@@ -1,0 +1,9 @@
+services:
+  identity-api:
+    build:
+      context: ..
+      dockerfile: deploy/Identity.Api.Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:5080
+    ports:
+      - "5080:5080"

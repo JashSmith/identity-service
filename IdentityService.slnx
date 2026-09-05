@@ -1,0 +1,32 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Company.Identity.Abstractions/Company.Identity.Abstractions.csproj" />
+    <Project Path="src/Company.Identity.Authentication.AspNetCore/Company.Identity.Authentication.AspNetCore.csproj" />
+    <Project Path="src/Company.Identity.Authentication/Company.Identity.Authentication.csproj" />
+    <Project Path="src/Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj" />
+    <Project Path="src/Company.Identity.Authorization/Company.Identity.Authorization.csproj" />
+    <Project Path="src/Company.Identity.Blazor/Company.Identity.Blazor.csproj" />
+    <Project Path="src/Company.Identity.Grpc/Company.Identity.Grpc.csproj" />
+    <Project Path="src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj" />
+    <Project Path="src/Identity.Api/Identity.Api.csproj" />
+    <Project Path="src/Identity.Application/Identity.Application.csproj" />
+    <Project Path="src/Identity.Contracts/Identity.Contracts.csproj" />
+    <Project Path="src/Identity.Domain/Identity.Domain.csproj" />
+    <Project Path="src/Identity.Infrastructure/Identity.Infrastructure.csproj" />
+    <Project Path="src/Identity.Messaging.Contracts/Identity.Messaging.Contracts.csproj" />
+    <Project Path="src/Identity.Messaging.RabbitMq/Identity.Messaging.RabbitMq.csproj" />
+    <Project Path="src/Identity.Messaging/Identity.Messaging.csproj" />
+    <Project Path="src/Identity.Persistence.EntityFrameworkCore/Identity.Persistence.EntityFrameworkCore.csproj" />
+    <Project Path="src/Identity.Persistence/Identity.Persistence.csproj" />
+    <Project Path="src/Identity.Providers.Abstractions/Identity.Providers.Abstractions.csproj" />
+    <Project Path="src/Identity.Providers.Local/Identity.Providers.Local.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Identity.Application.Tests/Identity.Application.Tests.csproj" />
+    <Project Path="tests/Identity.ArchitectureTests/Identity.ArchitectureTests.csproj" />
+    <Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj" />
+    <Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj" />
+    <Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj" />
+    <Project Path="tests/Identity.Messaging.Tests/Identity.Messaging.Tests.csproj" />
+  </Folder>
+</Solution>

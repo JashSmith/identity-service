@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><RootNamespace>Company.Identity.Abstractions</RootNamespace><AssemblyName>Company.Identity.Abstractions</AssemblyName><PackageId>Company.Identity.Abstractions</PackageId></PropertyGroup></Project>

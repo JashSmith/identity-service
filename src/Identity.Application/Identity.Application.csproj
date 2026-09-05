@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><RootNamespace>Identity.Application</RootNamespace><AssemblyName>Identity.Application</AssemblyName></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Identity.Domain/Identity.Domain.csproj" /></ItemGroup>
+</Project>

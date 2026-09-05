@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Identity.Application/Identity.Application.csproj" />
+    <ProjectReference Include="../Identity.Messaging/Identity.Messaging.csproj" />
+    <ProjectReference Include="../Identity.Messaging.Contracts/Identity.Messaging.Contracts.csproj" />
+    <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj" />
+    <PackageReference Include="RabbitMQ.Client" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>
