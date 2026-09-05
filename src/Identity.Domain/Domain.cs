@@ -124,6 +124,33 @@ public sealed class Permission
     public void Deprecate() => IsDeprecated = true;
 }
 
+public sealed class PermissionManifestState
+{
+    private PermissionManifestState() { }
+    public PermissionManifestState(string serviceId, string serviceName, string manifestVersion, Guid correlationId, DateTimeOffset publishedAt)
+    {
+        if (string.IsNullOrWhiteSpace(serviceId)) throw new ArgumentException("Service ID is required.", nameof(serviceId));
+        if (string.IsNullOrWhiteSpace(serviceName)) throw new ArgumentException("Service name is required.", nameof(serviceName));
+        ServiceId = serviceId.Trim();
+        ServiceName = serviceName.Trim();
+        ManifestVersion = manifestVersion.Trim();
+        CorrelationId = correlationId;
+        PublishedAt = publishedAt;
+    }
+    public string ServiceId { get; private set; } = string.Empty;
+    public string ServiceName { get; private set; } = string.Empty;
+    public string ManifestVersion { get; private set; } = string.Empty;
+    public Guid CorrelationId { get; private set; }
+    public DateTimeOffset PublishedAt { get; private set; }
+    public void Accept(string serviceId, string manifestVersion, Guid correlationId, DateTimeOffset publishedAt)
+    {
+        ServiceId = serviceId.Trim();
+        ManifestVersion = manifestVersion.Trim();
+        CorrelationId = correlationId;
+        PublishedAt = publishedAt;
+    }
+}
+
 public sealed class RefreshTokenRecord
 {
     private RefreshTokenRecord() { }

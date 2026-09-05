@@ -10,6 +10,7 @@ public interface ICurrentUserContext
     bool IsAuthenticated { get; }
     Guid? UserId { get; }
     string? Username { get; }
+    string? DisplayName { get; }
     IReadOnlyCollection<string> Roles { get; }
     IReadOnlyCollection<string> Permissions { get; }
     string? SessionId { get; }
@@ -33,6 +34,14 @@ public interface IPermissionRepository
     Task<Permission?> FindByNameAsync(string name, CancellationToken cancellationToken);
     Task UpsertManifestAsync(PermissionManifest manifest, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<string>> GetEffectivePermissionsAsync(UserId userId, CancellationToken cancellationToken);
+}
+public interface IPermissionManifestVersionStore
+{
+    Task<bool> TryAcceptAsync(PermissionManifest manifest, CancellationToken cancellationToken);
+}
+public interface IUnitOfWork
+{
+    Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken);
 }
 public interface IRefreshTokenStore
 {
@@ -128,8 +137,24 @@ public sealed class LocalAuthenticationService(
     }
 }
 
-public sealed class PermissionManifestSynchronizer(IPermissionRepository repository)
-{ public Task SynchronizeAsync(PermissionManifest manifest, CancellationToken cancellationToken) => repository.UpsertManifestAsync(manifest, cancellationToken); }
+public sealed class PermissionManifestSynchronizer(
+    IPermissionRepository repository,
+    IPermissionManifestVersionStore versions,
+    IUnitOfWork? unitOfWork = null)
+{
+    public Task<bool> SynchronizeAsync(PermissionManifest manifest, CancellationToken cancellationToken)
+        => unitOfWork is null
+            ? SynchronizeCoreAsync(manifest, cancellationToken)
+            : unitOfWork.ExecuteInTransactionAsync(operationCancellationToken => SynchronizeCoreAsync(manifest, operationCancellationToken), cancellationToken);
+
+    private async Task<bool> SynchronizeCoreAsync(PermissionManifest manifest, CancellationToken cancellationToken)
+    {
+        if (!await versions.TryAcceptAsync(manifest, cancellationToken))
+            return false;
+        await repository.UpsertManifestAsync(manifest, cancellationToken);
+        return true;
+    }
+}
 public sealed class PermissionAuthorizationService(IPermissionRepository permissions)
 {
     public async Task<bool> HasPermissionAsync(UserId userId, string permission, CancellationToken cancellationToken)

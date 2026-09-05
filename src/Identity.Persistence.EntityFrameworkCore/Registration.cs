@@ -13,6 +13,8 @@ public static class Registration
         services.AddScoped<ISessionStore, EfSessionStore>();
         services.AddScoped<IRefreshTokenStore, EfRefreshTokenStore>();
         services.AddScoped<IPermissionRepository, EfPermissionRepository>();
+        services.AddScoped<IPermissionManifestVersionStore, EfPermissionManifestVersionStore>();
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         return services;
     }
 }

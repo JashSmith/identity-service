@@ -175,7 +175,8 @@ public sealed class RabbitMqPermissionManifestConsumer(
 
             await using var scope = scopeFactory.CreateAsyncScope();
             var synchronizer = scope.ServiceProvider.GetRequiredService<PermissionManifestSynchronizer>();
-            await synchronizer.SynchronizeAsync(PermissionManifestEventMapper.ToApplicationManifest(message), cancellationToken);
+            var accepted = await synchronizer.SynchronizeAsync(PermissionManifestEventMapper.ToApplicationManifest(message), cancellationToken);
+            logger.LogDebug("Permission manifest event {EventId} was {Result}.", message.EventId, accepted ? "accepted" : "ignored as duplicate");
             await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, cancellationToken);
         }
         catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException)

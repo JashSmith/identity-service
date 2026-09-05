@@ -22,8 +22,9 @@ public static class ServiceCollectionExtensions
                 ValidateLifetime = true,
                 ClockSkew = options.ClockSkew,
                 IssuerSigningKey = options.SigningKey,
-                ValidateIssuerSigningKey = options.SigningKey is not null,
-                ValidIssuer = options.SigningKey is not null ? options.Authority : null
+                IssuerSigningKeys = options.SigningKeys.Count > 0 ? options.SigningKeys : null,
+                ValidateIssuerSigningKey = options.SigningKey is not null || options.SigningKeys.Count > 0,
+                ValidIssuer = options.SigningKey is not null || options.SigningKeys.Count > 0 ? options.Authority : null
             };
         });
         return services;

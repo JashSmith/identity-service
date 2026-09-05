@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Identity.Application;
@@ -6,7 +5,9 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace Company.Identity.Grpc;
 
-public sealed class IdentityGrpcService(LocalAuthenticationService authentication) : IdentityService.IdentityServiceBase
+public sealed class IdentityGrpcService(
+    LocalAuthenticationService authentication,
+    ICurrentUserContext currentUser) : IdentityService.IdentityServiceBase
 {
     public override async Task<TokenResponse> Login(LoginRequest request, ServerCallContext context)
     {
@@ -33,21 +34,18 @@ public sealed class IdentityGrpcService(LocalAuthenticationService authenticatio
     [Authorize]
     public override Task<CurrentUserResponse> GetCurrentUser(CurrentUserRequest request, ServerCallContext context)
     {
-        var principal = context.GetHttpContext().User;
-        if (principal.Identity?.IsAuthenticated != true)
+        if (!currentUser.IsAuthenticated)
             throw new RpcException(new Status(StatusCode.Unauthenticated, "Authentication is required."));
 
         var response = new CurrentUserResponse
         {
-            UserId = principal.FindFirstValue("sub") ?? string.Empty,
-            Username = principal.Identity.Name ?? principal.FindFirstValue("unique_name") ?? string.Empty,
-            DisplayName = principal.FindFirstValue("name") ?? principal.Identity.Name ?? string.Empty,
-            SessionId = principal.FindFirstValue("sid") ?? string.Empty
+            UserId = currentUser.UserId?.ToString() ?? string.Empty,
+            Username = currentUser.Username ?? string.Empty,
+            DisplayName = currentUser.DisplayName ?? string.Empty,
+            SessionId = currentUser.SessionId ?? string.Empty
         };
-        response.Roles.AddRange(principal.FindAll("role").Select(x => x.Value));
-        response.Roles.AddRange(principal.FindAll("roles").Select(x => x.Value));
-        response.Permissions.AddRange(principal.FindAll("permission").Select(x => x.Value));
-        response.Permissions.AddRange(principal.FindAll("permissions").Select(x => x.Value));
+        response.Roles.AddRange(currentUser.Roles);
+        response.Permissions.AddRange(currentUser.Permissions);
         return Task.FromResult(response);
     }
 

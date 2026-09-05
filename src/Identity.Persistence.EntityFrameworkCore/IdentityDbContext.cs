@@ -14,6 +14,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
     public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<PermissionManifestState> PermissionManifestStates => Set<PermissionManifestState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -71,6 +72,14 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             b.HasKey(x => new { x.RoleId, x.PermissionId });
             b.Property(x => x.RoleId).HasConversion(x => x.Value, x => new RoleId(x));
             b.Property(x => x.PermissionId).HasConversion(x => x.Value, x => new PermissionId(x));
+        });
+        modelBuilder.Entity<PermissionManifestState>(b =>
+        {
+            b.HasKey(x => x.ServiceId);
+            b.Property(x => x.ServiceId).HasMaxLength(128).IsRequired();
+            b.Property(x => x.ServiceName).HasMaxLength(128).IsRequired();
+            b.Property(x => x.ManifestVersion).HasMaxLength(64).IsRequired();
+            b.HasIndex(x => new { x.ServiceName, x.ManifestVersion });
         });
         modelBuilder.Entity<Permission>(b =>
         {

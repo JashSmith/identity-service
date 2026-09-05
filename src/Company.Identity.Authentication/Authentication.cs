@@ -9,4 +9,5 @@ public sealed class IdentityAuthenticationOptions
     public TimeSpan ClockSkew { get; init; } = TimeSpan.FromMinutes(1);
     public bool RequireHttpsMetadata { get; init; } = true;
     public SecurityKey? SigningKey { get; init; }
+    public IReadOnlyCollection<SecurityKey> SigningKeys { get; init; } = [];
 }

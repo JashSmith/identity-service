@@ -5,5 +5,51 @@ services:
       dockerfile: deploy/Identity.Api.Dockerfile
     environment:
       ASPNETCORE_URLS: http://+:5080
+      ConnectionStrings__Identity: Host=postgres;Port=5432;Database=identity;Username=identity;Password=${IDENTITY_DB_PASSWORD:-identity-development-only}
+      Identity__Messaging__RabbitMq__Enabled: "true"
+      Identity__Messaging__RabbitMq__ConsumeEnabled: "true"
+      Identity__Messaging__RabbitMq__ConnectionString: amqp://identity:${RABBITMQ_PASSWORD:-identity-development-only}@rabbitmq:5672/
+      Identity__Tokens__StoragePath: /var/lib/identity/identity-signing-keys.json
     ports:
       - "5080:5080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - identity-signing-keys:/var/lib/identity
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: identity
+      POSTGRES_USER: identity
+      POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity-development-only}
+    volumes:
+      - identity-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identity -d identity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: identity
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-identity-development-only}
+    ports:
+      - "15672:15672"
+    volumes:
+      - identity-rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  identity-signing-keys:
+  identity-postgres:
+  identity-rabbitmq:

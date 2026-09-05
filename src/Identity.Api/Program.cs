@@ -9,6 +9,9 @@ using Identity.Domain;
 using IdentityGrpcService = Company.Identity.Grpc.IdentityGrpcService;
 using Identity.Messaging.RabbitMq;
 using Identity.Api;
+using Identity.Providers.Abstractions;
+using Identity.Providers.Local;
+using Identity.Providers.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,9 +19,31 @@ var authority = builder.Configuration["Identity:Tokens:Issuer"] ?? "https://loca
 var audience = builder.Configuration["Identity:Tokens:Audience"] ?? "identity-api";
 var signingKeys = new JwtSigningKeyProvider(builder.Configuration);
 builder.Services.AddSingleton(signingKeys);
-builder.Services.AddIdentityPersistence(builder.Configuration.GetConnectionString("Identity") ?? "Data Source=identity.db", useSqlite: true);
+var connectionString = builder.Configuration.GetConnectionString("Identity") ?? "Data Source=identity.db";
+var useSqlite = builder.Configuration.GetValue("Identity:Persistence:UseSqlite", true);
+builder.Services.AddIdentityPersistence(connectionString, useSqlite);
 builder.Services.AddScoped<LocalAuthenticationService>();
+builder.Services.AddSingleton<IExternalIdentityProvider, LocalExternalIdentityProvider>();
+var oidcAuthority = builder.Configuration["Identity:ExternalProviders:Oidc:Authority"];
+if (!string.IsNullOrWhiteSpace(oidcAuthority))
+{
+    builder.Services.AddHttpClient<OpenIdConnectIdentityProvider>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue("Identity:ExternalProviders:Oidc:TimeoutSeconds", 10));
+    });
+    builder.Services.AddSingleton(sp => new OpenIdConnectOptions
+    {
+        Authority = oidcAuthority,
+        ClientId = builder.Configuration["Identity:ExternalProviders:Oidc:ClientId"] ?? string.Empty,
+        ClientSecret = builder.Configuration["Identity:ExternalProviders:Oidc:ClientSecret"],
+        RequireHttpsMetadata = !builder.Environment.IsDevelopment(),
+        Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue("Identity:ExternalProviders:Oidc:TimeoutSeconds", 10))
+    });
+    builder.Services.AddSingleton<IExternalIdentityProvider>(sp => sp.GetRequiredService<OpenIdConnectIdentityProvider>());
+}
 builder.Services.AddSingleton<ISystemClock>(_ => new SystemClock(TimeProvider.System));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
 builder.Services.AddSingleton<IPasswordVerifier, Pbkdf2PasswordVerifier>();
 builder.Services.AddSingleton<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 builder.Services.AddScoped<PermissionManifestSynchronizer>();
@@ -32,7 +57,8 @@ builder.Services.AddCompanyAuthentication(new Company.Identity.Authentication.Id
     Authority = authority,
     Audiences = [audience],
     RequireHttpsMetadata = !builder.Environment.IsDevelopment(),
-    SigningKey = signingKeys.Key
+    SigningKey = signingKeys.Key,
+    SigningKeys = signingKeys.PublicKeys.ToArray()
 });
 builder.Services.AddCompanyAuthorization();
 builder.Services.AddGrpc();
@@ -63,29 +89,32 @@ app.UseAuthorization();
 app.MapHealthChecks("/health/live");
 app.MapGet("/.well-known/jwks.json", (JwtSigningKeyProvider keys) =>
 {
-    var parameters = keys.PublicKey.Rsa!.ExportParameters(false);
-    return Results.Ok(new
+    var publicKeys = keys.PublicKeys.Select(key =>
     {
-        keys = new[]
+        var parameters = key.Parameters;
+        return new
         {
-            new
-            {
-                kty = "RSA",
-                use = "sig",
-                alg = "RS256",
-                kid = keys.KeyId,
-                n = Base64UrlEncoder.Encode(parameters.Modulus!),
-                e = Base64UrlEncoder.Encode(parameters.Exponent!)
-            }
-        }
+            kty = "RSA",
+            use = "sig",
+            alg = "RS256",
+            kid = key.KeyId,
+            n = Base64UrlEncoder.Encode(parameters.Modulus!),
+            e = Base64UrlEncoder.Encode(parameters.Exponent!)
+        };
     });
+    return Results.Ok(new { keys = publicKeys });
 });
 app.MapGrpcService<IdentityGrpcService>();
-app.MapGet("/api/users/me", (HttpContext context) =>
+app.MapGet("/api/users/me", (ICurrentUserContext currentUser) =>
 {
-    if (context.User.Identity?.IsAuthenticated != true) return Results.Unauthorized();
-    var claims = context.User.Claims.ToArray();
-    return Results.Ok(new UserResponse(Guid.TryParse(context.User.FindFirst("sub")?.Value, out var id) ? id : Guid.Empty, context.User.Identity.Name ?? string.Empty, context.User.FindFirst("name")?.Value ?? context.User.Identity.Name ?? string.Empty, claims.Where(x => x.Type is "role" or "roles").Select(x => x.Value).ToArray(), claims.Where(x => x.Type is "permission" or "permissions").Select(x => x.Value).ToArray(), Guid.TryParse(context.User.FindFirst("sid")?.Value, out var sid) ? sid : null));
+    if (!currentUser.IsAuthenticated) return Results.Unauthorized();
+    return Results.Ok(new UserResponse(
+        currentUser.UserId ?? Guid.Empty,
+        currentUser.Username ?? string.Empty,
+        currentUser.DisplayName ?? currentUser.Username ?? string.Empty,
+        currentUser.Roles,
+        currentUser.Permissions,
+        Guid.TryParse(currentUser.SessionId, out var sessionId) ? sessionId : null));
 }).RequireAuthorization();
 app.MapPost("/api/auth/login", async (LoginRequest request, LocalAuthenticationService authentication, CancellationToken cancellationToken) =>
 {

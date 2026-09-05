@@ -20,6 +20,7 @@
     <Project Path="src/Identity.Persistence/Identity.Persistence.csproj" />
     <Project Path="src/Identity.Providers.Abstractions/Identity.Providers.Abstractions.csproj" />
     <Project Path="src/Identity.Providers.Local/Identity.Providers.Local.csproj" />
+    <Project Path="src/Identity.Providers.OpenIdConnect/Identity.Providers.OpenIdConnect.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Identity.Application.Tests/Identity.Application.Tests.csproj" />
@@ -27,6 +28,7 @@
     <Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj" />
     <Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj" />
     <Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj" />
+    <Project Path="tests/Identity.Infrastructure.Tests/Identity.Infrastructure.Tests.csproj" />
     <Project Path="tests/Identity.Messaging.Tests/Identity.Messaging.Tests.csproj" />
   </Folder>
 </Solution>
