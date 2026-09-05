@@ -14,6 +14,7 @@ using Identity.Providers.Local;
 using Identity.Providers.OpenIdConnect;
 using Identity.Providers.Keycloak;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 var authority = builder.Configuration["Identity:Tokens:Issuer"] ?? "https://localhost:7001";
@@ -61,7 +62,7 @@ if (!string.IsNullOrWhiteSpace(keycloakAuthority))
     builder.Services.AddSingleton<IExternalIdentityProvider>(sp => sp.GetRequiredService<KeycloakIdentityProvider>());
 }
 builder.Services.AddSingleton<IExternalIdentityProviderRegistry, ExternalIdentityProviderRegistry>();
-builder.Services.AddSingleton<ISystemClock>(_ => new SystemClock(TimeProvider.System));
+builder.Services.AddSingleton<Identity.Application.ISystemClock>(_ => new Identity.Application.SystemClock(TimeProvider.System));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
 builder.Services.AddSingleton<IPasswordVerifier, Pbkdf2PasswordVerifier>();
@@ -81,6 +82,7 @@ builder.Services.AddCompanyAuthentication(new Company.Identity.Authentication.Id
     SigningKeys = signingKeys.PublicKeys.ToArray()
 });
 builder.Services.AddCompanyAuthorization();
+builder.Services.AddCompanyBffSessions();
 builder.Services.AddGrpc();
 builder.Services.AddIdentityRabbitMq(builder.Configuration);
 builder.Services.AddAntiforgery();
@@ -96,7 +98,7 @@ using (var scope = app.Services.CreateScope())
     var password = builder.Configuration["Identity:Bootstrap:Password"];
     if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password) && !db.Users.Any(x => x.Username == username))
     {
-        var clock = scope.ServiceProvider.GetRequiredService<ISystemClock>();
+        var clock = scope.ServiceProvider.GetRequiredService<Identity.Application.ISystemClock>();
         var user = new User(UserId.New(), username, username, clock.UtcNow);
         db.Users.Add(user);
         db.PasswordCredentials.Add(new PasswordCredential(user.Id, scope.ServiceProvider.GetRequiredService<IPasswordVerifier>().Hash(password), clock.UtcNow));
@@ -177,6 +179,32 @@ app.MapPost("/api/auth/antiforgery", (HttpContext context, IAntiforgery antiforg
 {
     var tokens = antiforgery.GetAndStoreTokens(context);
     return Results.Ok(new { token = tokens.RequestToken });
+});
+app.MapPost("/api/auth/bff/sign-in", async (
+    LoginRequest request,
+    LocalAuthenticationService authentication,
+    HttpContext context,
+    IAntiforgery antiforgery,
+    CancellationToken cancellationToken) =>
+{
+    var result = await authentication.LoginAsync(request.Username, request.Password, cancellationToken);
+    if (!result.Succeeded || result.SessionId is null)
+        return Results.Unauthorized();
+
+    var claims = new[]
+    {
+        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, result.SessionId.Value.ToString()),
+        new System.Security.Claims.Claim("sid", result.SessionId.Value.ToString())
+    };
+    var identity = new System.Security.Claims.ClaimsIdentity(claims, ServiceCollectionExtensions.BffScheme);
+    await context.SignInAsync(ServiceCollectionExtensions.BffScheme, new System.Security.Claims.ClaimsPrincipal(identity));
+    var csrf = antiforgery.GetAndStoreTokens(context);
+    return Results.Ok(new { csrfToken = csrf.RequestToken });
+});
+app.MapPost("/api/auth/bff/sign-out", async (HttpContext context) =>
+{
+    await context.SignOutAsync(ServiceCollectionExtensions.BffScheme);
+    return Results.NoContent();
 });
 app.Run();
 public partial class Program;

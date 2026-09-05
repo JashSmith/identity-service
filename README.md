@@ -24,3 +24,9 @@ dotnet restore IdentityService.slnx
 dotnet build IdentityService.slnx
 dotnet test IdentityService.slnx
 ```
+
+
+## Resume Claude task
+```bash
+claude --resume 80d4fe4e-a1fe-4776-952d-750cc99a65c6
+```
