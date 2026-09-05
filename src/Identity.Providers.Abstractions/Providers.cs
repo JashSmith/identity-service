@@ -20,3 +20,21 @@ public interface IExternalIdentityProvider
         ExternalAuthenticationRequest request,
         CancellationToken cancellationToken);
 }
+
+public interface IExternalIdentityProviderRegistry
+{
+    IReadOnlyCollection<IExternalIdentityProvider> Providers { get; }
+    IExternalIdentityProvider? Find(string name);
+}
+
+public sealed class ExternalIdentityProviderRegistry(
+    IEnumerable<IExternalIdentityProvider> providers) : IExternalIdentityProviderRegistry
+{
+    public IReadOnlyCollection<IExternalIdentityProvider> Providers { get; } = providers
+        .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+        .Select(x => x.First())
+        .ToArray();
+
+    public IExternalIdentityProvider? Find(string name)
+        => Providers.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+}

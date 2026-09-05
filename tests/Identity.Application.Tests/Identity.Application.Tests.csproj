@@ -18,4 +18,5 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-<ItemGroup><ProjectReference Include="../../src/Identity.Application/Identity.Application.csproj" /></ItemGroup></Project>
+<ItemGroup><ProjectReference Include="../../src/Identity.Application/Identity.Application.csproj" />
+    <ProjectReference Include="../../src/Identity.Providers.Abstractions/Identity.Providers.Abstractions.csproj" /></ItemGroup></Project>

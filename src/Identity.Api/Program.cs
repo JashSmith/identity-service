@@ -12,6 +12,7 @@ using Identity.Api;
 using Identity.Providers.Abstractions;
 using Identity.Providers.Local;
 using Identity.Providers.OpenIdConnect;
+using Identity.Providers.Keycloak;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +24,7 @@ var connectionString = builder.Configuration.GetConnectionString("Identity") ?? 
 var useSqlite = builder.Configuration.GetValue("Identity:Persistence:UseSqlite", true);
 builder.Services.AddIdentityPersistence(connectionString, useSqlite);
 builder.Services.AddScoped<LocalAuthenticationService>();
+builder.Services.AddScoped<ExternalAuthenticationService>();
 builder.Services.AddSingleton<IExternalIdentityProvider, LocalExternalIdentityProvider>();
 var oidcAuthority = builder.Configuration["Identity:ExternalProviders:Oidc:Authority"];
 if (!string.IsNullOrWhiteSpace(oidcAuthority))
@@ -41,6 +43,24 @@ if (!string.IsNullOrWhiteSpace(oidcAuthority))
     });
     builder.Services.AddSingleton<IExternalIdentityProvider>(sp => sp.GetRequiredService<OpenIdConnectIdentityProvider>());
 }
+var keycloakAuthority = builder.Configuration["Identity:ExternalProviders:Keycloak:Authority"];
+if (!string.IsNullOrWhiteSpace(keycloakAuthority))
+{
+    builder.Services.AddHttpClient<KeycloakIdentityProvider>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue("Identity:ExternalProviders:Keycloak:TimeoutSeconds", 10));
+    });
+    builder.Services.AddSingleton(sp => new KeycloakOptions
+    {
+        Authority = keycloakAuthority,
+        ClientId = builder.Configuration["Identity:ExternalProviders:Keycloak:ClientId"] ?? string.Empty,
+        ClientSecret = builder.Configuration["Identity:ExternalProviders:Keycloak:ClientSecret"],
+        RequireHttpsMetadata = !builder.Environment.IsDevelopment(),
+        Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue("Identity:ExternalProviders:Keycloak:TimeoutSeconds", 10))
+    });
+    builder.Services.AddSingleton<IExternalIdentityProvider>(sp => sp.GetRequiredService<KeycloakIdentityProvider>());
+}
+builder.Services.AddSingleton<IExternalIdentityProviderRegistry, ExternalIdentityProviderRegistry>();
 builder.Services.AddSingleton<ISystemClock>(_ => new SystemClock(TimeProvider.System));
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
@@ -135,6 +155,24 @@ app.MapPost("/api/auth/logout", async (HttpContext context, LocalAuthenticationS
     return Results.NoContent();
 }).RequireAuthorization();
 app.MapGet("/api/auth/session", (HttpContext context) => Results.Ok(new { authenticated = context.User.Identity?.IsAuthenticated == true }));
+app.MapPost("/api/auth/external/link", async (
+    ExternalIdentityLinkRequest request,
+    ICurrentUserContext currentUser,
+    ExternalIdentityLinkingService linking,
+    CancellationToken cancellationToken) =>
+{
+    if (!currentUser.IsAuthenticated || currentUser.UserId is null)
+        return Results.Unauthorized();
+
+    var result = await linking.LinkAsync(
+        new UserId(currentUser.UserId.Value),
+        new ExternalIdentityDescriptor(request.Provider, request.Subject, null, null),
+        cancellationToken);
+    return result.Succeeded ? Results.NoContent() : Results.Conflict(new ProblemResponse(
+        result.ErrorCode ?? "external_identity_link_failed",
+        "The external identity could not be linked.",
+        Guid.NewGuid().ToString("N")));
+}).RequireAuthorization();
 app.MapPost("/api/auth/antiforgery", (HttpContext context, IAntiforgery antiforgery) =>
 {
     var tokens = antiforgery.GetAndStoreTokens(context);

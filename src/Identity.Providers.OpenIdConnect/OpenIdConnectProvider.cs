@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Identity.Providers.Abstractions;
 
 namespace Identity.Providers.OpenIdConnect;
@@ -14,6 +15,7 @@ public sealed class OpenIdConnectOptions
     public string[] Scopes { get; init; } = ["openid", "profile", "email"];
     public bool RequireHttpsMetadata { get; init; } = true;
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(10);
+    public string? ExpectedIssuer { get; init; }
 }
 
 public sealed class OpenIdConnectIdentityProvider(
@@ -105,7 +107,9 @@ public sealed class OpenIdConnectIdentityProvider(
 
             var discoveryUri = $"{authority}/.well-known/openid-configuration";
             var candidate = await httpClient.GetFromJsonAsync<DiscoveryDocument>(discoveryUri, cancellationToken);
-            if (candidate is null || !IsAllowedEndpoint(candidate.TokenEndpoint, options.RequireHttpsMetadata) ||
+            if (candidate is null ||
+                (!string.IsNullOrWhiteSpace(options.ExpectedIssuer) && !string.Equals(candidate.Issuer, options.ExpectedIssuer, StringComparison.Ordinal)) ||
+                !IsAllowedEndpoint(candidate.TokenEndpoint, options.RequireHttpsMetadata) ||
                 !IsAllowedEndpoint(candidate.UserInfoEndpoint, options.RequireHttpsMetadata))
                 return null;
 
@@ -127,6 +131,13 @@ public sealed class OpenIdConnectIdentityProvider(
             ? value.GetString()
             : null;
 
-    private sealed record DiscoveryDocument(string? TokenEndpoint, string? UserInfoEndpoint);
-    private sealed record TokenResponse(string? AccessToken, string? TokenType, int ExpiresIn);
+    private sealed record DiscoveryDocument(
+        [property: JsonPropertyName("issuer")] string? Issuer,
+        [property: JsonPropertyName("token_endpoint")] string? TokenEndpoint,
+        [property: JsonPropertyName("userinfo_endpoint")] string? UserInfoEndpoint);
+
+    private sealed record TokenResponse(
+        [property: JsonPropertyName("access_token")] string? AccessToken,
+        [property: JsonPropertyName("token_type")] string? TokenType,
+        [property: JsonPropertyName("expires_in")] int ExpiresIn);
 }

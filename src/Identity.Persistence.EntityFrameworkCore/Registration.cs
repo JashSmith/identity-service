@@ -9,6 +9,7 @@ public static class Registration
         if (useSqlite) services.AddDbContext<IdentityDbContext>(o => o.UseSqlite(connectionString));
         else services.AddDbContext<IdentityDbContext>(o => o.UseNpgsql(connectionString));
         services.AddScoped<IUserRepository, EfUserRepository>();
+        services.AddScoped<IExternalIdentityLinkRepository, EfExternalIdentityLinkRepository>();
         services.AddScoped<IPasswordCredentialStore, EfPasswordCredentialStore>();
         services.AddScoped<ISessionStore, EfSessionStore>();
         services.AddScoped<IRefreshTokenStore, EfRefreshTokenStore>();

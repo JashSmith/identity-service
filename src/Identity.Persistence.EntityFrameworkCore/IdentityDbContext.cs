@@ -15,6 +15,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<PermissionManifestState> PermissionManifestStates => Set<PermissionManifestState>();
+    public DbSet<ExternalIdentityLink> ExternalIdentityLinks => Set<ExternalIdentityLink>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -80,6 +81,15 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             b.Property(x => x.ServiceName).HasMaxLength(128).IsRequired();
             b.Property(x => x.ManifestVersion).HasMaxLength(64).IsRequired();
             b.HasIndex(x => new { x.ServiceName, x.ManifestVersion });
+        });
+        modelBuilder.Entity<ExternalIdentityLink>(b =>
+        {
+            b.HasKey(x => x.Id);
+            b.Property(x => x.UserId).HasConversion(x => x.Value, x => new UserId(x));
+            b.Property(x => x.Provider).HasMaxLength(128).IsRequired();
+            b.Property(x => x.Subject).HasMaxLength(512).IsRequired();
+            b.HasIndex(x => new { x.Provider, x.Subject }).IsUnique();
+            b.HasIndex(x => x.UserId);
         });
         modelBuilder.Entity<Permission>(b =>
         {

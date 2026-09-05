@@ -24,6 +24,13 @@ public interface IUserRepository
     Task AddAsync(User user, CancellationToken cancellationToken);
     Task SaveAsync(User user, CancellationToken cancellationToken);
 }
+public interface IExternalIdentityLinkRepository
+{
+    Task<ExternalIdentityLink?> FindAsync(string provider, string subject, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<ExternalIdentityLink>> FindForUserAsync(UserId userId, CancellationToken cancellationToken);
+    Task AddAsync(ExternalIdentityLink link, CancellationToken cancellationToken);
+    Task SaveAsync(ExternalIdentityLink link, CancellationToken cancellationToken);
+}
 public interface IPasswordCredentialStore
 {
     Task<PasswordCredential?> FindAsync(UserId userId, CancellationToken cancellationToken);
@@ -60,11 +67,76 @@ public interface IPasswordVerifier { bool Verify(string encodedHash, string pass
 public interface IAccessTokenIssuer { Task<AccessTokenResult> IssueAsync(User user, IReadOnlyCollection<string> permissions, Guid sessionId, CancellationToken cancellationToken); }
 public interface IIntegrationEventPublisher { Task PublishAsync<T>(T message, CancellationToken cancellationToken) where T : class; }
 
+public sealed record ExternalIdentityDescriptor(string Provider, string Subject, string? Username, string? DisplayName);
 public sealed record PermissionDefinition(string Name, string Description, string Module);
 public sealed record PermissionManifest(string ServiceId, string ServiceName, string Version, string Environment, IReadOnlyCollection<PermissionDefinition> Permissions, string ManifestVersion, Guid CorrelationId, DateTimeOffset PublishedAt);
 public sealed record AccessTokenResult(string AccessToken, DateTimeOffset ExpiresAt, string KeyId);
 public sealed record AuthenticationResult(bool Succeeded, AccessTokenResult? AccessToken, string? RefreshToken, Guid? SessionId, string? ErrorCode)
 { public static AuthenticationResult Failure(string code) => new(false, null, null, null, code); }
+
+public sealed class ExternalAuthenticationService(
+    IExternalIdentityLinkRepository links,
+    IUserRepository users,
+    ISystemClock clock)
+{
+    public async Task<User?> ResolveUserAsync(ExternalIdentityDescriptor identity, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(identity.Provider) || string.IsNullOrWhiteSpace(identity.Subject))
+            return null;
+
+        var link = await links.FindAsync(identity.Provider, identity.Subject, cancellationToken);
+        if (link is null)
+            return null;
+
+        var user = await users.FindAsync(link.UserId, cancellationToken);
+        if (user is null || !user.IsEnabled || user.IsLocked(clock.UtcNow))
+            return null;
+
+        link.RecordAuthentication(clock.UtcNow);
+        await links.SaveAsync(link, cancellationToken);
+        return user;
+    }
+}
+
+public sealed record ExternalLinkResult(bool Succeeded, string? ErrorCode)
+{
+    public static ExternalLinkResult Success() => new(true, null);
+    public static ExternalLinkResult Failure(string code) => new(false, code);
+}
+
+public sealed class ExternalIdentityLinkingService(
+    IExternalIdentityLinkRepository links,
+    IUserRepository users,
+    ISystemClock clock)
+{
+    public async Task<ExternalLinkResult> LinkAsync(
+        UserId userId,
+        ExternalIdentityDescriptor identity,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(identity.Provider) || string.IsNullOrWhiteSpace(identity.Subject))
+            return ExternalLinkResult.Failure("invalid_external_identity");
+
+        var user = await users.FindAsync(userId, cancellationToken);
+        if (user is null || !user.IsEnabled)
+            return ExternalLinkResult.Failure("user_not_found");
+
+        var existing = await links.FindAsync(identity.Provider, identity.Subject, cancellationToken);
+        if (existing is not null)
+            return existing.UserId == userId
+                ? ExternalLinkResult.Failure("external_identity_already_linked")
+                : ExternalLinkResult.Failure("external_identity_linked_to_another_user");
+
+        var userLinks = await links.FindForUserAsync(userId, cancellationToken);
+        if (userLinks.Any(x => string.Equals(x.Provider, identity.Provider, StringComparison.OrdinalIgnoreCase) &&
+                               string.Equals(x.Subject, identity.Subject, StringComparison.Ordinal)))
+            return ExternalLinkResult.Failure("external_identity_already_linked");
+
+        await links.AddAsync(new ExternalIdentityLink(
+            Guid.NewGuid(), userId, identity.Provider, identity.Subject, clock.UtcNow), cancellationToken);
+        return ExternalLinkResult.Success();
+    }
+}
 
 public sealed class LocalAuthenticationService(
     IUserRepository users,
