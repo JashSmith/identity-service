@@ -1,78 +1,77 @@
 <Solution>
+    <Folder Name="/docs/" />
+    <Folder Name="/items/" />
     <Folder Name="/samples/">
-        <Project Path="samples/Identity.Consumer.Api/Identity.Consumer.Api.csproj"/>
+        <Project Path="samples/Identity.Consumer.Api/Identity.Consumer.Api.csproj" />
     </Folder>
+    <Folder Name="/scripts/" />
 
-    <Folder Name="/src/"/>
+    <Folder Name="/src/" />
     <Folder Name="/src/Domain/">
-        <Project Path="src/Identity.Domain/Identity.Domain.csproj"/>
+        <Project Path="src/Identity.Domain/Identity.Domain.csproj" />
     </Folder>
 
     <Folder Name="/src/Application/">
-        <Project Path="src/Identity.Application/Identity.Application.csproj"/>
+        <Project Path="src/Identity.Application/Identity.Application.csproj" />
     </Folder>
     
     <Folder Name="/src/Contracts/">
-        <Project Path="src/Identity.Contracts/Identity.Contracts.csproj"/>
-        <Project Path="src/Identity.Messaging.Contracts/Identity.Messaging.Contracts.csproj"/>
+        <Project Path="src/Identity.Contracts/Identity.Contracts.csproj" />
+        <Project Path="src/Identity.Messaging.Contracts/Identity.Messaging.Contracts.csproj" />
     </Folder>
     
     <Folder Name="/src/Infrastructure/">
-        <Project Path="src/Identity.Infrastructure/Identity.Infrastructure.csproj"/>
+        <Project Path="src/Identity.Infrastructure/Identity.Infrastructure.csproj" />
     </Folder>
 
     <Folder Name="/src/Messaging/">
-        <Project Path="src/Identity.Messaging/Identity.Messaging.csproj"/>
-        <Project Path="src/Identity.Messaging.RabbitMq/Identity.Messaging.RabbitMq.csproj"/>
+        <Project Path="src/Identity.Messaging/Identity.Messaging.csproj" />
+        <Project Path="src/Identity.Messaging.RabbitMq/Identity.Messaging.RabbitMq.csproj" />
     </Folder>
 
-    <Folder Name="/src/Packages/"/>
+    <Folder Name="/src/Packages/" />
     <Folder Name="/src/Packages/Authentication/">
-        <Project Path="src/Company.Identity.Abstractions/Company.Identity.Abstractions.csproj"/>
-        <Project Path="src/Company.Identity.Authentication/Company.Identity.Authentication.csproj"/>
-        <Project
-                Path="src/Company.Identity.Authentication.AspNetCore/Company.Identity.Authentication.AspNetCore.csproj"/>
+        <Project Path="src/Company.Identity.Abstractions/Company.Identity.Abstractions.csproj" />
+        <Project Path="src/Company.Identity.Authentication/Company.Identity.Authentication.csproj" />
+        <Project Path="src/Company.Identity.Authentication.AspNetCore/Company.Identity.Authentication.AspNetCore.csproj" />
     </Folder>
     <Folder Name="/src/Packages/Authorization/">
-        <Project Path="src/Company.Identity.Authorization/Company.Identity.Authorization.csproj"/>
-        <Project
-                Path="src/Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj"/>
+        <Project Path="src/Company.Identity.Authorization/Company.Identity.Authorization.csproj" />
+        <Project Path="src/Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj" />
     </Folder>
 
     <Folder Name="/src/Packages/PermissionDiscovery/">
-        <Project Path="src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj"/>
+        <Project Path="src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj" />
     </Folder>
     <Folder Name="/src/Packages/Transport/">
-        <Project Path="src/Company.Identity.Grpc/Company.Identity.Grpc.csproj"/>
-        <Project Path="src/Company.Identity.Blazor/Company.Identity.Blazor.csproj"/>
+        <Project Path="src/Company.Identity.Grpc/Company.Identity.Grpc.csproj" />
+        <Project Path="src/Company.Identity.Blazor/Company.Identity.Blazor.csproj" />
     </Folder>
     <Folder Name="/src/Persistence/">
-        <Project Path="src/Identity.Persistence/Identity.Persistence.csproj"/>
-        <Project
-                Path="src/Identity.Persistence.EntityFrameworkCore/Identity.Persistence.EntityFrameworkCore.csproj"/>
+        <Project Path="src/Identity.Persistence/Identity.Persistence.csproj" />
+        <Project Path="src/Identity.Persistence.EntityFrameworkCore/Identity.Persistence.EntityFrameworkCore.csproj" />
     </Folder>
 
     <Folder Name="/src/Providers/">
-        <Project Path="src/Identity.Providers.Abstractions/Identity.Providers.Abstractions.csproj"/>
-        <Project Path="src/Identity.Providers.Local/Identity.Providers.Local.csproj"/>
-        <Project Path="src/Identity.Providers.OpenIdConnect/Identity.Providers.OpenIdConnect.csproj"/>
-        <Project Path="src/Identity.Providers.Keycloak/Identity.Providers.Keycloak.csproj"/>
+        <Project Path="src/Identity.Providers.Abstractions/Identity.Providers.Abstractions.csproj" />
+        <Project Path="src/Identity.Providers.Local/Identity.Providers.Local.csproj" />
+        <Project Path="src/Identity.Providers.OpenIdConnect/Identity.Providers.OpenIdConnect.csproj" />
+        <Project Path="src/Identity.Providers.Keycloak/Identity.Providers.Keycloak.csproj" />
     </Folder>
 
     <Folder Name="/src/Host/">
-        <Project Path="src/Identity.Api/Identity.Api.csproj"/>
+        <Project Path="src/Identity.Api/Identity.Api.csproj" />
     </Folder>
 
     <Folder Name="/tests/">
-        <Project Path="tests/Identity.Application.Tests/Identity.Application.Tests.csproj"/>
-        <Project Path="tests/Identity.ArchitectureTests/Identity.ArchitectureTests.csproj"/>
-        <Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj"/>
-        <Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj"/>
-        <Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj"/>
-        <Project Path="tests/Identity.Infrastructure.Tests/Identity.Infrastructure.Tests.csproj"/>
-        <Project Path="tests/Identity.Api.Tests/Identity.Api.Tests.csproj"/>
-        <Project Path="tests/Identity.Messaging.Tests/Identity.Messaging.Tests.csproj"/>
-        <Project
-                Path="tests/Identity.Persistence.EntityFrameworkCore.Tests/Identity.Persistence.EntityFrameworkCore.Tests.csproj"/>
+        <Project Path="tests/Identity.Application.Tests/Identity.Application.Tests.csproj" />
+        <Project Path="tests/Identity.ArchitectureTests/Identity.ArchitectureTests.csproj" />
+        <Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj" />
+        <Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj" />
+        <Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj" />
+        <Project Path="tests/Identity.Infrastructure.Tests/Identity.Infrastructure.Tests.csproj" />
+        <Project Path="tests/Identity.Api.Tests/Identity.Api.Tests.csproj" />
+        <Project Path="tests/Identity.Messaging.Tests/Identity.Messaging.Tests.csproj" />
+        <Project Path="tests/Identity.Persistence.EntityFrameworkCore.Tests/Identity.Persistence.EntityFrameworkCore.Tests.csproj" />
     </Folder>
 </Solution>
