@@ -67,8 +67,16 @@ public static class ServiceCollectionExtensions
                 ValidIssuer = options.SigningKey is not null || options.SigningKeys.Count > 0 ? options.Authority : null
             };
         });
+        services.AddHttpContextAccessor();
+        services.AddTransient<BearerTokenDelegatingHandler>();
         return services;
     }
+
+    public static IHttpClientBuilder AddIdentityApiClient(
+        this IServiceCollection services,
+        Uri baseAddress)
+        => services.AddHttpClient("IdentityApi", client => client.BaseAddress = baseAddress)
+            .AddHttpMessageHandler<BearerTokenDelegatingHandler>();
 
     public static IServiceCollection AddCompanyBffSessions(this IServiceCollection services)
     {

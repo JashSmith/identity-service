@@ -26,9 +26,7 @@ var authority = builder.Configuration["Identity:Tokens:Issuer"]
 var audience = builder.Configuration["Identity:Tokens:Audience"] ?? "identity-api";
 var signingKeys = new JwtSigningKeyProvider(builder.Configuration);
 builder.Services.AddSingleton(signingKeys);
-var connectionString = builder.Configuration.GetConnectionString("Identity") ?? "Data Source=identity.db";
-var useSqlite = builder.Configuration.GetValue("Identity:Persistence:UseSqlite", true);
-builder.Services.AddIdentityPersistence(connectionString, useSqlite);
+builder.Services.AddIdentityPersistence(builder.Configuration);
 var dataProtectionPath = builder.Configuration["Identity:DataProtection:KeysPath"] ?? "identity-data-protection-keys";
 var dataProtectionDirectory = Path.GetFullPath(dataProtectionPath);
 Directory.CreateDirectory(dataProtectionDirectory);

@@ -5,7 +5,8 @@ services:
       dockerfile: deploy/Identity.Api.Dockerfile
     environment:
       ASPNETCORE_URLS: http://+:5080
-      ConnectionStrings__Identity: Host=postgres;Port=5432;Database=identity;Username=identity;Password=${IDENTITY_DB_PASSWORD:-identity-development-only}
+      ConnectionStrings__Identity: Host=postgres;Port=5432;Database=identity;Username=identity;Password=${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD before starting Compose}
+      Identity__Persistence__Provider: PostgreSql
       Identity__Messaging__RabbitMq__Enabled: "true"
       Identity__Messaging__RabbitMq__ConsumeEnabled: "true"
       Identity__Messaging__RabbitMq__ConnectionString: amqp://identity:${RABBITMQ_PASSWORD:-identity-development-only}@rabbitmq:5672/

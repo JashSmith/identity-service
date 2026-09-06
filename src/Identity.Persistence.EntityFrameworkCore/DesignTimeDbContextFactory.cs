@@ -9,20 +9,15 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Ide
     {
         var connectionString = Environment.GetEnvironmentVariable("IDENTITY_DESIGN_TIME_CONNECTION")
             ?? "Data Source=identity-design-time.db";
-        var provider = Environment.GetEnvironmentVariable("IDENTITY_DESIGN_TIME_PROVIDER")
-            ?? "sqlite";
-
+        var provider = Registration.ParseProvider(
+            Environment.GetEnvironmentVariable("IDENTITY_DESIGN_TIME_PROVIDER") ?? "sqlite");
+        var options = new IdentityPersistenceOptions
+        {
+            Provider = provider,
+            ConnectionString = connectionString
+        };
         var builder = new DbContextOptionsBuilder<IdentityDbContext>();
-        if (string.Equals(provider, "postgres", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(provider, "postgresql", StringComparison.OrdinalIgnoreCase))
-        {
-            builder.UseNpgsql(connectionString);
-        }
-        else
-        {
-            builder.UseSqlite(connectionString);
-        }
-
+        Registration.ConfigureProvider(builder, options);
         return new IdentityDbContext(builder.Options);
     }
 }
