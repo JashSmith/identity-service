@@ -485,3 +485,4 @@ $RECYCLE.BIN/
 .claude
 identity-signing-keys.json
 identity-data-protection-keys/
+identity-design-time.db
