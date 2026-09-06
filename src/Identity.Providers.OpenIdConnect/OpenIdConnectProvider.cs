@@ -82,7 +82,8 @@ public sealed class OpenIdConnectIdentityProvider(
             ["code"] = request.AuthorizationCode,
             ["redirect_uri"] = request.RedirectUri,
             ["client_id"] = options.ClientId,
-            ["code_verifier"] = request.CodeVerifier
+            ["code_verifier"] = request.CodeVerifier,
+            ["scope"] = string.Join(' ', options.Scopes.Where(x => !string.IsNullOrWhiteSpace(x)))
         };
         if (!string.IsNullOrWhiteSpace(options.ClientSecret))
             values["client_secret"] = options.ClientSecret;

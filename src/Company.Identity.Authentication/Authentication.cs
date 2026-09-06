@@ -11,3 +11,8 @@ public sealed class IdentityAuthenticationOptions
     public SecurityKey? SigningKey { get; init; }
     public IReadOnlyCollection<SecurityKey> SigningKeys { get; init; } = [];
 }
+
+public interface IBffSessionValidator
+{
+    Task<bool> ValidateAsync(string sessionId, CancellationToken cancellationToken);
+}

@@ -30,6 +30,7 @@
     <Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj" />
     <Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj" />
     <Project Path="tests/Identity.Infrastructure.Tests/Identity.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Identity.Api.Tests/Identity.Api.Tests.csproj" />
     <Project Path="tests/Identity.Messaging.Tests/Identity.Messaging.Tests.csproj" />
   </Folder>
 </Solution>

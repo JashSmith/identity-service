@@ -1,3 +1,4 @@
+using Company.Identity.Authentication;
 using Company.Identity.Authentication.AspNetCore;
 using Company.Identity.Authorization.AspNetCore;
 using Identity.Application;
@@ -26,6 +27,7 @@ var useSqlite = builder.Configuration.GetValue("Identity:Persistence:UseSqlite",
 builder.Services.AddIdentityPersistence(connectionString, useSqlite);
 builder.Services.AddScoped<LocalAuthenticationService>();
 builder.Services.AddScoped<ExternalAuthenticationService>();
+builder.Services.AddScoped<IBffSessionValidator, BffSessionValidator>();
 builder.Services.AddSingleton<IExternalIdentityProvider, LocalExternalIdentityProvider>();
 var oidcAuthority = builder.Configuration["Identity:ExternalProviders:Oidc:Authority"];
 if (!string.IsNullOrWhiteSpace(oidcAuthority))
@@ -34,14 +36,16 @@ if (!string.IsNullOrWhiteSpace(oidcAuthority))
     {
         client.Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue("Identity:ExternalProviders:Oidc:TimeoutSeconds", 10));
     });
-    builder.Services.AddSingleton(sp => new OpenIdConnectOptions
+    var oidcOptions = new OpenIdConnectOptions
     {
         Authority = oidcAuthority,
         ClientId = builder.Configuration["Identity:ExternalProviders:Oidc:ClientId"] ?? string.Empty,
         ClientSecret = builder.Configuration["Identity:ExternalProviders:Oidc:ClientSecret"],
         RequireHttpsMetadata = !builder.Environment.IsDevelopment(),
         Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue("Identity:ExternalProviders:Oidc:TimeoutSeconds", 10))
-    });
+    };
+    ValidateExternalProviderOptions(oidcOptions.Authority, oidcOptions.ClientId, oidcOptions.RequireHttpsMetadata, oidcOptions.Timeout, "OIDC");
+    builder.Services.AddSingleton(oidcOptions);
     builder.Services.AddSingleton<IExternalIdentityProvider>(sp => sp.GetRequiredService<OpenIdConnectIdentityProvider>());
 }
 var keycloakAuthority = builder.Configuration["Identity:ExternalProviders:Keycloak:Authority"];
@@ -51,14 +55,16 @@ if (!string.IsNullOrWhiteSpace(keycloakAuthority))
     {
         client.Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue("Identity:ExternalProviders:Keycloak:TimeoutSeconds", 10));
     });
-    builder.Services.AddSingleton(sp => new KeycloakOptions
+    var keycloakOptions = new KeycloakOptions
     {
         Authority = keycloakAuthority,
         ClientId = builder.Configuration["Identity:ExternalProviders:Keycloak:ClientId"] ?? string.Empty,
         ClientSecret = builder.Configuration["Identity:ExternalProviders:Keycloak:ClientSecret"],
         RequireHttpsMetadata = !builder.Environment.IsDevelopment(),
         Timeout = TimeSpan.FromSeconds(builder.Configuration.GetValue("Identity:ExternalProviders:Keycloak:TimeoutSeconds", 10))
-    });
+    };
+    ValidateExternalProviderOptions(keycloakOptions.Authority, keycloakOptions.ClientId, keycloakOptions.RequireHttpsMetadata, keycloakOptions.Timeout, "Keycloak");
+    builder.Services.AddSingleton(keycloakOptions);
     builder.Services.AddSingleton<IExternalIdentityProvider>(sp => sp.GetRequiredService<KeycloakIdentityProvider>());
 }
 builder.Services.AddSingleton<IExternalIdentityProviderRegistry, ExternalIdentityProviderRegistry>();
@@ -72,7 +78,6 @@ builder.Services.AddOptions<PermissionManifestOptions>()
     .Bind(builder.Configuration.GetSection(PermissionManifestOptions.SectionName))
     .Validate(x => !string.IsNullOrWhiteSpace(x.ServiceId) && !string.IsNullOrWhiteSpace(x.ServiceName), "Permission manifest service metadata is required.")
     .ValidateOnStart();
-builder.Services.AddHostedService<PermissionManifestHostedService>();
 builder.Services.AddCompanyAuthentication(new Company.Identity.Authentication.IdentityAuthenticationOptions
 {
     Authority = authority,
@@ -160,15 +165,36 @@ app.MapGet("/api/auth/session", (HttpContext context) => Results.Ok(new { authen
 app.MapPost("/api/auth/external/link", async (
     ExternalIdentityLinkRequest request,
     ICurrentUserContext currentUser,
+    IExternalIdentityProviderRegistry providers,
     ExternalIdentityLinkingService linking,
     CancellationToken cancellationToken) =>
 {
     if (!currentUser.IsAuthenticated || currentUser.UserId is null)
         return Results.Unauthorized();
 
+    var provider = providers.Find(request.Provider);
+    if (provider is null)
+        return Results.BadRequest(new ProblemResponse(
+            "external_provider_unavailable",
+            "The external identity provider is unavailable.",
+            Guid.NewGuid().ToString("N")));
+
+    var externalIdentity = await provider.AuthenticateAsync(
+        new ExternalAuthenticationRequest(
+            request.AuthorizationCode,
+            request.RedirectUri,
+            request.CodeVerifier),
+        cancellationToken);
+    if (externalIdentity is null)
+        return Results.Unauthorized();
+
     var result = await linking.LinkAsync(
         new UserId(currentUser.UserId.Value),
-        new ExternalIdentityDescriptor(request.Provider, request.Subject, null, null),
+        new ExternalIdentityDescriptor(
+            externalIdentity.Provider,
+            externalIdentity.Subject,
+            externalIdentity.Username,
+            externalIdentity.DisplayName),
         cancellationToken);
     return result.Succeeded ? Results.NoContent() : Results.Conflict(new ProblemResponse(
         result.ErrorCode ?? "external_identity_link_failed",
@@ -187,13 +213,31 @@ app.MapPost("/api/auth/bff/sign-in", async (
     IAntiforgery antiforgery,
     CancellationToken cancellationToken) =>
 {
-    var result = await authentication.LoginAsync(request.Username, request.Password, cancellationToken);
+    try
+    {
+        await antiforgery.ValidateRequestAsync(context);
+    }
+    catch (AntiforgeryValidationException)
+    {
+        return Results.BadRequest(new ProblemResponse(
+            "antiforgery_validation_failed",
+            "The antiforgery token is invalid or missing.",
+            Guid.NewGuid().ToString("N")));
+    }
+
+    var result = await authentication.LoginForSessionAsync(
+        request.Username,
+        request.Password,
+        cancellationToken);
     if (!result.Succeeded || result.SessionId is null)
         return Results.Unauthorized();
 
     var claims = new[]
     {
-        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, result.SessionId.Value.ToString()),
+        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, result.UserId!.Value.ToString()),
+        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, result.Username!),
+        new System.Security.Claims.Claim("sub", result.UserId.Value.ToString()),
+        new System.Security.Claims.Claim("name", result.DisplayName!),
         new System.Security.Claims.Claim("sid", result.SessionId.Value.ToString())
     };
     var identity = new System.Security.Claims.ClaimsIdentity(claims, ServiceCollectionExtensions.BffScheme);
@@ -201,10 +245,50 @@ app.MapPost("/api/auth/bff/sign-in", async (
     var csrf = antiforgery.GetAndStoreTokens(context);
     return Results.Ok(new { csrfToken = csrf.RequestToken });
 });
-app.MapPost("/api/auth/bff/sign-out", async (HttpContext context) =>
+app.MapPost("/api/auth/bff/sign-out", async (
+    HttpContext context,
+    LocalAuthenticationService authentication,
+    IAntiforgery antiforgery,
+    CancellationToken cancellationToken) =>
 {
+    try
+    {
+        await antiforgery.ValidateRequestAsync(context);
+    }
+    catch (AntiforgeryValidationException)
+    {
+        return Results.BadRequest(new ProblemResponse(
+            "antiforgery_validation_failed",
+            "The antiforgery token is invalid or missing.",
+            Guid.NewGuid().ToString("N")));
+    }
+
+    if (Guid.TryParse(context.User.FindFirst("sid")?.Value, out var sessionId))
+        await authentication.LogoutAsync(sessionId, cancellationToken);
+
     await context.SignOutAsync(ServiceCollectionExtensions.BffScheme);
     return Results.NoContent();
+})
+.RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute
+{
+    AuthenticationSchemes = ServiceCollectionExtensions.BffScheme
 });
 app.Run();
+
+static void ValidateExternalProviderOptions(
+    string authority,
+    string clientId,
+    bool requireHttpsMetadata,
+    TimeSpan timeout,
+    string providerName)
+{
+    if (!Uri.TryCreate(authority, UriKind.Absolute, out var authorityUri) ||
+        (requireHttpsMetadata && authorityUri.Scheme != Uri.UriSchemeHttps))
+        throw new InvalidOperationException($"{providerName} authority must be an absolute HTTPS URI when HTTPS metadata is required.");
+    if (string.IsNullOrWhiteSpace(clientId))
+        throw new InvalidOperationException($"{providerName} client ID is required.");
+    if (timeout <= TimeSpan.Zero)
+        throw new InvalidOperationException($"{providerName} timeout must be positive.");
+}
+
 public partial class Program;

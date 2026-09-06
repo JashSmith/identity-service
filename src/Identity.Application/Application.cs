@@ -73,6 +73,17 @@ public sealed record PermissionManifest(string ServiceId, string ServiceName, st
 public sealed record AccessTokenResult(string AccessToken, DateTimeOffset ExpiresAt, string KeyId);
 public sealed record AuthenticationResult(bool Succeeded, AccessTokenResult? AccessToken, string? RefreshToken, Guid? SessionId, string? ErrorCode)
 { public static AuthenticationResult Failure(string code) => new(false, null, null, null, code); }
+public sealed record SessionAuthenticationResult(
+    bool Succeeded,
+    Guid? SessionId,
+    Guid? UserId,
+    string? Username,
+    string? DisplayName,
+    string? ErrorCode)
+{
+    public static SessionAuthenticationResult Failure(string code)
+        => new(false, null, null, null, null, code);
+}
 
 public sealed class ExternalAuthenticationService(
     IExternalIdentityLinkRepository links,
@@ -169,6 +180,43 @@ public sealed class LocalAuthenticationService(
         var refresh = new RefreshTokenRecord(Guid.NewGuid(), user.Id, session.Id, TokenGenerator.Hash(rawRefresh), Guid.NewGuid().ToString("N"), clock.UtcNow.AddDays(30), clock.UtcNow);
         await refreshTokens.AddAsync(refresh, cancellationToken);
         return new AuthenticationResult(true, access, rawRefresh, session.Id, null);
+    }
+
+    public async Task<SessionAuthenticationResult> LoginForSessionAsync(
+        string username,
+        string password,
+        CancellationToken cancellationToken)
+    {
+        var user = await users.FindByUsernameAsync(username.Trim(), cancellationToken);
+        if (user is null || !user.IsEnabled)
+            return SessionAuthenticationResult.Failure("invalid_credentials");
+        if (user.IsLocked(clock.UtcNow))
+            return SessionAuthenticationResult.Failure("account_locked");
+
+        var credential = await credentials.FindAsync(user.Id, cancellationToken);
+        if (credential is null || !passwordVerifier.Verify(credential.PasswordHash, password))
+        {
+            user.RecordFailedLogin(clock.UtcNow, 5, TimeSpan.FromMinutes(15));
+            await users.SaveAsync(user, cancellationToken);
+            return SessionAuthenticationResult.Failure("invalid_credentials");
+        }
+
+        user.RecordSuccessfulLogin(clock.UtcNow);
+        await users.SaveAsync(user, cancellationToken);
+        var session = new UserSession(
+            Guid.NewGuid(),
+            user.Id,
+            clock.UtcNow,
+            clock.UtcNow.AddHours(8),
+            user.SecurityStamp);
+        await sessions.AddAsync(session, cancellationToken);
+        return new SessionAuthenticationResult(
+            true,
+            session.Id,
+            user.Id.Value,
+            user.Username,
+            user.DisplayName,
+            null);
     }
 
     public async Task<AuthenticationResult> RefreshAsync(string rawRefreshToken, CancellationToken cancellationToken)
