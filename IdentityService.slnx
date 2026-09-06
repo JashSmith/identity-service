@@ -32,5 +32,6 @@
     <Project Path="tests/Identity.Infrastructure.Tests/Identity.Infrastructure.Tests.csproj" />
     <Project Path="tests/Identity.Api.Tests/Identity.Api.Tests.csproj" />
     <Project Path="tests/Identity.Messaging.Tests/Identity.Messaging.Tests.csproj" />
+    <Project Path="tests/Identity.Persistence.EntityFrameworkCore.Tests/Identity.Persistence.EntityFrameworkCore.Tests.csproj" />
   </Folder>
 </Solution>

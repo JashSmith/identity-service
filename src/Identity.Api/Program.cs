@@ -110,7 +110,9 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-    if (db.Database.GetPendingMigrations().Any())
+    // Use migrations whenever the provider has a migration history. Keep EnsureCreated
+    // only as a development fallback for a model that has not received its first migration.
+    if (db.Database.GetMigrations().Any())
         db.Database.Migrate();
     else
         db.Database.EnsureCreated();
