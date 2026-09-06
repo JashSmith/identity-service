@@ -26,7 +26,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             b.Property(x => x.Username).HasMaxLength(256).IsRequired();
             b.HasIndex(x => x.Username).IsUnique();
             b.Property(x => x.SecurityStamp).HasMaxLength(64).IsRequired();
-            b.Ignore(x => x.Roles); b.Ignore(x => x.DirectPermissions);
+            b.Ignore(x => x.Roles);
+            b.Ignore(x => x.DirectPermissions);
         });
         modelBuilder.Entity<PasswordCredential>(b =>
         {
@@ -54,7 +55,9 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasConversion(x => x.Value, x => new RoleId(x));
-            b.Property(x => x.Name).HasMaxLength(128).IsRequired(); b.HasIndex(x => x.Name).IsUnique(); b.Ignore(x => x.Permissions);
+            b.Property(x => x.Name).HasMaxLength(128).IsRequired();
+            b.HasIndex(x => x.Name).IsUnique();
+            b.Ignore(x => x.Permissions);
         });
         modelBuilder.Entity<UserPermission>(b =>
         {
@@ -95,8 +98,10 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
         {
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).HasConversion(x => x.Value, x => new PermissionId(x));
-            b.Property(x => x.Name).HasMaxLength(200).IsRequired(); b.HasIndex(x => new { x.ServiceName, x.Name }).IsUnique();
-            b.Property(x => x.ServiceName).HasMaxLength(128).IsRequired(); b.Property(x => x.Version).HasMaxLength(64).IsRequired();
+            b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            b.HasIndex(x => new { x.ServiceName, x.Name }).IsUnique();
+            b.Property(x => x.ServiceName).HasMaxLength(128).IsRequired();
+            b.Property(x => x.Version).HasMaxLength(64).IsRequired();
         });
     }
 }

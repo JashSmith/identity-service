@@ -1,5 +1,6 @@
 using Company.Identity.Abstractions;
 using Microsoft.AspNetCore.Authorization;
+
 namespace Company.Identity.Authorization;
 
 public interface IPermissionEvaluator

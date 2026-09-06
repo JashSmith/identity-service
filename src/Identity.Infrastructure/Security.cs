@@ -11,30 +11,49 @@ namespace Identity.Infrastructure;
 
 public sealed class Pbkdf2PasswordVerifier : IPasswordVerifier
 {
-    private const int SaltSize = 16; private const int KeySize = 32; private const int Iterations = 210_000;
+    private const int SaltSize = 16;
+    private const int KeySize = 32;
+    private const int Iterations = 210_000;
+
     public string Hash(string password)
     {
-        var salt = RandomNumberGenerator.GetBytes(SaltSize); var key = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA512, KeySize);
+        var salt = RandomNumberGenerator.GetBytes(SaltSize);
+        var key = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA512, KeySize);
         return $"pbkdf2-sha512:{Iterations}:{Convert.ToBase64String(salt)}:{Convert.ToBase64String(key)}";
     }
+
     public bool Verify(string encodedHash, string password)
     {
         try
         {
-            var parts = encodedHash.Split(':'); if (parts.Length != 4 || parts[0] != "pbkdf2-sha512") return false;
-            var iterations = int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture); var salt = Convert.FromBase64String(parts[2]); var expected = Convert.FromBase64String(parts[3]);
-            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA512, expected.Length); return CryptographicOperations.FixedTimeEquals(actual, expected);
+            var parts = encodedHash.Split(':');
+            if (parts.Length != 4 || parts[0] != "pbkdf2-sha512") return false;
+            var iterations = int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+            var salt = Convert.FromBase64String(parts[2]);
+            var expected = Convert.FromBase64String(parts[3]);
+            var actual =
+                Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA512, expected.Length);
+            return CryptographicOperations.FixedTimeEquals(actual, expected);
         }
-        catch (FormatException) { return false; }
-        catch (ArgumentException) { return false; }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 }
 
 public sealed class JwtAccessTokenIssuer(JwtSigningKeyProvider keys, ISystemClock clock) : IAccessTokenIssuer
 {
-    public Task<AccessTokenResult> IssueAsync(User user, IReadOnlyCollection<string> permissions, Guid sessionId, CancellationToken cancellationToken)
+    public Task<AccessTokenResult> IssueAsync(User user, IReadOnlyCollection<string> permissions, Guid sessionId,
+        CancellationToken cancellationToken)
     {
-        var now = clock.UtcNow; var expires = now.AddMinutes(10); var credentials = new SigningCredentials(keys.Key, SecurityAlgorithms.RsaSha256);
+        var now = clock.UtcNow;
+        var expires = now.AddMinutes(10);
+        var credentials = new SigningCredentials(keys.Key, SecurityAlgorithms.RsaSha256);
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.Value.ToString()),
@@ -46,9 +65,11 @@ public sealed class JwtAccessTokenIssuer(JwtSigningKeyProvider keys, ISystemCloc
             new("ver", user.SecurityStamp)
         };
         claims.AddRange(permissions.Select(x => new Claim("permission", x)));
-        var token = new JwtSecurityToken(keys.Issuer, keys.Audience, claims, now.UtcDateTime, expires.UtcDateTime, credentials);
+        var token = new JwtSecurityToken(keys.Issuer, keys.Audience, claims, now.UtcDateTime, expires.UtcDateTime,
+            credentials);
         token.Header["kid"] = keys.KeyId;
-        return Task.FromResult(new AccessTokenResult(new JwtSecurityTokenHandler().WriteToken(token), expires, keys.KeyId));
+        return Task.FromResult(new AccessTokenResult(new JwtSecurityTokenHandler().WriteToken(token), expires,
+            keys.KeyId));
     }
 }
 
@@ -77,8 +98,10 @@ public sealed class JwtSigningKeyProvider : IDisposable
             StoragePath = configuration["Identity:Tokens:StoragePath"] ?? "identity-signing-keys.json",
             KeyId = configuration["Identity:Tokens:KeyId"] ?? "development-key-1",
             KeySize = ParsePositiveInt(configuration["Identity:Tokens:KeySize"], 2048),
-            ActiveKeyLifetime = ParseDuration(configuration["Identity:Tokens:ActiveKeyLifetime"], TimeSpan.FromDays(30)),
-            KeyOverlapLifetime = ParseDuration(configuration["Identity:Tokens:KeyOverlapLifetime"], TimeSpan.FromDays(14)),
+            ActiveKeyLifetime =
+                ParseDuration(configuration["Identity:Tokens:ActiveKeyLifetime"], TimeSpan.FromDays(30)),
+            KeyOverlapLifetime =
+                ParseDuration(configuration["Identity:Tokens:KeyOverlapLifetime"], TimeSpan.FromDays(14)),
             AutomaticRotation = ParseBool(configuration["Identity:Tokens:AutomaticRotation"], true)
         };
         Validate(options);
@@ -202,11 +225,15 @@ public sealed class JwtSigningKeyProvider : IDisposable
 
     private static void Validate(JwtSigningKeyOptions options)
     {
-        if (string.IsNullOrWhiteSpace(options.StoragePath)) throw new InvalidOperationException("JWT signing-key storage path is required.");
-        if (string.IsNullOrWhiteSpace(options.KeyId)) throw new InvalidOperationException("JWT signing-key ID is required.");
+        if (string.IsNullOrWhiteSpace(options.StoragePath))
+            throw new InvalidOperationException("JWT signing-key storage path is required.");
+        if (string.IsNullOrWhiteSpace(options.KeyId))
+            throw new InvalidOperationException("JWT signing-key ID is required.");
         if (options.KeySize < 2048) throw new InvalidOperationException("JWT signing keys must be at least 2048 bits.");
-        if (options.ActiveKeyLifetime <= TimeSpan.Zero) throw new InvalidOperationException("JWT active-key lifetime must be positive.");
-        if (options.KeyOverlapLifetime <= TimeSpan.Zero) throw new InvalidOperationException("JWT key-overlap lifetime must be positive.");
+        if (options.ActiveKeyLifetime <= TimeSpan.Zero)
+            throw new InvalidOperationException("JWT active-key lifetime must be positive.");
+        if (options.KeyOverlapLifetime <= TimeSpan.Zero)
+            throw new InvalidOperationException("JWT key-overlap lifetime must be positive.");
     }
 
     private static int ParsePositiveInt(string? value, int fallback)
@@ -218,7 +245,11 @@ public sealed class JwtSigningKeyProvider : IDisposable
     private static TimeSpan ParseDuration(string? value, TimeSpan fallback)
         => TimeSpan.TryParse(value, out var result) && result > TimeSpan.Zero ? result : fallback;
 
-    private sealed class PersistedSigningKey(string keyId, DateTimeOffset createdAt, DateTimeOffset? retireAt, string privateKey)
+    private sealed class PersistedSigningKey(
+        string keyId,
+        DateTimeOffset createdAt,
+        DateTimeOffset? retireAt,
+        string privateKey)
     {
         public string KeyId { get; } = keyId;
         public DateTimeOffset CreatedAt { get; } = createdAt;

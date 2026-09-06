@@ -2,7 +2,9 @@ namespace Identity.Domain;
 
 public sealed class ExternalIdentityLink
 {
-    private ExternalIdentityLink() { }
+    private ExternalIdentityLink()
+    {
+    }
 
     public ExternalIdentityLink(
         Guid id,

@@ -35,9 +35,11 @@ public static class RabbitMqServiceCollectionExtensions
     {
         services.AddOptions<RabbitMqOptions>()
             .Bind(configuration.GetSection(RabbitMqOptions.SectionName))
-            .Validate(x => !x.Enabled || Uri.TryCreate(x.ConnectionString, UriKind.Absolute, out _), "RabbitMQ connection string must be a valid URI when enabled.")
+            .Validate(x => !x.Enabled || Uri.TryCreate(x.ConnectionString, UriKind.Absolute, out _),
+                "RabbitMQ connection string must be a valid URI when enabled.")
             .Validate(x => x.RetryCount is >= 0 and <= 20, "RetryCount must be between 0 and 20.")
-            .Validate(x => x.RetryDelayMilliseconds is >= 100 and <= 300_000, "RetryDelayMilliseconds must be between 100 and 300000.")
+            .Validate(x => x.RetryDelayMilliseconds is >= 100 and <= 300_000,
+                "RetryDelayMilliseconds must be between 100 and 300000.")
             .ValidateOnStart();
         services.AddSingleton<IIntegrationEventPublisher, RabbitMqIntegrationEventPublisher>();
         if (configuration.GetValue<bool>($"{RabbitMqOptions.SectionName}:ConsumeEnabled"))
@@ -61,7 +63,8 @@ public sealed class RabbitMqIntegrationEventPublisher(
         var envelope = message switch
         {
             PermissionManifestEvent value => value,
-            ServicePermissionManifestPublished value => ToEnvelope(value.Manifest, PermissionManifestEventTypes.Published),
+            ServicePermissionManifestPublished value => ToEnvelope(value.Manifest,
+                PermissionManifestEventTypes.Published),
             ServicePermissionManifestUpdated value => ToEnvelope(value.Manifest, PermissionManifestEventTypes.Updated),
             _ => throw new NotSupportedException($"Unsupported RabbitMQ message type: {typeof(T).FullName}.")
         };
@@ -84,8 +87,10 @@ public sealed class RabbitMqIntegrationEventPublisher(
             CorrelationId = envelope.CorrelationId.ToString("N"),
             Type = envelope.EventType
         };
-        await channel.BasicPublishAsync(_options.Exchange, _options.RoutingKey, true, properties, body, cancellationToken);
-        logger.LogInformation("Published permission manifest event {EventId} for service {ServiceName}.", envelope.EventId, envelope.ServiceName);
+        await channel.BasicPublishAsync(_options.Exchange, _options.RoutingKey, true, properties, body,
+            cancellationToken);
+        logger.LogInformation("Published permission manifest event {EventId} for service {ServiceName}.",
+            envelope.EventId, envelope.ServiceName);
     }
 
     private static PermissionManifestEvent ToEnvelope(PermissionManifestMessage message, string eventType) => new(
@@ -95,18 +100,23 @@ public sealed class RabbitMqIntegrationEventPublisher(
 
 internal static class RabbitMqTopology
 {
-    public static async Task DeclareAsync(IChannel channel, RabbitMqOptions options, CancellationToken cancellationToken)
+    public static async Task DeclareAsync(IChannel channel, RabbitMqOptions options,
+        CancellationToken cancellationToken)
     {
-        await channel.ExchangeDeclareAsync(options.Exchange, ExchangeType.Topic, durable: true, autoDelete: false, cancellationToken: cancellationToken);
-        await channel.ExchangeDeclareAsync(options.DeadLetterExchange, ExchangeType.Direct, durable: true, autoDelete: false, cancellationToken: cancellationToken);
-        await channel.ExchangeDeclareAsync(options.RetryExchange, ExchangeType.Direct, durable: true, autoDelete: false, cancellationToken: cancellationToken);
+        await channel.ExchangeDeclareAsync(options.Exchange, ExchangeType.Topic, durable: true, autoDelete: false,
+            cancellationToken: cancellationToken);
+        await channel.ExchangeDeclareAsync(options.DeadLetterExchange, ExchangeType.Direct, durable: true,
+            autoDelete: false, cancellationToken: cancellationToken);
+        await channel.ExchangeDeclareAsync(options.RetryExchange, ExchangeType.Direct, durable: true, autoDelete: false,
+            cancellationToken: cancellationToken);
         await channel.QueueDeclareAsync(options.Queue, durable: true, exclusive: false, autoDelete: false,
             arguments: new Dictionary<string, object?>
             {
                 ["x-dead-letter-exchange"] = options.DeadLetterExchange,
                 ["x-dead-letter-routing-key"] = options.Queue
             }, cancellationToken: cancellationToken);
-        await channel.QueueBindAsync(options.Queue, options.Exchange, options.RoutingKey, cancellationToken: cancellationToken);
+        await channel.QueueBindAsync(options.Queue, options.Exchange, options.RoutingKey,
+            cancellationToken: cancellationToken);
         await channel.QueueDeclareAsync($"{options.Queue}.retry", durable: true, exclusive: false, autoDelete: false,
             arguments: new Dictionary<string, object?>
             {
@@ -114,9 +124,12 @@ internal static class RabbitMqTopology
                 ["x-dead-letter-exchange"] = options.Exchange,
                 ["x-dead-letter-routing-key"] = options.RoutingKey
             }, cancellationToken: cancellationToken);
-        await channel.QueueBindAsync($"{options.Queue}.retry", options.RetryExchange, options.Queue, cancellationToken: cancellationToken);
-        await channel.QueueDeclareAsync($"{options.Queue}.dead", durable: true, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
-        await channel.QueueBindAsync($"{options.Queue}.dead", options.DeadLetterExchange, options.Queue, cancellationToken: cancellationToken);
+        await channel.QueueBindAsync($"{options.Queue}.retry", options.RetryExchange, options.Queue,
+            cancellationToken: cancellationToken);
+        await channel.QueueDeclareAsync($"{options.Queue}.dead", durable: true, exclusive: false, autoDelete: false,
+            cancellationToken: cancellationToken);
+        await channel.QueueBindAsync($"{options.Queue}.dead", options.DeadLetterExchange, options.Queue,
+            cancellationToken: cancellationToken);
     }
 }
 
@@ -137,12 +150,19 @@ public sealed class RabbitMqPermissionManifestConsumer(
             {
                 await ConsumeConnectionAsync(stoppingToken);
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+            }
             catch (Exception exception)
             {
                 logger.LogWarning(exception, "RabbitMQ consumer unavailable; retrying without stopping the service.");
-                try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                }
             }
         }
     }
@@ -165,23 +185,29 @@ public sealed class RabbitMqPermissionManifestConsumer(
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
     }
 
-    private async Task HandleAsync(IChannel channel, BasicDeliverEventArgs delivery, CancellationToken cancellationToken)
+    private async Task HandleAsync(IChannel channel, BasicDeliverEventArgs delivery,
+        CancellationToken cancellationToken)
     {
         try
         {
             var message = JsonSerializer.Deserialize<PermissionManifestEvent>(delivery.Body.Span, _json);
-            if (message is null || message.SchemaVersion != 1 || string.IsNullOrWhiteSpace(message.ServiceId) || string.IsNullOrWhiteSpace(message.ServiceName))
+            if (message is null || message.SchemaVersion != 1 || string.IsNullOrWhiteSpace(message.ServiceId) ||
+                string.IsNullOrWhiteSpace(message.ServiceName))
                 throw new InvalidDataException("Invalid permission-manifest event.");
 
             await using var scope = scopeFactory.CreateAsyncScope();
             var synchronizer = scope.ServiceProvider.GetRequiredService<PermissionManifestSynchronizer>();
-            var accepted = await synchronizer.SynchronizeAsync(PermissionManifestEventMapper.ToApplicationManifest(message), cancellationToken);
-            logger.LogDebug("Permission manifest event {EventId} was {Result}.", message.EventId, accepted ? "accepted" : "ignored as duplicate");
+            var accepted =
+                await synchronizer.SynchronizeAsync(PermissionManifestEventMapper.ToApplicationManifest(message),
+                    cancellationToken);
+            logger.LogDebug("Permission manifest event {EventId} was {Result}.", message.EventId,
+                accepted ? "accepted" : "ignored as duplicate");
             await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, cancellationToken);
         }
         catch (Exception exception) when (exception is JsonException or InvalidDataException or ArgumentException)
         {
-            logger.LogWarning(exception, "Rejecting malformed permission-manifest message {DeliveryTag}.", delivery.DeliveryTag);
+            logger.LogWarning(exception, "Rejecting malformed permission-manifest message {DeliveryTag}.",
+                delivery.DeliveryTag);
             await channel.BasicRejectAsync(delivery.DeliveryTag, requeue: false, cancellationToken);
         }
         catch (Exception exception)
@@ -189,12 +215,16 @@ public sealed class RabbitMqPermissionManifestConsumer(
             var retryCount = GetRetryCount(delivery.BasicProperties);
             if (retryCount >= _options.RetryCount)
             {
-                logger.LogError(exception, "Permission-manifest processing failed after {RetryCount} retries for {DeliveryTag}; moving to dead letter queue.", retryCount, delivery.DeliveryTag);
+                logger.LogError(exception,
+                    "Permission-manifest processing failed after {RetryCount} retries for {DeliveryTag}; moving to dead letter queue.",
+                    retryCount, delivery.DeliveryTag);
                 await channel.BasicRejectAsync(delivery.DeliveryTag, requeue: false, cancellationToken);
                 return;
             }
 
-            logger.LogWarning(exception, "Permission-manifest processing failed for {DeliveryTag}; scheduling retry {RetryCount}.", delivery.DeliveryTag, retryCount + 1);
+            logger.LogWarning(exception,
+                "Permission-manifest processing failed for {DeliveryTag}; scheduling retry {RetryCount}.",
+                delivery.DeliveryTag, retryCount + 1);
             var properties = new BasicProperties
             {
                 ContentType = delivery.BasicProperties.ContentType,
@@ -204,7 +234,8 @@ public sealed class RabbitMqPermissionManifestConsumer(
                 Type = delivery.BasicProperties.Type,
                 Headers = new Dictionary<string, object?> { [RetryHeader] = retryCount + 1 }
             };
-            await channel.BasicPublishAsync(_options.RetryExchange, _options.Queue, true, properties, delivery.Body, cancellationToken);
+            await channel.BasicPublishAsync(_options.RetryExchange, _options.Queue, true, properties, delivery.Body,
+                cancellationToken);
             await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, cancellationToken);
         }
     }

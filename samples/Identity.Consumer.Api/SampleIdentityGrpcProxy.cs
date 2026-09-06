@@ -24,6 +24,7 @@ public sealed class BearerTokenGrpcInterceptor(IHttpContextAccessor accessor) : 
             headers.Add("authorization", token);
 
         var options = context.Options.WithHeaders(headers);
-        return continuation(request, new ClientInterceptorContext<TRequest, TResponse>(context.Method, context.Host, options));
+        return continuation(request,
+            new ClientInterceptorContext<TRequest, TResponse>(context.Method, context.Host, options));
     }
 }

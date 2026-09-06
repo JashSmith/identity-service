@@ -2,8 +2,15 @@ using Identity.Domain;
 
 namespace Identity.Application;
 
-public interface ISystemClock { DateTimeOffset UtcNow { get; } }
-public sealed class SystemClock(TimeProvider timeProvider) : ISystemClock { public DateTimeOffset UtcNow => timeProvider.GetUtcNow(); }
+public interface ISystemClock
+{
+    DateTimeOffset UtcNow { get; }
+}
+
+public sealed class SystemClock(TimeProvider timeProvider) : ISystemClock
+{
+    public DateTimeOffset UtcNow => timeProvider.GetUtcNow();
+}
 
 public interface ICurrentUserContext
 {
@@ -24,32 +31,42 @@ public interface IUserRepository
     Task AddAsync(User user, CancellationToken cancellationToken);
     Task SaveAsync(User user, CancellationToken cancellationToken);
 }
+
 public interface IExternalIdentityLinkRepository
 {
     Task<ExternalIdentityLink?> FindAsync(string provider, string subject, CancellationToken cancellationToken);
-    Task<IReadOnlyCollection<ExternalIdentityLink>> FindForUserAsync(UserId userId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyCollection<ExternalIdentityLink>>
+        FindForUserAsync(UserId userId, CancellationToken cancellationToken);
+
     Task AddAsync(ExternalIdentityLink link, CancellationToken cancellationToken);
     Task SaveAsync(ExternalIdentityLink link, CancellationToken cancellationToken);
 }
+
 public interface IPasswordCredentialStore
 {
     Task<PasswordCredential?> FindAsync(UserId userId, CancellationToken cancellationToken);
     Task SaveAsync(PasswordCredential credential, CancellationToken cancellationToken);
 }
+
 public interface IPermissionRepository
 {
     Task<Permission?> FindByNameAsync(string name, CancellationToken cancellationToken);
     Task UpsertManifestAsync(PermissionManifest manifest, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<string>> GetEffectivePermissionsAsync(UserId userId, CancellationToken cancellationToken);
 }
+
 public interface IPermissionManifestVersionStore
 {
     Task<bool> TryAcceptAsync(PermissionManifest manifest, CancellationToken cancellationToken);
 }
+
 public interface IUnitOfWork
 {
-    Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken);
+    Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken);
 }
+
 public interface IRefreshTokenStore
 {
     Task<RefreshTokenRecord?> FindAsync(string tokenHash, CancellationToken cancellationToken);
@@ -57,6 +74,7 @@ public interface IRefreshTokenStore
     Task RotateAsync(RefreshTokenRecord current, RefreshTokenRecord replacement, CancellationToken cancellationToken);
     Task RevokeFamilyAsync(string familyId, DateTimeOffset revokedAt, CancellationToken cancellationToken);
 }
+
 public interface ISessionStore
 {
     Task AddAsync(UserSession session, CancellationToken cancellationToken);
@@ -64,16 +82,50 @@ public interface ISessionStore
     Task<IReadOnlyCollection<UserSession>> FindForUserAsync(UserId userId, CancellationToken cancellationToken);
     Task RevokeAsync(UserSession session, DateTimeOffset at, CancellationToken cancellationToken);
 }
-public interface IPasswordVerifier { bool Verify(string encodedHash, string password); string Hash(string password); }
-public interface IAccessTokenIssuer { Task<AccessTokenResult> IssueAsync(User user, IReadOnlyCollection<string> permissions, Guid sessionId, CancellationToken cancellationToken); }
-public interface IIntegrationEventPublisher { Task PublishAsync<T>(T message, CancellationToken cancellationToken) where T : class; }
+
+public interface IPasswordVerifier
+{
+    bool Verify(string encodedHash, string password);
+    string Hash(string password);
+}
+
+public interface IAccessTokenIssuer
+{
+    Task<AccessTokenResult> IssueAsync(User user, IReadOnlyCollection<string> permissions, Guid sessionId,
+        CancellationToken cancellationToken);
+}
+
+public interface IIntegrationEventPublisher
+{
+    Task PublishAsync<T>(T message, CancellationToken cancellationToken) where T : class;
+}
 
 public sealed record ExternalIdentityDescriptor(string Provider, string Subject, string? Username, string? DisplayName);
+
 public sealed record PermissionDefinition(string Name, string Description, string Module);
-public sealed record PermissionManifest(string ServiceId, string ServiceName, string Version, string Environment, IReadOnlyCollection<PermissionDefinition> Permissions, string ManifestVersion, Guid CorrelationId, DateTimeOffset PublishedAt);
+
+public sealed record PermissionManifest(
+    string ServiceId,
+    string ServiceName,
+    string Version,
+    string Environment,
+    IReadOnlyCollection<PermissionDefinition> Permissions,
+    string ManifestVersion,
+    Guid CorrelationId,
+    DateTimeOffset PublishedAt);
+
 public sealed record AccessTokenResult(string AccessToken, DateTimeOffset ExpiresAt, string KeyId);
-public sealed record AuthenticationResult(bool Succeeded, AccessTokenResult? AccessToken, string? RefreshToken, Guid? SessionId, string? ErrorCode)
-{ public static AuthenticationResult Failure(string code) => new(false, null, null, null, code); }
+
+public sealed record AuthenticationResult(
+    bool Succeeded,
+    AccessTokenResult? AccessToken,
+    string? RefreshToken,
+    Guid? SessionId,
+    string? ErrorCode)
+{
+    public static AuthenticationResult Failure(string code) => new(false, null, null, null, code);
+}
+
 public sealed record SessionAuthenticationResult(
     bool Succeeded,
     Guid? SessionId,
@@ -160,7 +212,8 @@ public sealed class LocalAuthenticationService(
     IAccessTokenIssuer tokenIssuer,
     ISystemClock clock)
 {
-    public async Task<AuthenticationResult> LoginAsync(string username, string password, CancellationToken cancellationToken)
+    public async Task<AuthenticationResult> LoginAsync(string username, string password,
+        CancellationToken cancellationToken)
     {
         var user = await users.FindByUsernameAsync(username.Trim(), cancellationToken);
         if (user is null || !user.IsEnabled) return AuthenticationResult.Failure("invalid_credentials");
@@ -172,6 +225,7 @@ public sealed class LocalAuthenticationService(
             await users.SaveAsync(user, cancellationToken);
             return AuthenticationResult.Failure("invalid_credentials");
         }
+
         user.RecordSuccessfulLogin(clock.UtcNow);
         await users.SaveAsync(user, cancellationToken);
         return await IssueTokensAsync(user, cancellationToken);
@@ -256,12 +310,15 @@ public sealed class LocalAuthenticationService(
             await refreshTokens.RevokeFamilyAsync(current.FamilyId, clock.UtcNow, cancellationToken);
             return AuthenticationResult.Failure("refresh_token_reuse_detected");
         }
+
         var session = await sessions.FindAsync(current.SessionId, cancellationToken);
         var user = await users.FindAsync(current.UserId, cancellationToken);
-        if (session is null || user is null || !session.IsActive(clock.UtcNow) || !user.IsEnabled || user.IsLocked(clock.UtcNow))
+        if (session is null || user is null || !session.IsActive(clock.UtcNow) || !user.IsEnabled ||
+            user.IsLocked(clock.UtcNow))
             return AuthenticationResult.Failure("session_invalid");
         var rawReplacement = TokenGenerator.Generate();
-        var replacement = new RefreshTokenRecord(Guid.NewGuid(), user.Id, session.Id, TokenGenerator.Hash(rawReplacement), current.FamilyId, clock.UtcNow.AddDays(30), clock.UtcNow);
+        var replacement = new RefreshTokenRecord(Guid.NewGuid(), user.Id, session.Id,
+            TokenGenerator.Hash(rawReplacement), current.FamilyId, clock.UtcNow.AddDays(30), clock.UtcNow);
         current.Replace(replacement.TokenHash, clock.UtcNow);
         await refreshTokens.RotateAsync(current, replacement, cancellationToken);
         var effectivePermissions = await permissions.GetEffectivePermissionsAsync(user.Id, cancellationToken);
@@ -295,8 +352,12 @@ public sealed class LocalAuthenticationService(
 
     public static class TokenGenerator
     {
-        public static string Generate() => Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
-        public static string Hash(string value) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+        public static string Generate() =>
+            Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
+
+        public static string Hash(string value) => Convert
+            .ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)))
+            .ToLowerInvariant();
     }
 }
 
@@ -308,7 +369,9 @@ public sealed class PermissionManifestSynchronizer(
     public Task<bool> SynchronizeAsync(PermissionManifest manifest, CancellationToken cancellationToken)
         => unitOfWork is null
             ? SynchronizeCoreAsync(manifest, cancellationToken)
-            : unitOfWork.ExecuteInTransactionAsync(operationCancellationToken => SynchronizeCoreAsync(manifest, operationCancellationToken), cancellationToken);
+            : unitOfWork.ExecuteInTransactionAsync(
+                operationCancellationToken => SynchronizeCoreAsync(manifest, operationCancellationToken),
+                cancellationToken);
 
     private async Task<bool> SynchronizeCoreAsync(PermissionManifest manifest, CancellationToken cancellationToken)
     {
@@ -318,8 +381,10 @@ public sealed class PermissionManifestSynchronizer(
         return true;
     }
 }
+
 public sealed class PermissionAuthorizationService(IPermissionRepository permissions)
 {
     public async Task<bool> HasPermissionAsync(UserId userId, string permission, CancellationToken cancellationToken)
-        => (await permissions.GetEffectivePermissionsAsync(userId, cancellationToken)).Contains(permission, StringComparer.Ordinal);
+        => (await permissions.GetEffectivePermissionsAsync(userId, cancellationToken)).Contains(permission,
+            StringComparer.Ordinal);
 }

@@ -29,7 +29,7 @@ public static class Registration
         var section = configuration.GetSection(IdentityPersistenceOptions.SectionName);
         var provider = ParseProvider(section["Provider"] ?? "sqlite");
         var connectionString = configuration.GetConnectionString("Identity")
-            ?? "Data Source=identity.db";
+                               ?? "Data Source=identity.db";
         var configuredConnectionString = section["ConnectionString"];
         if (!string.IsNullOrWhiteSpace(configuredConnectionString))
             connectionString = configuredConnectionString;

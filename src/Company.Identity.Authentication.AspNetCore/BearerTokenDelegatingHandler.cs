@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Http;
 
 namespace Company.Identity.Authentication.AspNetCore;
 

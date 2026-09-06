@@ -11,7 +11,8 @@ public sealed class ManifestSynchronizationTests
         var repository = new FakePermissionRepository();
         var versions = new FakeVersionStore();
         var synchronizer = new PermissionManifestSynchronizer(repository, versions);
-        var manifest = new PermissionManifest("orders", "Orders", "1", "Test", [], "2", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var manifest = new PermissionManifest("orders", "Orders", "1", "Test", [], "2", Guid.NewGuid(),
+            DateTimeOffset.UtcNow);
 
         Assert.True(await synchronizer.SynchronizeAsync(manifest, CancellationToken.None));
         Assert.False(await synchronizer.SynchronizeAsync(manifest, CancellationToken.None));
@@ -21,6 +22,7 @@ public sealed class ManifestSynchronizationTests
     private sealed class FakeVersionStore : IPermissionManifestVersionStore
     {
         private readonly HashSet<string> _accepted = [];
+
         public Task<bool> TryAcceptAsync(PermissionManifest manifest, CancellationToken cancellationToken)
             => Task.FromResult(_accepted.Add($"{manifest.ServiceId}:{manifest.ManifestVersion}"));
     }
@@ -28,9 +30,14 @@ public sealed class ManifestSynchronizationTests
     private sealed class FakePermissionRepository : IPermissionRepository
     {
         public int UpsertCount { get; private set; }
-        public Task<Permission?> FindByNameAsync(string name, CancellationToken cancellationToken) => Task.FromResult<Permission?>(null);
-        public Task<IReadOnlyCollection<string>> GetEffectivePermissionsAsync(UserId userId, CancellationToken cancellationToken)
+
+        public Task<Permission?> FindByNameAsync(string name, CancellationToken cancellationToken) =>
+            Task.FromResult<Permission?>(null);
+
+        public Task<IReadOnlyCollection<string>> GetEffectivePermissionsAsync(UserId userId,
+            CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyCollection<string>>([]);
+
         public Task UpsertManifestAsync(PermissionManifest manifest, CancellationToken cancellationToken)
         {
             UpsertCount++;

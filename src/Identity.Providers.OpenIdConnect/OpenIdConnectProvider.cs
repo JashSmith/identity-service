@@ -47,7 +47,8 @@ public sealed class OpenIdConnectIdentityProvider(
             return null;
 
         var token = await tokenResponse.Content.ReadFromJsonAsync<TokenResponse>(cancellationToken);
-        if (token is null || string.IsNullOrWhiteSpace(token.AccessToken) || string.IsNullOrWhiteSpace(discovery.UserInfoEndpoint))
+        if (token is null || string.IsNullOrWhiteSpace(token.AccessToken) ||
+            string.IsNullOrWhiteSpace(discovery.UserInfoEndpoint))
             return null;
 
         using var userInfoRequest = new HttpRequestMessage(HttpMethod.Get, discovery.UserInfoEndpoint);
@@ -63,7 +64,8 @@ public sealed class OpenIdConnectIdentityProvider(
             return null;
 
         var claims = root.EnumerateObject()
-            .Where(x => x.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+            .Where(x => x.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True
+                or JsonValueKind.False)
             .Select(x => $"{x.Name}={x.Value}")
             .ToArray();
         return new ExternalIdentity(
@@ -109,7 +111,8 @@ public sealed class OpenIdConnectIdentityProvider(
             var discoveryUri = $"{authority}/.well-known/openid-configuration";
             var candidate = await httpClient.GetFromJsonAsync<DiscoveryDocument>(discoveryUri, cancellationToken);
             if (candidate is null ||
-                (!string.IsNullOrWhiteSpace(options.ExpectedIssuer) && !string.Equals(candidate.Issuer, options.ExpectedIssuer, StringComparison.Ordinal)) ||
+                (!string.IsNullOrWhiteSpace(options.ExpectedIssuer) && !string.Equals(candidate.Issuer,
+                    options.ExpectedIssuer, StringComparison.Ordinal)) ||
                 !IsAllowedEndpoint(candidate.TokenEndpoint, options.RequireHttpsMetadata) ||
                 !IsAllowedEndpoint(candidate.UserInfoEndpoint, options.RequireHttpsMetadata))
                 return null;
@@ -134,11 +137,16 @@ public sealed class OpenIdConnectIdentityProvider(
 
     private sealed record DiscoveryDocument(
         [property: JsonPropertyName("issuer")] string? Issuer,
-        [property: JsonPropertyName("token_endpoint")] string? TokenEndpoint,
-        [property: JsonPropertyName("userinfo_endpoint")] string? UserInfoEndpoint);
+        [property: JsonPropertyName("token_endpoint")]
+        string? TokenEndpoint,
+        [property: JsonPropertyName("userinfo_endpoint")]
+        string? UserInfoEndpoint);
 
     private sealed record TokenResponse(
-        [property: JsonPropertyName("access_token")] string? AccessToken,
-        [property: JsonPropertyName("token_type")] string? TokenType,
-        [property: JsonPropertyName("expires_in")] int ExpiresIn);
+        [property: JsonPropertyName("access_token")]
+        string? AccessToken,
+        [property: JsonPropertyName("token_type")]
+        string? TokenType,
+        [property: JsonPropertyName("expires_in")]
+        int ExpiresIn);
 }

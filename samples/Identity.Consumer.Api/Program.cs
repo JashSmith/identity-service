@@ -30,7 +30,7 @@ app.MapGet("/api/sample/orders", () => Results.Ok(new[] { "order-1001", "order-1
     .RequireAuthorization("sample.orders.read");
 
 app.MapGet("/api/sample/permissions", () => Results.Ok(Company.Identity.PermissionDiscovery.PermissionDiscovery
-    .Discover(typeof(Program).Assembly)))
+        .Discover(typeof(Program).Assembly)))
     .RequireAuthorization();
 
 app.MapGet("/api/sample/identity-rest", async (IHttpClientFactory clients, CancellationToken cancellationToken) =>

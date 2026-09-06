@@ -1,5 +1,7 @@
 using Company.Identity.Authentication;
+
 namespace Identity.Authentication.Tests;
+
 public class AuthenticationTests
 {
     [Fact]

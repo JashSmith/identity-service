@@ -8,7 +8,7 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Ide
     public IdentityDbContext CreateDbContext(string[] args)
     {
         var connectionString = Environment.GetEnvironmentVariable("IDENTITY_DESIGN_TIME_CONNECTION")
-            ?? "Data Source=identity-design-time.db";
+                               ?? "Data Source=identity-design-time.db";
         var provider = Registration.ParseProvider(
             Environment.GetEnvironmentVariable("IDENTITY_DESIGN_TIME_PROVIDER") ?? "sqlite");
         var options = new IdentityPersistenceOptions

@@ -19,7 +19,8 @@ public static class PermissionDiscovery
                     type.Namespace ?? string.Empty));
             descriptors.AddRange(typePermissions);
 
-            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
+                                                   BindingFlags.Instance | BindingFlags.Static))
             {
                 var methodPermissions = method
                     .GetCustomAttributes<RequirePermissionAttribute>(inherit: true)

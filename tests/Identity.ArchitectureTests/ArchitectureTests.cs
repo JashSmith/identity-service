@@ -1,5 +1,7 @@
 using System.Reflection;
+
 namespace Identity.ArchitectureTests;
+
 public class ArchitectureTests
 {
     [Fact]

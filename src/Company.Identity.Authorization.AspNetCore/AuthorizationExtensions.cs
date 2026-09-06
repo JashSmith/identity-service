@@ -1,6 +1,7 @@
 using Company.Identity.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+
 namespace Company.Identity.Authorization.AspNetCore;
 
 public static class AuthorizationExtensions
@@ -16,7 +17,10 @@ public static class AuthorizationExtensions
 
 public sealed class PermissionPolicyProvider : DefaultAuthorizationPolicyProvider
 {
-    public PermissionPolicyProvider(Microsoft.Extensions.Options.IOptions<AuthorizationOptions> options) : base(options) { }
+    public PermissionPolicyProvider(Microsoft.Extensions.Options.IOptions<AuthorizationOptions> options) : base(options)
+    {
+    }
+
     public override async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
     {
         return await base.GetPolicyAsync(policyName) ?? new AuthorizationPolicyBuilder()
@@ -28,9 +32,11 @@ public sealed class PermissionPolicyProvider : DefaultAuthorizationPolicyProvide
 
 public sealed class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
-    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionRequirement requirement)
+    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context,
+        PermissionRequirement requirement)
     {
-        if (context.User.Claims.Any(c => c.Type is "permission" or "permissions" && c.Value == requirement.Permission)) context.Succeed(requirement);
+        if (context.User.Claims.Any(c => c.Type is "permission" or "permissions" && c.Value == requirement.Permission))
+            context.Succeed(requirement);
         return Task.CompletedTask;
     }
 }

@@ -43,7 +43,8 @@ public sealed class EfPermissionManifestVersionStore(IdentityDbContext db) : IPe
     {
         if (string.Equals(existing.ManifestVersion, manifest.ManifestVersion, StringComparison.Ordinal))
             return false;
-        if (Version.TryParse(existing.ManifestVersion, out var current) && Version.TryParse(manifest.ManifestVersion, out var incoming))
+        if (Version.TryParse(existing.ManifestVersion, out var current) &&
+            Version.TryParse(manifest.ManifestVersion, out var incoming))
             return incoming > current;
         return manifest.PublishedAt > existing.PublishedAt;
     }

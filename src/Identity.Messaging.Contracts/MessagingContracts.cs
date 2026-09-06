@@ -3,6 +3,7 @@ using Identity.Contracts;
 namespace Identity.Messaging.Contracts;
 
 public sealed record ServicePermissionManifestPublished(PermissionManifestMessage Manifest);
+
 public sealed record ServicePermissionManifestUpdated(PermissionManifestMessage Manifest);
 
 public sealed record PermissionManifestEvent(

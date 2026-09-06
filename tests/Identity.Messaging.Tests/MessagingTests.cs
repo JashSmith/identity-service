@@ -34,7 +34,8 @@ public sealed class MessagingTests
     [Fact]
     public void Event_mapping_rejects_missing_event_type()
     {
-        var manifest = new PermissionManifest("id", "Identity", "1", "Test", [], "1", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var manifest =
+            new PermissionManifest("id", "Identity", "1", "Test", [], "1", Guid.NewGuid(), DateTimeOffset.UtcNow);
         Assert.Throws<ArgumentException>(() => PermissionManifestEventMapper.ToEvent(manifest, " "));
     }
 }

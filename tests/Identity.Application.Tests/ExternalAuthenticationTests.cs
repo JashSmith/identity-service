@@ -24,7 +24,8 @@ public sealed class ExternalAuthenticationTests
     public async Task Linked_external_identity_resolves_enabled_user_and_updates_last_login()
     {
         var user = new User(UserId.New(), "user", "User", DateTimeOffset.UtcNow);
-        var link = new ExternalIdentityLink(Guid.NewGuid(), user.Id, "oidc", "subject-1", DateTimeOffset.UtcNow.AddDays(-1));
+        var link = new ExternalIdentityLink(Guid.NewGuid(), user.Id, "oidc", "subject-1",
+            DateTimeOffset.UtcNow.AddDays(-1));
         var links = new FakeLinkRepository(link);
         var users = new FakeUserRepository(user);
         var service = new ExternalAuthenticationService(links, users, new FixedClock());
@@ -43,7 +44,8 @@ public sealed class ExternalAuthenticationTests
     {
         var existingUser = new User(UserId.New(), "existing", "Existing", DateTimeOffset.UtcNow);
         var targetUser = new User(UserId.New(), "target", "Target", DateTimeOffset.UtcNow);
-        var link = new ExternalIdentityLink(Guid.NewGuid(), existingUser.Id, "oidc", "subject-1", DateTimeOffset.UtcNow);
+        var link = new ExternalIdentityLink(Guid.NewGuid(), existingUser.Id, "oidc", "subject-1",
+            DateTimeOffset.UtcNow);
         var links = new FakeLinkRepository(link);
         var users = new FakeUserRepository(existingUser, targetUser);
         var service = new ExternalIdentityLinkingService(links, users, new FixedClock());
@@ -87,10 +89,17 @@ public sealed class ExternalAuthenticationTests
         public int SaveCount { get; private set; }
         public int AddCount { get; private set; }
         public ExternalIdentityLink? Added { get; private set; }
-        public Task<ExternalIdentityLink?> FindAsync(string provider, string subject, CancellationToken cancellationToken)
-            => Task.FromResult<ExternalIdentityLink?>(links.SingleOrDefault(x => x.Provider == provider && x.Subject == subject));
-        public Task<IReadOnlyCollection<ExternalIdentityLink>> FindForUserAsync(UserId userId, CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyCollection<ExternalIdentityLink>>(links.Where(x => x.UserId == userId).ToArray());
+
+        public Task<ExternalIdentityLink?> FindAsync(string provider, string subject,
+            CancellationToken cancellationToken)
+            => Task.FromResult<ExternalIdentityLink?>(links.SingleOrDefault(x =>
+                x.Provider == provider && x.Subject == subject));
+
+        public Task<IReadOnlyCollection<ExternalIdentityLink>> FindForUserAsync(UserId userId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyCollection<ExternalIdentityLink>>(
+                links.Where(x => x.UserId == userId).ToArray());
+
         public Task AddAsync(ExternalIdentityLink link, CancellationToken cancellationToken)
         {
             AddCount++;
@@ -98,6 +107,7 @@ public sealed class ExternalAuthenticationTests
             links.Add(link);
             return Task.CompletedTask;
         }
+
         public Task SaveAsync(ExternalIdentityLink link, CancellationToken cancellationToken)
         {
             SaveCount++;
@@ -109,12 +119,16 @@ public sealed class ExternalAuthenticationTests
     {
         private readonly List<User> users = [.. initial];
         public int FindCount { get; private set; }
-        public Task<User?> FindByUsernameAsync(string username, CancellationToken cancellationToken) => Task.FromResult<User?>(null);
+
+        public Task<User?> FindByUsernameAsync(string username, CancellationToken cancellationToken) =>
+            Task.FromResult<User?>(null);
+
         public Task<User?> FindAsync(UserId id, CancellationToken cancellationToken)
         {
             FindCount++;
             return Task.FromResult(users.SingleOrDefault(x => x.Id == id));
         }
+
         public Task AddAsync(User user, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task SaveAsync(User user, CancellationToken cancellationToken) => Task.CompletedTask;
     }

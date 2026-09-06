@@ -16,6 +16,7 @@ public sealed record ExternalAuthenticationRequest(
 public interface IExternalIdentityProvider
 {
     string Name { get; }
+
     Task<ExternalIdentity?> AuthenticateAsync(
         ExternalAuthenticationRequest request,
         CancellationToken cancellationToken);
