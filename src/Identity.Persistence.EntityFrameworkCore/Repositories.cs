@@ -22,6 +22,8 @@ public sealed class EfSessionStore(IdentityDbContext db) : ISessionStore
 {
     public async Task AddAsync(UserSession session, CancellationToken cancellationToken) { await db.Sessions.AddAsync(session, cancellationToken); await db.SaveChangesAsync(cancellationToken); }
     public Task<UserSession?> FindAsync(Guid id, CancellationToken cancellationToken) => db.Sessions.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+    public async Task<IReadOnlyCollection<UserSession>> FindForUserAsync(UserId userId, CancellationToken cancellationToken)
+        => await db.Sessions.Where(x => x.UserId == userId).ToArrayAsync(cancellationToken);
     public async Task RevokeAsync(UserSession session, DateTimeOffset at, CancellationToken cancellationToken) { session.Revoke(at); db.Sessions.Update(session); await db.SaveChangesAsync(cancellationToken); }
 }
 

@@ -16,6 +16,8 @@ using Identity.Providers.OpenIdConnect;
 using Identity.Providers.Keycloak;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 var authority = builder.Configuration["Identity:Tokens:Issuer"] ?? "https://localhost:7001";
@@ -25,6 +27,12 @@ builder.Services.AddSingleton(signingKeys);
 var connectionString = builder.Configuration.GetConnectionString("Identity") ?? "Data Source=identity.db";
 var useSqlite = builder.Configuration.GetValue("Identity:Persistence:UseSqlite", true);
 builder.Services.AddIdentityPersistence(connectionString, useSqlite);
+var dataProtectionPath = builder.Configuration["Identity:DataProtection:KeysPath"] ?? "identity-data-protection-keys";
+var dataProtectionDirectory = Path.GetFullPath(dataProtectionPath);
+Directory.CreateDirectory(dataProtectionDirectory);
+builder.Services.AddDataProtection()
+    .SetApplicationName("Company.Identity")
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionDirectory));
 builder.Services.AddScoped<LocalAuthenticationService>();
 builder.Services.AddScoped<ExternalAuthenticationService>();
 builder.Services.AddScoped<IBffSessionValidator, BffSessionValidator>();
@@ -98,7 +106,10 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-    db.Database.EnsureCreated();
+    if (db.Database.GetPendingMigrations().Any())
+        db.Database.Migrate();
+    else
+        db.Database.EnsureCreated();
     var username = builder.Configuration["Identity:Bootstrap:Username"];
     var password = builder.Configuration["Identity:Bootstrap:Password"];
     if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password) && !db.Users.Any(x => x.Username == username))

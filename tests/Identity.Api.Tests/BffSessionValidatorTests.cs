@@ -75,6 +75,9 @@ public sealed class BffSessionValidatorTests
             return Task.CompletedTask;
         }
 
+        public Task<IReadOnlyCollection<UserSession>> FindForUserAsync(UserId userId, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyCollection<UserSession>>(sessions.Values.Where(x => x.UserId == userId).ToArray());
+
         public Task<UserSession?> FindAsync(Guid id, CancellationToken cancellationToken)
         {
             FindCount++;

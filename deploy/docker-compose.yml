@@ -10,6 +10,7 @@ services:
       Identity__Messaging__RabbitMq__ConsumeEnabled: "true"
       Identity__Messaging__RabbitMq__ConnectionString: amqp://identity:${RABBITMQ_PASSWORD:-identity-development-only}@rabbitmq:5672/
       Identity__Tokens__StoragePath: /var/lib/identity/identity-signing-keys.json
+      Identity__DataProtection__KeysPath: /var/lib/identity/data-protection
     ports:
       - "5080:5080"
     depends_on:
@@ -19,6 +20,7 @@ services:
         condition: service_healthy
     volumes:
       - identity-signing-keys:/var/lib/identity
+      - identity-data-protection:/var/lib/identity/data-protection
 
   postgres:
     image: postgres:17-alpine
@@ -51,5 +53,6 @@ services:
 
 volumes:
   identity-signing-keys:
+  identity-data-protection:
   identity-postgres:
   identity-rabbitmq:

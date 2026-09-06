@@ -484,3 +484,4 @@ $RECYCLE.BIN/
 /prompts
 .claude
 identity-signing-keys.json
+identity-data-protection-keys/

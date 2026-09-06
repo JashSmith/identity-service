@@ -61,6 +61,7 @@ public interface ISessionStore
 {
     Task AddAsync(UserSession session, CancellationToken cancellationToken);
     Task<UserSession?> FindAsync(Guid id, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<UserSession>> FindForUserAsync(UserId userId, CancellationToken cancellationToken);
     Task RevokeAsync(UserSession session, DateTimeOffset at, CancellationToken cancellationToken);
 }
 public interface IPasswordVerifier { bool Verify(string encodedHash, string password); string Hash(string password); }
@@ -248,6 +249,17 @@ public sealed class LocalAuthenticationService(
         if (session is null) return false;
         await sessions.RevokeAsync(session, clock.UtcNow, cancellationToken);
         return true;
+    }
+
+    public async Task<int> LogoutAllAsync(UserId userId, CancellationToken cancellationToken)
+    {
+        var now = clock.UtcNow;
+        var activeSessions = (await sessions.FindForUserAsync(userId, cancellationToken))
+            .Where(x => x.IsActive(now))
+            .ToArray();
+        foreach (var session in activeSessions)
+            await sessions.RevokeAsync(session, now, cancellationToken);
+        return activeSessions.Length;
     }
 
     public static class TokenGenerator
