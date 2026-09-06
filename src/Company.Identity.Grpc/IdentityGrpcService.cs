@@ -1,6 +1,7 @@
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Identity.Application;
+using Identity.Domain;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Company.Identity.Grpc;
@@ -27,7 +28,13 @@ public sealed class IdentityGrpcService(
         if (!Guid.TryParse(request.SessionId, out var sessionId))
             throw new RpcException(new Status(StatusCode.InvalidArgument, "A valid session ID is required."));
 
-        await authentication.LogoutAsync(sessionId, context.CancellationToken);
+        if (currentUser.UserId is not { } userId)
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Authentication is required."));
+
+        await authentication.LogoutAsync(
+            new UserId(userId),
+            sessionId,
+            context.CancellationToken);
         return new LogoutResponse();
     }
 

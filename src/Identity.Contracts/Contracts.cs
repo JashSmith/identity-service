@@ -7,6 +7,11 @@ public sealed record ExternalIdentityLinkRequest(
     string AuthorizationCode,
     string RedirectUri,
     string CodeVerifier);
+public sealed record ExternalLoginRequest(
+    string Provider,
+    string AuthorizationCode,
+    string RedirectUri,
+    string CodeVerifier);
 public sealed record TokenResponse(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt, Guid SessionId);
 public sealed record UserResponse(Guid UserId, string Username, string DisplayName, IReadOnlyCollection<string> Roles, IReadOnlyCollection<string> Permissions, Guid? SessionId);
 public sealed record ProblemResponse(string Code, string Message, string CorrelationId);

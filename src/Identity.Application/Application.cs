@@ -172,13 +172,39 @@ public sealed class LocalAuthenticationService(
             await users.SaveAsync(user, cancellationToken);
             return AuthenticationResult.Failure("invalid_credentials");
         }
-        user.RecordSuccessfulLogin(clock.UtcNow); await users.SaveAsync(user, cancellationToken);
-        var session = new UserSession(Guid.NewGuid(), user.Id, clock.UtcNow, clock.UtcNow.AddHours(8), user.SecurityStamp);
+        user.RecordSuccessfulLogin(clock.UtcNow);
+        await users.SaveAsync(user, cancellationToken);
+        return await IssueTokensAsync(user, cancellationToken);
+    }
+
+    public async Task<AuthenticationResult> IssueTokensAsync(
+        User user,
+        CancellationToken cancellationToken)
+    {
+        if (!user.IsEnabled || user.IsLocked(clock.UtcNow))
+            return AuthenticationResult.Failure("session_invalid");
+        var session = new UserSession(
+            Guid.NewGuid(),
+            user.Id,
+            clock.UtcNow,
+            clock.UtcNow.AddHours(8),
+            user.SecurityStamp);
         await sessions.AddAsync(session, cancellationToken);
         var effectivePermissions = await permissions.GetEffectivePermissionsAsync(user.Id, cancellationToken);
-        var access = await tokenIssuer.IssueAsync(user, effectivePermissions, session.Id, cancellationToken);
+        var access = await tokenIssuer.IssueAsync(
+            user,
+            effectivePermissions,
+            session.Id,
+            cancellationToken);
         var rawRefresh = TokenGenerator.Generate();
-        var refresh = new RefreshTokenRecord(Guid.NewGuid(), user.Id, session.Id, TokenGenerator.Hash(rawRefresh), Guid.NewGuid().ToString("N"), clock.UtcNow.AddDays(30), clock.UtcNow);
+        var refresh = new RefreshTokenRecord(
+            Guid.NewGuid(),
+            user.Id,
+            session.Id,
+            TokenGenerator.Hash(rawRefresh),
+            Guid.NewGuid().ToString("N"),
+            clock.UtcNow.AddDays(30),
+            clock.UtcNow);
         await refreshTokens.AddAsync(refresh, cancellationToken);
         return new AuthenticationResult(true, access, rawRefresh, session.Id, null);
     }
@@ -243,10 +269,15 @@ public sealed class LocalAuthenticationService(
         return new AuthenticationResult(true, access, rawReplacement, session.Id, null);
     }
 
-    public async Task<bool> LogoutAsync(Guid sessionId, CancellationToken cancellationToken)
+    public async Task<bool> LogoutAsync(
+        UserId userId,
+        Guid sessionId,
+        CancellationToken cancellationToken)
     {
         var session = await sessions.FindAsync(sessionId, cancellationToken);
-        if (session is null) return false;
+        if (session is null || session.UserId != userId)
+            return false;
+
         await sessions.RevokeAsync(session, clock.UtcNow, cancellationToken);
         return true;
     }

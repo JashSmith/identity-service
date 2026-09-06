@@ -20,7 +20,9 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
-var authority = builder.Configuration["Identity:Tokens:Issuer"] ?? "https://localhost:7001";
+var authority = builder.Configuration["Identity:Tokens:Issuer"]
+    ?? builder.Configuration["Identity:Authority"]
+    ?? "https://localhost:7001";
 var audience = builder.Configuration["Identity:Tokens:Audience"] ?? "identity-api";
 var signingKeys = new JwtSigningKeyProvider(builder.Configuration);
 builder.Services.AddSingleton(signingKeys);
@@ -98,6 +100,8 @@ builder.Services.AddCompanyAuthorization();
 builder.Services.AddCompanyBffSessions();
 builder.Services.AddGrpc();
 builder.Services.AddIdentityRabbitMq(builder.Configuration);
+if (builder.Configuration.GetValue<bool>("Identity:Messaging:RabbitMq:Enabled"))
+    builder.Services.AddHostedService<PermissionManifestHostedService>();
 builder.Services.AddAntiforgery();
 builder.Services.AddHealthChecks();
 builder.Services.AddOpenApi();
@@ -166,13 +170,74 @@ app.MapPost("/api/auth/refresh", async (RefreshRequest request, LocalAuthenticat
     if (!result.Succeeded) return Results.Unauthorized();
     return Results.Ok(new TokenResponse(result.AccessToken!.AccessToken, result.RefreshToken!, result.AccessToken.ExpiresAt, result.SessionId!.Value));
 });
-app.MapPost("/api/auth/logout", async (HttpContext context, LocalAuthenticationService authentication, CancellationToken cancellationToken) =>
+app.MapPost("/api/auth/logout", async (
+    HttpContext context,
+    ICurrentUserContext currentUser,
+    LocalAuthenticationService authentication,
+    CancellationToken cancellationToken) =>
 {
-    if (!Guid.TryParse(context.User.FindFirst("sid")?.Value, out var sessionId)) return Results.NoContent();
-    await authentication.LogoutAsync(sessionId, cancellationToken);
+    if (currentUser.UserId is { } userId &&
+        Guid.TryParse(context.User.FindFirst("sid")?.Value, out var sessionId))
+    {
+        await authentication.LogoutAsync(
+            new UserId(userId),
+            sessionId,
+            cancellationToken);
+    }
+
+    return Results.NoContent();
+}).RequireAuthorization();
+app.MapPost("/api/auth/logout-all", async (
+    ICurrentUserContext currentUser,
+    LocalAuthenticationService authentication,
+    CancellationToken cancellationToken) =>
+{
+    if (currentUser.UserId is not { } userId)
+        return Results.Unauthorized();
+
+    await authentication.LogoutAllAsync(
+        new UserId(userId),
+        cancellationToken);
     return Results.NoContent();
 }).RequireAuthorization();
 app.MapGet("/api/auth/session", (HttpContext context) => Results.Ok(new { authenticated = context.User.Identity?.IsAuthenticated == true }));
+app.MapPost("/api/auth/external/sign-in", async (
+    ExternalLoginRequest request,
+    IExternalIdentityProviderRegistry providers,
+    ExternalAuthenticationService externalAuthentication,
+    LocalAuthenticationService authentication,
+    CancellationToken cancellationToken) =>
+{
+    var provider = providers.Find(request.Provider);
+    if (provider is null)
+        return Results.Unauthorized();
+
+    var externalIdentity = await provider.AuthenticateAsync(
+        new ExternalAuthenticationRequest(
+            request.AuthorizationCode,
+            request.RedirectUri,
+            request.CodeVerifier),
+        cancellationToken);
+    if (externalIdentity is null)
+        return Results.Unauthorized();
+
+    var user = await externalAuthentication.ResolveUserAsync(
+        new ExternalIdentityDescriptor(
+            externalIdentity.Provider,
+            externalIdentity.Subject,
+            externalIdentity.Username,
+            externalIdentity.DisplayName),
+        cancellationToken);
+    if (user is null)
+        return Results.Unauthorized();
+
+    var result = await authentication.IssueTokensAsync(user, cancellationToken);
+    return Results.Ok(new TokenResponse(
+        result.AccessToken!.AccessToken,
+        result.RefreshToken!,
+        result.AccessToken.ExpiresAt,
+        result.SessionId!.Value));
+});
 app.MapPost("/api/auth/external/link", async (
     ExternalIdentityLinkRequest request,
     ICurrentUserContext currentUser,
@@ -258,6 +323,7 @@ app.MapPost("/api/auth/bff/sign-in", async (
 });
 app.MapPost("/api/auth/bff/sign-out", async (
     HttpContext context,
+    ICurrentUserContext currentUser,
     LocalAuthenticationService authentication,
     IAntiforgery antiforgery,
     CancellationToken cancellationToken) =>
@@ -274,8 +340,14 @@ app.MapPost("/api/auth/bff/sign-out", async (
             Guid.NewGuid().ToString("N")));
     }
 
-    if (Guid.TryParse(context.User.FindFirst("sid")?.Value, out var sessionId))
-        await authentication.LogoutAsync(sessionId, cancellationToken);
+    if (currentUser.UserId is { } userId &&
+        Guid.TryParse(context.User.FindFirst("sid")?.Value, out var sessionId))
+    {
+        await authentication.LogoutAsync(
+            new UserId(userId),
+            sessionId,
+            cancellationToken);
+    }
 
     await context.SignOutAsync(ServiceCollectionExtensions.BffScheme);
     return Results.NoContent();

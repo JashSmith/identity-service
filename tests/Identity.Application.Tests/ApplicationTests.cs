@@ -22,6 +22,41 @@ public class ApplicationTests
 public sealed class SessionLifecycleTests
 {
     [Fact]
+    public async Task Token_issuance_rejects_disabled_users()
+    {
+        var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var user = new User(UserId.New(), "user", "User", now);
+        user.Disable(now);
+        var service = new LocalAuthenticationService(
+            new EmptyUserRepository(), new EmptyCredentialStore(), new EmptyPermissionRepository(),
+            new FakeSessionStore(), new EmptyRefreshTokenStore(), new EmptyPasswordVerifier(),
+            new EmptyTokenIssuer(), new FixedClock(now));
+
+        var result = await service.IssueTokensAsync(user, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("session_invalid", result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Logout_cannot_revoke_another_users_session()
+    {
+        var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var owner = new User(UserId.New(), "owner", "Owner", now);
+        var caller = new User(UserId.New(), "caller", "Caller", now);
+        var session = new UserSession(Guid.NewGuid(), owner.Id, now, now.AddHours(1), owner.SecurityStamp);
+        var sessions = new FakeSessionStore(session);
+        var service = new LocalAuthenticationService(
+            new EmptyUserRepository(), new EmptyCredentialStore(), new EmptyPermissionRepository(), sessions,
+            new EmptyRefreshTokenStore(), new EmptyPasswordVerifier(), new EmptyTokenIssuer(), new FixedClock(now));
+
+        var revoked = await service.LogoutAsync(caller.Id, session.Id, CancellationToken.None);
+
+        Assert.False(revoked);
+        Assert.Null(session.RevokedAt);
+    }
+
+    [Fact]
     public async Task Logout_all_revokes_only_active_sessions()
     {
         var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
