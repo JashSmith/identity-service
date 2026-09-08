@@ -2,6 +2,11 @@
   <PropertyGroup><RootNamespace>Identity.Api</RootNamespace><AssemblyName>Identity.Api</AssemblyName></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Identity.Application/Identity.Application.csproj" />
+<ProjectReference Include="../Identity.Infrastructure/Identity.Infrastructure.csproj" />
+    <ProjectReference Include="../Identity.Infrastructure.Vault/Identity.Infrastructure.Vault.csproj" />
+    <ProjectReference Include="../Identity.Infrastructure.Keycloak/Identity.Infrastructure.Keycloak.csproj" />
+    <ProjectReference Include="../Identity.Infrastructure.Redis/Identity.Infrastructure.Redis.csproj" />
+    <ProjectReference Include="../Identity.Persistence.KeyManagement/Identity.Persistence.KeyManagement.csproj" />
     <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj" />
     <ProjectReference Include="../Company.Identity.Authentication.AspNetCore/Company.Identity.Authentication.AspNetCore.csproj" />
     <ProjectReference Include="../Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj" />

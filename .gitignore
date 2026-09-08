@@ -486,3 +486,6 @@ $RECYCLE.BIN/
 identity-signing-keys.json
 identity-data-protection-keys/
 identity-design-time.db
+identity.db
+identity-data-protection-keys/
+identity-signing-keys.json

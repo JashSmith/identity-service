@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Identity.Application;
 using Identity.Domain;
 
 namespace Identity.Infrastructure;
@@ -44,19 +45,45 @@ public static partial class SecretRedaction
     [GeneratedRegex("eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}", RegexOptions.Compiled)]
     private static partial Regex CompactJwtPattern();
 
+    /// <summary>
+    /// A PEM private-key block, including the base64 body. Matches an unterminated block too, so a
+    /// truncated log line still loses its material rather than leaking a prefix of it.
+    /// </summary>
+    [GeneratedRegex(
+        "-----BEGIN (?<kind>[A-Z ]*PRIVATE KEY)-----(?<body>[\\s\\S]*?)(?:-----END \\k<kind>-----|$)",
+        RegexOptions.Compiled)]
+    private static partial Regex PemPrivateKeyPattern();
+
+    /// <summary>
+    /// A Vault KV v2 write/read payload: the <c>"data"</c> wrapper is kept (it names the path shape)
+    /// but every value inside it is masked, so a serialized Vault response cannot carry key material.
+    /// </summary>
+    [GeneratedRegex(
+        "(?i)\"data\"\\s*:\\s*\\{[^{}]*(?:\\{[^{}]*\\}[^{}]*)*\\}",
+        RegexOptions.Compiled)]
+    private static partial Regex VaultPayloadPattern();
+
+    /// <summary>Base64-encoded PKCS#8/PKCS#1 DER, as Vault or Keycloak may store it without PEM armour.</summary>
+    [GeneratedRegex("(?<=[\"'\\s:=,])(?:MII[A-Za-z0-9+/=\\r\\n]{200,})(?=[\"'\\s,}\\]]|$)", RegexOptions.Compiled)]
+    private static partial Regex Base64DerPattern();
+
     /// <summary>True when a key names a secret, regardless of casing or separator.</summary>
     public static bool IsSensitive(string? key)
         => !string.IsNullOrEmpty(key) && SensitiveKeys.Contains(key.Replace('-', '_'));
 
     /// <summary>
-    /// Strips bearer/basic credentials, compact JWTs and secret key/value pairs from a message.
-    /// Apply to every log line that could carry an inbound token or Keycloak/Vault response.
+    /// Strips bearer/basic credentials, compact JWTs, PEM private-key blocks, raw base64 DER key
+    /// material, Vault KV payloads and secret key/value pairs from a message. Apply to every log line
+    /// that could carry an inbound token, a signing key or a Keycloak/Vault response.
     /// </summary>
     public static string Redact(string? message)
     {
         if (string.IsNullOrEmpty(message)) return string.Empty;
-        var result = SchemePattern().Replace(message, _ => Mask);
+        var result = PemPrivateKeyPattern().Replace(message, _ => Mask);
+        result = VaultPayloadPattern().Replace(result, m => MaskVaultPayload(m.Value));
+        result = SchemePattern().Replace(result, _ => Mask);
         result = CompactJwtPattern().Replace(result, Mask);
+        result = Base64DerPattern().Replace(result, Mask);
         result = JsonPattern().Replace(result, m => MaskJson(m.Value));
         result = KeyValuePattern().Replace(result, m => MaskKeyValue(m.Value));
         return result;
@@ -73,6 +100,15 @@ public static partial class SecretRedaction
         return redacted;
     }
 
+    private static string MaskVaultPayload(string match)
+    {
+        // Preserve the wrapper key name but mask every value inside the Vault "data" object.
+        var open = match.IndexOf('{');
+        var close = match.LastIndexOf('}');
+        if (open < 0 || close <= open) return "[REDACTED]";
+        return string.Concat(match.AsSpan(0, open + 1), " \"[REDACTED]\" ", match.AsSpan(close));
+    }
+
     private static string MaskJson(string match)
     {
         var separator = match.IndexOf(':');
@@ -86,12 +122,6 @@ public static partial class SecretRedaction
             ? Mask
             : string.Concat(match.AsSpan(0, separator + 1), match.Contains('=') ? "=" : " ", Mask);
     }
-}
-
-/// <summary>Sink for facade audit records. Implementations must not receive unredacted input.</summary>
-public interface IAuditSink
-{
-    Task RecordAsync(AuditEvent auditEvent, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -112,4 +142,9 @@ public sealed class RedactingAuditSink(IAuditSink inner) : IAuditSink
             SecretRedaction.Redact(auditEvent.Details));
         return inner.RecordAsync(safe, cancellationToken);
     }
+}
+
+public sealed class NoopAuditSink : Identity.Application.IAuditSink
+{
+    public Task RecordAsync(Identity.Domain.AuditEvent auditEvent, CancellationToken cancellationToken) => Task.CompletedTask;
 }

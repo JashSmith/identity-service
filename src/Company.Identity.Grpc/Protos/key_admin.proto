@@ -1,0 +1,19 @@
+syntax = "proto3";
+package company.identity.keys.v1;
+service KeyAdminService {
+  rpc GenerateKey(GenerateKeyRequest) returns (SigningKey);
+  rpc ImportKey(ImportKeyRequest) returns (SigningKey);
+  rpc GetKey(GetKeyRequest) returns (SigningKey);
+  rpc ListKeys(ListKeysRequest) returns (ListKeysResponse);
+  rpc Rotate(RotateRequest) returns (RotationOperation);
+  rpc Rollback(RollbackRequest) returns (RotationOperation);
+}
+message GenerateKeyRequest { int32 size = 1; string kid = 2; }
+message ImportKeyRequest { string pem = 1; string kid = 2; }
+message GetKeyRequest { string kid = 1; }
+message ListKeysRequest { int32 page = 1; int32 page_size = 2; }
+message ListKeysResponse { repeated SigningKey items = 1; int32 total = 2; }
+message RotateRequest { string reason = 1; string idempotency_key = 2; }
+message RollbackRequest { string kid = 1; string reason = 2; }
+message SigningKey { string kid = 1; int32 size = 2; string state = 3; }
+message RotationOperation { string operation_id = 1; string status = 2; }
