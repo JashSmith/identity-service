@@ -1,6 +1,4 @@
 using Company.Identity.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -9,106 +7,35 @@ namespace Company.Identity.Authentication.AspNetCore;
 
 public static class ServiceCollectionExtensions
 {
-    public const string BffScheme = "CompanyIdentityBff";
-    public const string BffPolicyScheme = "CompanyIdentityBffOrBearer";
-    private const string BffCookieName = "__Host-company-identity";
-
-    public static IServiceCollection AddCompanyAuthentication(this IServiceCollection services,
-        IdentityAuthenticationOptions options)
+    public static IServiceCollection AddCompanyAuthentication(this IServiceCollection services, Action<IdentityAuthenticationOptions> configure)
     {
-        ArgumentNullException.ThrowIfNull(options);
-        services.AddAuthentication(authentication =>
-            {
-                authentication.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                authentication.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            })
-            .AddCookie(BffScheme, cookie =>
-            {
-                cookie.Cookie.Name = BffCookieName;
-                cookie.Cookie.HttpOnly = true;
-                cookie.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-                cookie.Cookie.SameSite = SameSiteMode.Lax;
-                cookie.SlidingExpiration = false;
-                cookie.ExpireTimeSpan = TimeSpan.FromHours(8);
-                cookie.Events.OnRedirectToLogin = context =>
-                {
-                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                    return Task.CompletedTask;
-                };
-                cookie.Events.OnRedirectToAccessDenied = context =>
-                {
-                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    return Task.CompletedTask;
-                };
-                cookie.Events.OnValidatePrincipal = async context =>
-                {
-                    var sessionId = context.Principal?.FindFirst("sid")?.Value;
-                    var validator = context.HttpContext.RequestServices.GetService<IBffSessionValidator>();
-                    if (validator is null || string.IsNullOrWhiteSpace(sessionId) ||
-                        !await validator.ValidateAsync(sessionId, context.HttpContext.RequestAborted))
-                    {
-                        context.RejectPrincipal();
-                    }
-                };
-            })
-            .AddJwtBearer(jwt =>
-            {
-                jwt.Authority = options.Authority;
-                jwt.RequireHttpsMetadata = options.RequireHttpsMetadata;
-                jwt.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = options.Audiences.Length > 0,
-                    ValidAudiences = options.Audiences,
-                    ValidateLifetime = true,
-                    ClockSkew = options.ClockSkew,
-                    IssuerSigningKey = options.SigningKey,
-                    IssuerSigningKeys = options.SigningKeys.Count > 0 ? options.SigningKeys : null,
-                    ValidateIssuerSigningKey = options.SigningKey is not null || options.SigningKeys.Count > 0,
-                    ValidIssuer = options.SigningKey is not null || options.SigningKeys.Count > 0
-                        ? options.Authority
-                        : null
-                };
-            });
-        services.AddHttpContextAccessor();
-        services.AddTransient<BearerTokenDelegatingHandler>();
-        return services;
-    }
-
-    public static IHttpClientBuilder AddIdentityApiClient(
-        this IServiceCollection services,
-        Uri baseAddress)
-        => services.AddHttpClient("IdentityApi", client => client.BaseAddress = baseAddress)
-            .AddHttpMessageHandler<BearerTokenDelegatingHandler>();
-
-    public static IServiceCollection AddCompanyBffSessions(this IServiceCollection services)
-    {
-        services.AddAuthentication(authentication =>
-            {
-                authentication.DefaultAuthenticateScheme = BffPolicyScheme;
-                authentication.DefaultChallengeScheme = BffPolicyScheme;
-            })
-            .AddPolicyScheme(BffPolicyScheme, displayName: null, policy =>
-            {
-                policy.ForwardDefaultSelector = context =>
-                {
-                    var authorization = context.Request.Headers.Authorization.ToString();
-                    if (authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                        return JwtBearerDefaults.AuthenticationScheme;
-
-                    return context.Request.Cookies.ContainsKey(BffCookieName)
-                        ? BffScheme
-                        : JwtBearerDefaults.AuthenticationScheme;
-                };
-            });
-
-        services.AddAntiforgery(options =>
+        var options = new IdentityAuthenticationOptions();
+        configure(options);
+        if (string.IsNullOrWhiteSpace(options.Authority)) throw new InvalidOperationException("Identity authority is required.");
+        var audiences = options.Audiences.Length > 0 ? options.Audiences : string.IsNullOrWhiteSpace(options.Audience) ? [] : [options.Audience];
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(jwt =>
         {
-            options.Cookie.Name = "__Host-company-identity-csrf";
-            options.Cookie.HttpOnly = false;
-            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-            options.Cookie.SameSite = SameSiteMode.Strict;
-            options.HeaderName = "X-CSRF-TOKEN";
+            jwt.Authority = options.Authority.TrimEnd('/');
+            jwt.RequireHttpsMetadata = options.RequireHttpsMetadata;
+            jwt.RefreshOnIssuerKeyNotFound = true;
+            jwt.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true, ValidIssuer = options.Authority.TrimEnd('/'),
+                ValidateAudience = audiences.Length > 0, ValidAudiences = audiences,
+                ValidateLifetime = true, ValidateIssuerSigningKey = true,
+                ClockSkew = options.ClockSkew, ValidAlgorithms = options.ValidAlgorithms
+            };
+            jwt.Events = new JwtBearerEvents
+            {
+                OnTokenValidated = context =>
+                {
+                    if (!options.ValidateTokenType || context.SecurityToken is not System.IdentityModel.Tokens.Jwt.JwtSecurityToken token) return Task.CompletedTask;
+                    if (token.Header.TryGetValue("typ", out var value) && value is string type &&
+                        !string.Equals(type, "Bearer", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(type, "at+jwt", StringComparison.OrdinalIgnoreCase)) context.Fail("Unexpected token type.");
+                    return Task.CompletedTask;
+                }
+            };
         });
         return services;
     }

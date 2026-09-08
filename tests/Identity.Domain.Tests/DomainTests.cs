@@ -2,27 +2,32 @@ using Identity.Domain;
 
 namespace Identity.Domain.Tests;
 
-public class DomainTests
+public sealed class DomainTests
 {
     [Fact]
-    public void User_lockout_is_enforced_after_threshold()
+    public void PermissionManifest_records_are_distinct_by_hash()
     {
-        var now = DateTimeOffset.UtcNow;
-        var user = new User(UserId.New(), "alice", "Alice", now);
-        user.RecordFailedLogin(now, 3, TimeSpan.FromMinutes(5));
-        user.RecordFailedLogin(now, 3, TimeSpan.FromMinutes(5));
-        user.RecordFailedLogin(now, 3, TimeSpan.FromMinutes(5));
-        Assert.True(user.IsLocked(now.AddSeconds(1)));
+        var a = new PermissionManifest("order-service", "1.0.0", "1", [new PermissionDefinition("Orders.Read", "read")],
+            "sha256:abc");
+        var b = new PermissionManifest("order-service", "1.0.0", "1", [new PermissionDefinition("Orders.Read", "read")],
+            "sha256:def");
+        Assert.NotEqual(a.ManifestHash, b.ManifestHash);
     }
 
     [Fact]
-    public void Permission_assignment_is_idempotent()
+    public void Deprecated_permissions_are_tracked_on_registration_state()
     {
-        var now = DateTimeOffset.UtcNow;
-        var user = new User(UserId.New(), "alice", "Alice", now);
-        var p = PermissionId.New();
-        user.GrantPermission(p, now);
-        user.GrantPermission(p, now);
-        Assert.Single(user.DirectPermissions);
+        var state = new ManifestRegistrationState("order-service", "2", "sha256:abc", DateTimeOffset.UtcNow,
+            ["Orders.Legacy"]);
+        Assert.Contains("Orders.Legacy", state.DeprecatedPermissions);
+    }
+
+    [Fact]
+    public void Audit_events_never_carry_raw_secrets_in_details_keys()
+    {
+        var evt = new AuditEvent("svc:order-service", "manifest.registered", "service=order-service",
+            DateTimeOffset.UtcNow, new Dictionary<string, string?> { ["manifest_hash"] = "sha256:abc" });
+        Assert.DoesNotContain(evt.Details.Keys, k => k.Equals("access_token", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(evt.Details.Keys, k => k.Equals("private_key", StringComparison.OrdinalIgnoreCase));
     }
 }

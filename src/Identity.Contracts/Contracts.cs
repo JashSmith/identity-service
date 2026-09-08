@@ -1,41 +1,13 @@
 namespace Identity.Contracts;
 
-public sealed record LoginRequest(string Username, string Password);
-
-public sealed record RefreshRequest(string RefreshToken);
-
-public sealed record ExternalIdentityLinkRequest(
-    string Provider,
-    string AuthorizationCode,
-    string RedirectUri,
-    string CodeVerifier);
-
-public sealed record ExternalLoginRequest(
-    string Provider,
-    string AuthorizationCode,
-    string RedirectUri,
-    string CodeVerifier);
-
-public sealed record TokenResponse(string AccessToken, string RefreshToken, DateTimeOffset ExpiresAt, Guid SessionId);
-
-public sealed record UserResponse(
-    Guid UserId,
-    string Username,
-    string DisplayName,
-    IReadOnlyCollection<string> Roles,
-    IReadOnlyCollection<string> Permissions,
-    Guid? SessionId);
-
+public sealed record AccessTokenResponse(string AccessToken, string? RefreshToken, int ExpiresIn, string TokenType = "Bearer");
+public sealed record UserDto(string Id, string Username, string? DisplayName, bool Enabled, IReadOnlyDictionary<string, string[]> Attributes);
+public sealed record RoleDto(string Id, string Name, string? Description, string? ClientId, bool Composite);
+public sealed record PermissionDto(string Name, string Description, string ServiceId, string ServiceVersion, bool Deprecated, string? KeycloakRoleId = null);
+public sealed record PagedResponse<T>(IReadOnlyCollection<T> Items, int Page, int PageSize, int? Total = null);
+public sealed record PermissionManifestRequest(string ServiceId, string ServiceVersion, string ManifestVersion, IReadOnlyCollection<PermissionDefinitionDto> Permissions, string ManifestHash, string? IdempotencyKey = null);
+public sealed record PermissionDefinitionDto(string Name, string Description);
+public sealed record ManifestRegistrationResponse(string ServiceId, string ManifestVersion, string ManifestHash, bool Accepted, IReadOnlyCollection<string> DeprecatedPermissions);
+public sealed record ExternalIdentityValidationResult(string Provider, string Subject, IReadOnlyDictionary<string, string> AllowlistedAttributes, IReadOnlyCollection<string> ExternalRoles, DateTimeOffset ValidatedAt);
+public sealed record OrganizationTokenRequest(string ExternalToken);
 public sealed record ProblemResponse(string Code, string Message, string CorrelationId);
-
-public sealed record PermissionManifestMessage(
-    string ServiceId,
-    string ServiceName,
-    string Version,
-    string Environment,
-    IReadOnlyCollection<PermissionMessage> Permissions,
-    string ManifestVersion,
-    Guid CorrelationId,
-    DateTimeOffset PublishedAt);
-
-public sealed record PermissionMessage(string Name, string Description, string Module);

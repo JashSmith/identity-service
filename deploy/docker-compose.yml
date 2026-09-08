@@ -1,59 +1,60 @@
 services:
-  identity-api:
+  identity-facade:
     build:
       context: ..
       dockerfile: deploy/Identity.Api.Dockerfile
     environment:
       ASPNETCORE_URLS: http://+:5080
-      ConnectionStrings__Identity: Host=postgres;Port=5432;Database=identity;Username=identity;Password=${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD before starting Compose}
-      Identity__Persistence__Provider: PostgreSql
-      Identity__Messaging__RabbitMq__Enabled: "true"
-      Identity__Messaging__RabbitMq__ConsumeEnabled: "true"
-      Identity__Messaging__RabbitMq__ConnectionString: amqp://identity:${RABBITMQ_PASSWORD:-identity-development-only}@rabbitmq:5672/
-      Identity__Tokens__StoragePath: /var/lib/identity/identity-signing-keys.json
-      Identity__DataProtection__KeysPath: /var/lib/identity/data-protection
-    ports:
-      - "5080:5080"
+      Identity__Authority: http://keycloak:8080/realms/company
+      Identity__Audience: order-service
+      Identity__Server: http://identity-facade:5080
+    ports: ["5080:5080"]
     depends_on:
-      postgres:
+      keycloak:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    volumes:
-      - identity-signing-keys:/var/lib/identity
-      - identity-data-protection:/var/lib/identity/data-protection
+      redis:
+        condition: service_started
 
-  postgres:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: start-dev --http-port=8080 --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-development-only}
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin-development-only}
+    ports: ["8080:8080"]
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  keycloak-db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: identity
-      POSTGRES_USER: identity
-      POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity-development-only}
-    volumes:
-      - identity-postgres:/var/lib/postgresql/data
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-development-only}
+    volumes: [keycloak-postgres:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U identity -d identity"]
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  rabbitmq:
-    image: rabbitmq:4-management-alpine
-    environment:
-      RABBITMQ_DEFAULT_USER: identity
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-identity-development-only}
-    ports:
-      - "15672:15672"
-    volumes:
-      - identity-rabbitmq:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes: [identity-redis:/data]
 
 volumes:
-  identity-signing-keys:
-  identity-data-protection:
-  identity-postgres:
-  identity-rabbitmq:
+  keycloak-postgres:
+  identity-redis:

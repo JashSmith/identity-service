@@ -1,1 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><RootNamespace>Identity.Infrastructure</RootNamespace><AssemblyName>Identity.Infrastructure</AssemblyName></PropertyGroup><ItemGroup><ProjectReference Include="../Identity.Application/Identity.Application.csproj" /><PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" /><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><RootNamespace>Identity.Infrastructure</RootNamespace><AssemblyName>Identity.Infrastructure</AssemblyName></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Identity.Application/Identity.Application.csproj" /><ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj" /></ItemGroup>
+</Project>

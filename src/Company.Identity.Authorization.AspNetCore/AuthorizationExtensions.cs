@@ -15,28 +15,18 @@ public static class AuthorizationExtensions
     }
 }
 
-public sealed class PermissionPolicyProvider : DefaultAuthorizationPolicyProvider
+public sealed class PermissionPolicyProvider(Microsoft.Extensions.Options.IOptions<AuthorizationOptions> options) : DefaultAuthorizationPolicyProvider(options)
 {
-    public PermissionPolicyProvider(Microsoft.Extensions.Options.IOptions<AuthorizationOptions> options) : base(options)
-    {
-    }
-
     public override async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
-    {
-        return await base.GetPolicyAsync(policyName) ?? new AuthorizationPolicyBuilder()
-            .RequireAuthenticatedUser()
-            .AddRequirements(new PermissionRequirement(policyName))
-            .Build();
-    }
+        => await base.GetPolicyAsync(policyName) ?? new AuthorizationPolicyBuilder().RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(policyName)).Build();
 }
 
 public sealed class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
-    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context,
-        PermissionRequirement requirement)
+    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionRequirement requirement)
     {
-        if (context.User.Claims.Any(c => c.Type is "permission" or "permissions" && c.Value == requirement.Permission))
-            context.Succeed(requirement);
+        var permissions = context.User.FindAll("permission").Concat(context.User.FindAll("permissions")).Select(x => x.Value);
+        if (permissions.Contains(requirement.Permission, StringComparer.Ordinal) || context.User.IsInRole(requirement.Permission)) context.Succeed(requirement);
         return Task.CompletedTask;
     }
 }

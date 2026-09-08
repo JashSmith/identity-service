@@ -1,18 +1,12 @@
-using Microsoft.IdentityModel.Tokens;
-
 namespace Company.Identity.Authentication;
 
 public sealed class IdentityAuthenticationOptions
 {
-    public required string Authority { get; init; }
-    public string[] Audiences { get; init; } = [];
-    public TimeSpan ClockSkew { get; init; } = TimeSpan.FromMinutes(1);
-    public bool RequireHttpsMetadata { get; init; } = true;
-    public SecurityKey? SigningKey { get; init; }
-    public IReadOnlyCollection<SecurityKey> SigningKeys { get; init; } = [];
-}
-
-public interface IBffSessionValidator
-{
-    Task<bool> ValidateAsync(string sessionId, CancellationToken cancellationToken);
+    public string Authority { get; set; } = string.Empty;
+    public string Audience { get; set; } = string.Empty;
+    public string[] Audiences { get; set; } = [];
+    public TimeSpan ClockSkew { get; set; } = TimeSpan.FromMinutes(1);
+    public bool RequireHttpsMetadata { get; set; } = true;
+    public string[] ValidAlgorithms { get; set; } = ["RS256"];
+    public bool ValidateTokenType { get; set; } = true;
 }
