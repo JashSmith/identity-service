@@ -1,0 +1,29 @@
+# Keep the Docker build context small and stop local runtime state from being baked into images.
+.git
+.gitignore
+.idea
+.vs
+.vscode
+.claude
+
+**/bin
+**/obj
+**/*.user
+
+# Local dev artifacts — never ship these into an image.
+*.db
+*.db-shm
+*.db-wal
+identity.db
+identity_keys.db
+identity-signing-keys.json
+identity-data-protection-keys
+deploy/.env
+
+# Postgres fallback is a CI concern, not part of the Oracle image build.
+deploy/docker-compose.postgres.yml
+deploy/docker-compose.oracle.yml
+
+docs
+README.md
+LICENSE

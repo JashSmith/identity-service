@@ -7,22 +7,23 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5080
       Identity__Authority: http://keycloak:8080/realms/company
-      Identity__Audience: order-service
-      Identity__Server: http://identity-facade:5080
-      Identity__Persistence__Provider: oracle
+      # Tokens are minted for the facade's own Keycloak client, so its audience is that client id.
+      Identity__Audience: identity-facade
       Identity__KeyMetadata__Provider: oracle
-      ConnectionStrings__Identity: "User Id=identity;Password=identity-development-only;Data Source=identity-db:1521/FREEPDB1"
       ConnectionStrings__KeyMetadata: "User Id=identity_meta;Password=identity-development-only;Data Source=identity-meta-db:1521/FREEPDB1"
       Identity__Vault__Address: http://vault:8200
       Identity__Vault__Token: root
       Identity__KeycloakAdmin__BaseUrl: http://keycloak:8080
       Identity__KeycloakAdmin__Realm: company
+      # Admin bootstrap for KeycloakDirectoryAdapter / KeycloakKeyManager (dev only;
+      # in prod replace with client-credentials via Identity__KeycloakAdmin__AdminClientSecret).
+      Identity__KeycloakAdmin__AdminClientId: admin-cli
+      Identity__KeycloakAdmin__AdminUsername: ${KEYCLOAK_ADMIN:-admin}
+      Identity__KeycloakAdmin__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD:-admin-development-only}
       Identity__Redis__Configuration: redis:6379
-    ports: ["5080:5080", "5081:5081"]
+    ports: ["5080:5080"]
     depends_on:
       keycloak:
-        condition: service_healthy
-      identity-db:
         condition: service_healthy
       identity-meta-db:
         condition: service_healthy
@@ -32,7 +33,9 @@ services:
         condition: service_started
 
   keycloak:
-    image: quay.io/keycloak/keycloak:latest
+    build:
+      context: ..
+      dockerfile: deploy/Keycloak.Dockerfile
     command: start-dev --http-port=8080 --import-realm
     environment:
       KC_DB: oracle
@@ -44,14 +47,17 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin-development-only}
     ports: ["8080:8080"]
+    volumes:
+      - ./realm-company.json:/opt/keycloak/data/import/realm-company.json:ro
     depends_on:
       keycloak-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health/ready || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 30
+      start_period: 60s
 
   keycloak-db:
     image: gvenzl/oracle-free:23-slim
@@ -68,22 +74,8 @@ services:
       retries: 40
       start_period: 60s
 
-  # Facade's own metadata DB (users/roles/permissions)
-  identity-db:
-    image: gvenzl/oracle-free:23-slim
-    environment:
-      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle-development-only}
-      APP_USER: identity
-      APP_USER_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity-development-only}
-    volumes: [identity-oracle:/opt/oracle/oradata]
-    healthcheck:
-      test: ["CMD-SHELL", "healthcheck.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 40
-      start_period: 60s
-
-  # Key-metadata DB (signing keys / rotation ops) — separate PDB to avoid coupling
+  # Key-metadata DB (signing keys / rotation ops) — the only facade-owned DB.
+  # Kept on a separate Oracle instance so key lifecycle is not coupled to Keycloak's DB.
   identity-meta-db:
     image: gvenzl/oracle-free:23-slim
     environment:
@@ -123,6 +115,5 @@ services:
 
 volumes:
   keycloak-oracle:
-  identity-oracle:
   identity-meta-oracle:
   identity-redis:

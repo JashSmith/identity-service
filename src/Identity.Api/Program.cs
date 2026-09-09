@@ -68,7 +68,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Identity Facade v1"));
 }
 app.MapOpenApi();
-app.UseHttpsRedirection();
+// No HTTPS endpoint exists in Development/compose (plain HTTP on 5080), so a redirect here would 307 every request.
+if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");

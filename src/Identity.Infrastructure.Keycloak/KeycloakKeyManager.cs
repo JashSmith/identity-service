@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Identity.Application;
 using Identity.Domain;
 using Microsoft.Extensions.Options;
@@ -14,11 +16,23 @@ public sealed class KeycloakKeyManager(HttpClient http, IOptions<KeycloakOptions
 
     private async Task<string> GetAdminTokenAsync(CancellationToken ct)
     {
-        var form = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["grant_type"] = "client_credentials", ["client_id"] = _o.AdminClientId,
-            ["client_secret"] = _o.AdminClientSecret
-        });
+        // Same bootstrap as KeycloakDirectoryAdapter: client credentials when a secret is configured,
+        // otherwise the dev-only resource-owner grant against the master realm.
+        Dictionary<string, string> formValues;
+        if (!string.IsNullOrEmpty(_o.AdminClientSecret))
+            formValues = new Dictionary<string, string>
+            {
+                ["grant_type"] = "client_credentials", ["client_id"] = _o.AdminClientId,
+                ["client_secret"] = _o.AdminClientSecret
+            };
+        else if (!string.IsNullOrEmpty(_o.AdminUsername) && !string.IsNullOrEmpty(_o.AdminPassword))
+            formValues = new Dictionary<string, string>
+            {
+                ["grant_type"] = "password", ["client_id"] = _o.AdminClientId,
+                ["username"] = _o.AdminUsername, ["password"] = _o.AdminPassword
+            };
+        else return "";
+        var form = new FormUrlEncodedContent(formValues);
         try
         {
             var res = await http.PostAsync($"{_o.BaseUrl.TrimEnd('/')}/realms/master/protocol/openid-connect/token",
@@ -80,13 +94,21 @@ public sealed class KeycloakKeyManager(HttpClient http, IOptions<KeycloakOptions
     }
 
     public Task ActivateAsync(string realm, string componentId, CancellationToken ct) =>
-        UpdateAsync(realm, componentId, ct);
+        PatchComponentConfigAsync(realm, componentId, cfg =>
+        {
+            SetConfig(cfg, "active", "true");
+            SetConfig(cfg, "enabled", "true");
+        }, ct);
 
     public Task PassivateAsync(string realm, string componentId, CancellationToken ct) =>
-        UpdateAsync(realm, componentId, ct);
+        PatchComponentConfigAsync(realm, componentId, cfg => SetConfig(cfg, "active", "false"), ct);
 
     public Task DisableAsync(string realm, string componentId, CancellationToken ct) =>
-        UpdateAsync(realm, componentId, ct);
+        PatchComponentConfigAsync(realm, componentId, cfg => SetConfig(cfg, "enabled", "false"), ct);
+
+    // Keycloak MultiValuedHashMap config: every value is a JSON array of strings.
+    private static void SetConfig(IDictionary<string, JsonNode?> cfg, string key, string value) =>
+        cfg[key] = new JsonArray { JsonValue.Create(value) };
 
     public async Task RemoveAsync(string realm, string componentId, CancellationToken ct)
     {
@@ -96,17 +118,29 @@ public sealed class KeycloakKeyManager(HttpClient http, IOptions<KeycloakOptions
         await http.SendAsync(req, ct);
     }
 
-    private async Task UpdateAsync(string realm, string id, CancellationToken ct)
+    /// <summary>
+    /// Reads the component, mutates only the supplied <c>config</c> entries and writes it back —
+    /// Keycloak's component PUT is a full replace, so a blind re-PUT of the GET body is a no-op.
+    /// Never log the response body: it carries <c>config.privateKey</c>.
+    /// </summary>
+    private async Task PatchComponentConfigAsync(string realm, string id,
+        Action<IDictionary<string, JsonNode?>> patch, CancellationToken ct)
     {
         var t = await GetAdminTokenAsync(ct);
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{realm}/components/{id}");
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{realm}/components/{Uri.EscapeDataString(id)}");
         if (!string.IsNullOrEmpty(t)) req.Headers.Add("Authorization", $"Bearer {t}");
         var res = await http.SendAsync(req, ct);
         if (!res.IsSuccessStatusCode) return;
-        var el = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct)).RootElement;
-        var body = JsonSerializer.Deserialize<Dictionary<string, object>>(el.GetRawText()) ?? new();
-        var put = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{realm}/components/{id}")
-            {Content = JsonContent.Create(body)};
+        var node = JsonNode.Parse(await res.Content.ReadAsStringAsync(ct));
+        if (node is not JsonObject component) return;
+        if (component["config"] is not JsonObject cfg)
+        {
+            cfg = new JsonObject();
+            component["config"] = cfg;
+        }
+        patch(cfg);
+        var put = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{realm}/components/{Uri.EscapeDataString(id)}")
+            {Content = new StringContent(component.ToJsonString(), Encoding.UTF8, "application/json")};
         if (!string.IsNullOrEmpty(t)) put.Headers.Add("Authorization", $"Bearer {t}");
         await http.SendAsync(put, ct);
     }
