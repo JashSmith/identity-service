@@ -4,14 +4,30 @@ services:
       context: ..
       dockerfile: deploy/Identity.Api.Dockerfile
     environment:
+      ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5080
       Identity__Authority: http://keycloak:8080/realms/company
       Identity__Audience: order-service
       Identity__Server: http://identity-facade:5080
-    ports: ["5080:5080"]
+      Identity__Persistence__Provider: oracle
+      Identity__KeyMetadata__Provider: oracle
+      ConnectionStrings__Identity: "User Id=identity;Password=identity-development-only;Data Source=identity-db:1521/FREEPDB1"
+      ConnectionStrings__KeyMetadata: "User Id=identity_meta;Password=identity-development-only;Data Source=identity-meta-db:1521/FREEPDB1"
+      Identity__Vault__Address: http://vault:8200
+      Identity__Vault__Token: root
+      Identity__KeycloakAdmin__BaseUrl: http://keycloak:8080
+      Identity__KeycloakAdmin__Realm: company
+      Identity__Redis__Configuration: redis:6379
+    ports: ["5080:5080", "5081:5081"]
     depends_on:
       keycloak:
         condition: service_healthy
+      identity-db:
+        condition: service_healthy
+      identity-meta-db:
+        condition: service_healthy
+      vault:
+        condition: service_started
       redis:
         condition: service_started
 
@@ -19,8 +35,8 @@ services:
     image: quay.io/keycloak/keycloak:26.4
     command: start-dev --http-port=8080 --import-realm
     environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB: oracle
+      KC_DB_URL: jdbc:oracle:thin:@keycloak-db:1521/FREEPDB1
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-development-only}
       KC_HEALTH_ENABLED: "true"
@@ -35,18 +51,63 @@ services:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
       interval: 10s
       timeout: 5s
-      retries: 20
+      retries: 30
 
   keycloak-db:
-    image: postgres:17-alpine
+    image: gvenzl/oracle-free:23-slim
     environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-development-only}
-    volumes: [keycloak-postgres:/var/lib/postgresql/data]
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle-development-only}
+      APP_USER: keycloak
+      APP_USER_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-development-only}
+    ports: ["1521:1521"]
+    volumes: [keycloak-oracle:/opt/oracle/oradata]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
-      interval: 5s
+      test: ["CMD-SHELL", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+
+  # Facade's own metadata DB (users/roles/permissions)
+  identity-db:
+    image: gvenzl/oracle-free:23-slim
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle-development-only}
+      APP_USER: identity
+      APP_USER_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity-development-only}
+    volumes: [identity-oracle:/opt/oracle/oradata]
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+
+  # Key-metadata DB (signing keys / rotation ops) — separate PDB to avoid coupling
+  identity-meta-db:
+    image: gvenzl/oracle-free:23-slim
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle-development-only}
+      APP_USER: identity_meta
+      APP_USER_PASSWORD: ${IDENTITY_META_DB_PASSWORD:-identity-development-only}
+    volumes: [identity-meta-oracle:/opt/oracle/oradata]
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+
+  vault:
+    image: hashicorp/vault:1.16
+    cap_add: [IPC_LOCK]
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:-root}
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports: ["8200:8200"]
+    healthcheck:
+      test: ["CMD-SHELL", "vault status || exit 1"]
+      interval: 10s
       timeout: 5s
       retries: 10
 
@@ -54,7 +115,14 @@ services:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes: [identity-redis:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
-  keycloak-postgres:
+  keycloak-oracle:
+  identity-oracle:
+  identity-meta-oracle:
   identity-redis:

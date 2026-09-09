@@ -1,22 +1,5 @@
-# Oracle topology: Keycloak on Oracle XE + facade metadata on Oracle (or Postgres in CI)
+# Oracle is now the DEFAULT in deploy/docker-compose.yml.
+# This file is kept as an explicit alias for backwards compatibility.
 # Usage: docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.oracle.yml up
-services:
-  keycloak-db-oracle:
-    image: gvenzl/oracle-xe:21-slim
-    environment:
-      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle-development-only}
-    ports: ["1521:1521"]
-    healthcheck: { test: ["CMD-SHELL", "healthcheck.sh"], interval: 10s, retries: 20 }
-  vault:
-    image: hashicorp/vault:1.16
-    cap_add: [IPC_LOCK]
-    environment:
-      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:-root}
-      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
-    ports: ["8200:8200"]
-  keycloak:
-    environment:
-      KC_DB: oracle
-      KC_DB_URL: jdbc:oracle:thin:@keycloak-db-oracle:1521/xe
-      KC_DB_USERNAME: system
-      KC_DB_PASSWORD: ${ORACLE_PASSWORD:-oracle-development-only}
+# No overrides needed — base compose already runs Oracle.
+# For postgres/CI fallback use: docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.postgres.yml up

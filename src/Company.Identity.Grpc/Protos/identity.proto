@@ -3,6 +3,10 @@ option csharp_namespace = "Company.Identity.Grpc";
 package company.identity.v1;
 
 service IdentityService {
+  rpc Login (LoginRequest) returns (TokenResponse);
+  rpc RefreshToken (RefreshTokenRequest) returns (TokenResponse);
+  rpc Introspect (IntrospectRequest) returns (IntrospectResponse);
+  rpc Logout (LogoutRequest) returns (LogoutResponse);
   rpc GetUser (GetUserRequest) returns (UserResponse);
   rpc ListUsers (ListUsersRequest) returns (UserListResponse);
   rpc ListRoles (ListRolesRequest) returns (RoleListResponse);
@@ -10,6 +14,13 @@ service IdentityService {
   rpc GetUserPermissions (GetUserRequest) returns (PermissionListResponse);
   rpc RegisterPermissions (PermissionManifestRequest) returns (ManifestRegistrationResponse);
 }
+message LoginRequest { string username = 1; string password = 2; string client_id = 3; string client_secret = 4; string scope = 5; }
+message RefreshTokenRequest { string refresh_token = 1; string client_id = 2; string client_secret = 3; }
+message IntrospectRequest { string token = 1; string client_id = 2; string client_secret = 3; }
+message IntrospectResponse { bool active = 1; string sub = 2; string username = 3; string scope = 4; int64 exp = 5; }
+message TokenResponse { string access_token = 1; string refresh_token = 2; int32 expires_in = 3; string token_type = 4; }
+message LogoutRequest { string refresh_token = 1; string client_id = 2; string client_secret = 3; }
+message LogoutResponse { bool success = 1; }
 message GetUserRequest { string user_id = 1; }
 message ListUsersRequest { string search = 1; int32 page = 2; int32 page_size = 3; }
 message ListRolesRequest { string client_id = 1; int32 page = 2; int32 page_size = 3; }

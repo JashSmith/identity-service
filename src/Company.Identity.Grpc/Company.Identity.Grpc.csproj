@@ -13,5 +13,6 @@
         <PackageReference Include="Grpc.Tools" PrivateAssets="All" />
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
         <Protobuf Include="Protos/identity.proto" GrpcServices="Both" />
+        <Protobuf Include="Protos/key_admin.proto" GrpcServices="Both" />
     </ItemGroup>
 </Project>

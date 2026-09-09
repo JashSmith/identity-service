@@ -10,7 +10,10 @@
     <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj" />
     <ProjectReference Include="../Company.Identity.Authentication.AspNetCore/Company.Identity.Authentication.AspNetCore.csproj" />
     <ProjectReference Include="../Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj" />
+    <ProjectReference Include="../Company.Identity.Grpc/Company.Identity.Grpc.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+    <PackageReference Include="Microsoft.OpenApi" />
   </ItemGroup>
 </Project>
