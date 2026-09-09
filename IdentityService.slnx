@@ -1,7 +1,6 @@
 <Solution>
   <Folder Name="/deploy/"><File Path="deploy/docker-compose.yml"/><File Path="deploy/Identity.Api.Dockerfile"/></Folder>
   <Folder Name="/docs/"/>
-  <Folder Name="/samples/"><Project Path="samples/Identity.Consumer.Api/Identity.Consumer.Api.csproj"/></Folder>
   <Folder Name="/src/"/>
   <Folder Name="/src/Domain/"><Project Path="src/Identity.Domain/Identity.Domain.csproj"/></Folder>
   <Folder Name="/src/Application/"><Project Path="src/Identity.Application/Identity.Application.csproj"/></Folder>
@@ -10,7 +9,7 @@
   <Folder Name="/src/Packages/Authentication/"><Project Path="src/Company.Identity.Abstractions/Company.Identity.Abstractions.csproj"/><Project Path="src/Company.Identity.Authentication/Company.Identity.Authentication.csproj"/><Project Path="src/Company.Identity.Authentication.AspNetCore/Company.Identity.Authentication.AspNetCore.csproj"/></Folder>
   <Folder Name="/src/Packages/Authorization/"><Project Path="src/Company.Identity.Authorization/Company.Identity.Authorization.csproj"/><Project Path="src/Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj"/></Folder>
   <Folder Name="/src/Packages/PermissionRegistration/"><Project Path="src/Company.Identity.PermissionRegistration/Company.Identity.PermissionRegistration.csproj"/><Project Path="src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj"/></Folder>
-  <Folder Name="/src/Packages/Transport/"><Project Path="src/Company.Identity.Grpc/Company.Identity.Grpc.csproj"/><Project Path="src/Company.Identity.Blazor/Company.Identity.Blazor.csproj"/></Folder>
+  <Folder Name="/src/Packages/Transport/"><Project Path="src/Company.Identity.Grpc/Company.Identity.Grpc.csproj"/></Folder>
   <Folder Name="/src/Host/"><Project Path="src/Identity.Api/Identity.Api.csproj"/></Folder>
   <Folder Name="/tests/"><Project Path="tests/Identity.ArchitectureTests/Identity.ArchitectureTests.csproj"/><Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj"/><Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj"/><Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj"/></Folder>
 </Solution>
