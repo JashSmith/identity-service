@@ -10,7 +10,7 @@ public sealed class RsaKeyGenerationService : Identity.Application.IKeyGeneratio
     public (string PublicPem, Identity.Application.TransientPrivatePem Private, string PublicFingerprint) Generate(
         RsaKeySize size, string kid)
     {
-        using var rsa = RSA.Create((int) size);
+        using var rsa = RSA.Create((int)size);
         var publicPem = ExportPublicPem(rsa);
         var privatePem = ExportPrivatePem(rsa);
         var fingerprint = Sha256Fingerprint(publicPem);

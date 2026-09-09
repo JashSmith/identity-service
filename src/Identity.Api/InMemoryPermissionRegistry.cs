@@ -13,9 +13,12 @@ namespace Identity.Api;
 public sealed class InMemoryPermissionRegistry : IPermissionRegistry
 {
     private readonly ConcurrentDictionary<string, PermissionDto> _perms = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, (string Version, string Hash)> _manifests = new(StringComparer.Ordinal);
 
-    public Task<ManifestRegistrationResponse> RegisterAsync(PermissionManifestRequest manifest, string authenticatedServiceId, CancellationToken ct)
+    private readonly ConcurrentDictionary<string, (string Version, string Hash)> _manifests =
+        new(StringComparer.Ordinal);
+
+    public Task<ManifestRegistrationResponse> RegisterAsync(PermissionManifestRequest manifest,
+        string authenticatedServiceId, CancellationToken ct)
     {
         var incoming = manifest.Permissions.Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
         var already = _perms.Values.Where(p => p.ServiceId == manifest.ServiceId).ToList();
@@ -27,13 +30,19 @@ public sealed class InMemoryPermissionRegistry : IPermissionRegistry
         {
             _perms.AddOrUpdate(d.Name,
                 _ => new PermissionDto(d.Name, d.Description, manifest.ServiceId, manifest.ManifestVersion, false),
-                (_, cur) => cur with { Description = d.Description, ServiceVersion = manifest.ManifestVersion, Deprecated = false });
+                (_, cur) => cur with
+                {
+                    Description = d.Description, ServiceVersion = manifest.ManifestVersion, Deprecated = false
+                });
         }
+
         _manifests[manifest.ServiceId] = (manifest.ManifestVersion, manifest.ManifestHash);
-        return Task.FromResult(new ManifestRegistrationResponse(manifest.ServiceId, manifest.ManifestVersion, manifest.ManifestHash, true, deprecated));
+        return Task.FromResult(new ManifestRegistrationResponse(manifest.ServiceId, manifest.ManifestVersion,
+            manifest.ManifestHash, true, deprecated));
     }
 
-    public Task<IReadOnlyCollection<PermissionDto>> GetPermissionsAsync(string? serviceId, bool includeDeprecated, CancellationToken ct)
+    public Task<IReadOnlyCollection<PermissionDto>> GetPermissionsAsync(string? serviceId, bool includeDeprecated,
+        CancellationToken ct)
     {
         IEnumerable<PermissionDto> q = _perms.Values;
         if (!string.IsNullOrWhiteSpace(serviceId)) q = q.Where(p => p.ServiceId == serviceId);

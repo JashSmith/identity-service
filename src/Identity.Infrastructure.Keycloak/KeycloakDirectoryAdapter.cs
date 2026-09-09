@@ -33,10 +33,16 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
                     $"{_o.BaseUrl.TrimEnd('/')}/realms/master/protocol/openid-connect/token", form, ct);
                 if (!res.IsSuccessStatusCode) return string.Empty;
                 var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-                return doc.RootElement.TryGetProperty("access_token", out var t) ? t.GetString() ?? string.Empty : string.Empty;
+                return doc.RootElement.TryGetProperty("access_token", out var t)
+                    ? t.GetString() ?? string.Empty
+                    : string.Empty;
             }
-            catch { return string.Empty; }
+            catch
+            {
+                return string.Empty;
+            }
         }
+
         if (!string.IsNullOrEmpty(_o.AdminUsername) && !string.IsNullOrEmpty(_o.AdminPassword))
         {
             var form = new FormUrlEncodedContent(new Dictionary<string, string>
@@ -52,10 +58,16 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
                     $"{_o.BaseUrl.TrimEnd('/')}/realms/master/protocol/openid-connect/token", form, ct);
                 if (!res.IsSuccessStatusCode) return string.Empty;
                 var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-                return doc.RootElement.TryGetProperty("access_token", out var t) ? t.GetString() ?? string.Empty : string.Empty;
+                return doc.RootElement.TryGetProperty("access_token", out var t)
+                    ? t.GetString() ?? string.Empty
+                    : string.Empty;
             }
-            catch { return string.Empty; }
+            catch
+            {
+                return string.Empty;
+            }
         }
+
         return string.Empty;
     }
 
@@ -83,6 +95,7 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
                     ? prop.Value.EnumerateArray().Select(v => v.GetString() ?? string.Empty).ToArray()
                     : [prop.Value.GetString() ?? string.Empty];
         }
+
         return new UserDto(id, username, displayName, enabled, attrs);
     }
 
@@ -96,9 +109,11 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
         return new RoleDto(id, name, desc, clientId, composite);
     }
 
-    public async Task<PagedResponse<UserDto>> GetUsersAsync(string? search, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResponse<UserDto>> GetUsersAsync(string? search, int page, int pageSize,
+        CancellationToken ct)
     {
-        page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
         var token = await GetAdminTokenAsync(ct);
         var first = (page - 1) * pageSize;
         var url = $"{AdminBase}/{_o.Realm}/users?first={first}&max={pageSize}";
@@ -115,7 +130,10 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
                 : new List<UserDto>();
             return new PagedResponse<UserDto>(items, page, pageSize, null);
         }
-        catch { return new PagedResponse<UserDto>([], page, pageSize, 0); }
+        catch
+        {
+            return new PagedResponse<UserDto>([], page, pageSize, 0);
+        }
     }
 
     public async Task<UserDto?> GetUserAsync(string id, CancellationToken ct)
@@ -130,13 +148,17 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
             var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
             return MapUser(doc.RootElement);
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<IReadOnlyCollection<RoleDto>> GetUserRolesAsync(string id, CancellationToken ct)
     {
         var token = await GetAdminTokenAsync(ct);
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/users/{Uri.EscapeDataString(id)}/role-mappings");
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"{AdminBase}/{_o.Realm}/users/{Uri.EscapeDataString(id)}/role-mappings");
         AttachAuth(req, token);
         try
         {
@@ -152,19 +174,26 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
                         result.AddRange(m.EnumerateArray().Select(MapRole));
             return result;
         }
-        catch { return []; }
+        catch
+        {
+            return [];
+        }
     }
 
     public async Task<IReadOnlyCollection<PermissionDto>> GetUserPermissionsAsync(string id, CancellationToken ct)
     {
         // Permissions are modelled as roles in Keycloak for this facade; map them to PermissionDto by convention.
         var roles = await GetUserRolesAsync(id, ct);
-        return roles.Select(r => new PermissionDto(r.Name, r.Description ?? r.Name, _o.Realm, string.Empty, false, r.Id)).ToList();
+        return roles
+            .Select(r => new PermissionDto(r.Name, r.Description ?? r.Name, _o.Realm, string.Empty, false, r.Id))
+            .ToList();
     }
 
-    public async Task<PagedResponse<RoleDto>> GetRolesAsync(string? clientId, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResponse<RoleDto>> GetRolesAsync(string? clientId, int page, int pageSize,
+        CancellationToken ct)
     {
-        page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 100);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
         var token = await GetAdminTokenAsync(ct);
         var first = (page - 1) * pageSize;
         string url = string.IsNullOrWhiteSpace(clientId)
@@ -182,14 +211,18 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
                 : new List<RoleDto>();
             return new PagedResponse<RoleDto>(items, page, pageSize, null);
         }
-        catch { return new PagedResponse<RoleDto>([], page, pageSize, 0); }
+        catch
+        {
+            return new PagedResponse<RoleDto>([], page, pageSize, 0);
+        }
     }
 
     public async Task<RoleDto?> GetRoleAsync(string id, CancellationToken ct)
     {
         // Keycloak has no direct GetRole by id without knowing client; search realm roles only.
         var token = await GetAdminTokenAsync(ct);
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/roles-by-id/{Uri.EscapeDataString(id)}");
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"{AdminBase}/{_o.Realm}/roles-by-id/{Uri.EscapeDataString(id)}");
         AttachAuth(req, token);
         try
         {
@@ -198,6 +231,9 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
             var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
             return MapRole(doc.RootElement);
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 }

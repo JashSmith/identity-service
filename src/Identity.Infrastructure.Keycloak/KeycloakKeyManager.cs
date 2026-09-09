@@ -83,7 +83,7 @@ public sealed class KeycloakKeyManager(HttpClient http, IOptions<KeycloakOptions
             }
         };
         var req = new HttpRequestMessage(HttpMethod.Post, $"{AdminBase}/{realm}/components")
-            {Content = JsonContent.Create(body)};
+            { Content = JsonContent.Create(body) };
         if (!string.IsNullOrEmpty(token)) req.Headers.Add("Authorization", $"Bearer {token}");
         var res = await http.SendAsync(req, ct);
         res.EnsureSuccessStatusCode();
@@ -138,9 +138,10 @@ public sealed class KeycloakKeyManager(HttpClient http, IOptions<KeycloakOptions
             cfg = new JsonObject();
             component["config"] = cfg;
         }
+
         patch(cfg);
         var put = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{realm}/components/{Uri.EscapeDataString(id)}")
-            {Content = new StringContent(component.ToJsonString(), Encoding.UTF8, "application/json")};
+            { Content = new StringContent(component.ToJsonString(), Encoding.UTF8, "application/json") };
         if (!string.IsNullOrEmpty(t)) put.Headers.Add("Authorization", $"Bearer {t}");
         await http.SendAsync(put, ct);
     }

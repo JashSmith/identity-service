@@ -4,7 +4,7 @@
         <AssemblyName>Identity.Infrastructure</AssemblyName>
     </PropertyGroup>
     <ItemGroup>
-        <ProjectReference Include="../Identity.Application/Identity.Application.csproj" />
-        <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj" />
+        <ProjectReference Include="../Identity.Application/Identity.Application.csproj"/>
+        <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj"/>
     </ItemGroup>
 </Project>

@@ -23,22 +23,29 @@ builder.Services.AddGrpc();
 
 // Key management
 builder.Services.Configure<KeyManagementOptions>(builder.Configuration.GetSection("Identity:KeyManagement"));
-builder.Services.Configure<Identity.Infrastructure.Vault.VaultOptions>(builder.Configuration.GetSection("Identity:Vault"));
-builder.Services.Configure<Identity.Infrastructure.Keycloak.KeycloakOptions>(builder.Configuration.GetSection("Identity:KeycloakAdmin"));
-builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyManagementOptions>>().Value);
+builder.Services.Configure<Identity.Infrastructure.Vault.VaultOptions>(
+    builder.Configuration.GetSection("Identity:Vault"));
+builder.Services.Configure<Identity.Infrastructure.Keycloak.KeycloakOptions>(
+    builder.Configuration.GetSection("Identity:KeycloakAdmin"));
+builder.Services.AddSingleton(sp =>
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyManagementOptions>>().Value);
 builder.Services.AddSingleton<IKeyGenerationService, Identity.Infrastructure.RsaKeyGenerationService>();
 builder.Services.AddSingleton<IKeyRetirementSafety, Identity.Infrastructure.KeyRetirementSafety>();
 builder.Services.AddSingleton<IKeyRotationLock, Identity.Infrastructure.Redis.InMemoryKeyRotationLock>();
 builder.Services.AddSingleton<IAuditSink>(sp => new Identity.Infrastructure.NoopAuditSink());
 builder.Services.AddHttpClient<Identity.Infrastructure.Vault.VaultSigningKeyStore>();
-builder.Services.AddSingleton<ISigningKeyVault>(sp => sp.GetRequiredService<Identity.Infrastructure.Vault.VaultSigningKeyStore>());
+builder.Services.AddSingleton<ISigningKeyVault>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Vault.VaultSigningKeyStore>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakKeyManager>();
-builder.Services.AddSingleton<IKeycloakKeyManager>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakKeyManager>());
+builder.Services.AddSingleton<IKeycloakKeyManager>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakKeyManager>());
 
 // Directory + permissions — Keycloak is source of truth; facade registry is in-memory so failure never blocks start.
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>();
-builder.Services.AddSingleton<IUserDirectory>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
-builder.Services.AddSingleton<IRoleDirectory>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
+builder.Services.AddSingleton<IUserDirectory>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
+builder.Services.AddSingleton<IRoleDirectory>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
 builder.Services.AddSingleton<IPermissionRegistry, InMemoryPermissionRegistry>();
 builder.Services.AddSingleton<PermissionRegistrationService>();
 
@@ -56,8 +63,18 @@ builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>
 {
-    o.SwaggerDoc("v1", new Microsoft.OpenApi.OpenApiInfo { Title = "Identity Facade", Version = "v1", Description = "Keycloak-centric facade — auth proxy, directory, permissions, key lifecycle" });
-    o.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme { Type = Microsoft.OpenApi.SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT", Description = "Keycloak-issued JWT" });
+    o.SwaggerDoc("v1",
+        new Microsoft.OpenApi.OpenApiInfo
+        {
+            Title = "Identity Facade", Version = "v1",
+            Description = "Keycloak-centric facade — auth proxy, directory, permissions, key lifecycle"
+        });
+    o.AddSecurityDefinition("Bearer",
+        new Microsoft.OpenApi.OpenApiSecurityScheme
+        {
+            Type = Microsoft.OpenApi.SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT",
+            Description = "Keycloak-issued JWT"
+        });
 });
 builder.Services.AddOpenApi();
 
@@ -67,6 +84,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Identity Facade v1"));
 }
+
 app.MapOpenApi();
 // No HTTPS endpoint exists in Development/compose (plain HTTP on 5080), so a redirect here would 307 every request.
 if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
@@ -74,7 +92,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");
 app.MapGet("/api/identity/me", (ICurrentUserContext current) =>
-        current.UserId is null ? Results.Unauthorized() : Results.Ok(new { current.UserId, current.Username, current.Roles, current.Permissions, current.SessionId }))
+        current.UserId is null
+            ? Results.Unauthorized()
+            : Results.Ok(
+                new { current.UserId, current.Username, current.Roles, current.Permissions, current.SessionId }))
     .RequireAuthorization().WithTags("Users").WithName("Me").Produces<object>(200);
 app.MapAuth();
 app.MapUsers();
@@ -82,7 +103,8 @@ app.MapPermissions();
 app.MapAdminKeys();
 app.MapGrpcService<Company.Identity.Grpc.IdentityGrpcService>();
 app.MapGrpcService<Company.Identity.Grpc.KeyAdminGrpcService>();
-app.MapPost("/api/identity/external/organization-token", (OrganizationTokenRequest request) => Results.StatusCode(StatusCodes.Status501NotImplemented))
+app.MapPost("/api/identity/external/organization-token",
+        (OrganizationTokenRequest request) => Results.StatusCode(StatusCodes.Status501NotImplemented))
     .WithTags("Auth").WithName("ExchangeOrganizationToken");
 app.Run();
 

@@ -43,7 +43,7 @@ public sealed class KeyRotationService(
     private static string NewOpId() => Guid.NewGuid().ToString("N");
 
     private static Identity.Contracts.SigningKeyDto ToDto(SigningKeyMetadata m) =>
-        new(m.Kid, (int) m.Size, m.PublicPemFingerprint, m.VaultPath, m.VaultVersion,
+        new(m.Kid, (int)m.Size, m.PublicPemFingerprint, m.VaultPath, m.VaultVersion,
             m.State.ToString(), m.CreatedAt, m.Realm, m.KeycloakComponentId, m.ActivatedAt, m.RetiredAt, m.Origin);
 
     // ---- Generate + Import (create + store in Vault, no Keycloak yet) ----
@@ -52,7 +52,7 @@ public sealed class KeyRotationService(
         Identity.Contracts.GenerateKeyRequest request, string actor, CancellationToken ct)
     {
         var size = request.Size is 2048 or 3072 or 4096
-            ? (RsaKeySize) request.Size
+            ? (RsaKeySize)request.Size
             : options.DefaultSize;
         var kid = string.IsNullOrWhiteSpace(request.Kid) ? NewKid() : request.Kid.Trim();
 
@@ -73,7 +73,7 @@ public sealed class KeyRotationService(
             await audit.RecordAsync(new AuditEvent(actor, "key.generated", kid, now,
                 new Dictionary<string, string?>
                 {
-                    ["kid"] = kid, ["size"] = ((int) size).ToString(), ["vault_version"] = vaultRef.Version.ToString()
+                    ["kid"] = kid, ["size"] = ((int)size).ToString(), ["vault_version"] = vaultRef.Version.ToString()
                 }), ct);
             return ToDto(meta);
         }
@@ -99,7 +99,7 @@ public sealed class KeyRotationService(
             await repo.AddHistoryAsync(options.Realm, requestedKid, KeyLifecycleState.Generated.ToString(),
                 KeyLifecycleState.VaultStored.ToString(), now, actor, request.Reason, ct);
             await audit.RecordAsync(new AuditEvent(actor, "key.imported", requestedKid, now,
-                new Dictionary<string, string?> {["kid"] = requestedKid, ["size"] = ((int) size).ToString()}), ct);
+                new Dictionary<string, string?> { ["kid"] = requestedKid, ["size"] = ((int)size).ToString() }), ct);
             return ToDto(meta);
         }
     }
@@ -142,7 +142,7 @@ public sealed class KeyRotationService(
             await repo.AddHistoryAsync(options.Realm, kid, meta.State.ToString(), next.State.ToString(), now, actor,
                 null, ct);
             await audit.RecordAsync(new AuditEvent(actor, "key.staged", kid, now,
-                new Dictionary<string, string?> {["kid"] = kid, ["component_id"] = component.Id}), ct);
+                new Dictionary<string, string?> { ["kid"] = kid, ["component_id"] = component.Id }), ct);
             return ToDto(next);
         }
     }
@@ -172,7 +172,7 @@ public sealed class KeyRotationService(
         var now = clock.GetUtcNow();
         if (!result.Present || !result.FingerprintMatches)
         {
-            var failed = meta with {State = KeyLifecycleState.ValidationFailed};
+            var failed = meta with { State = KeyLifecycleState.ValidationFailed };
             // Direct assignment for failure branch (outside normal Validated path).
             await repo.UpsertAsync(failed, ct);
             await repo.AddHistoryAsync(options.Realm, kid, meta.State.ToString(), failed.State.ToString(), now, actor,
@@ -181,12 +181,12 @@ public sealed class KeyRotationService(
         }
 
         KeyLifecycleTransitions.Ensure(meta.State, KeyLifecycleState.Validated);
-        var next = meta with {State = KeyLifecycleState.Validated};
+        var next = meta with { State = KeyLifecycleState.Validated };
         await repo.UpsertAsync(next, ct);
         await repo.AddHistoryAsync(options.Realm, kid, meta.State.ToString(), next.State.ToString(), now, actor, null,
             ct);
         await audit.RecordAsync(new AuditEvent(actor, "key.validated", kid, now,
-            new Dictionary<string, string?> {["kid"] = kid}), ct);
+            new Dictionary<string, string?> { ["kid"] = kid }), ct);
         return ToDto(next);
     }
 
@@ -231,7 +231,7 @@ public sealed class KeyRotationService(
             var previousActive = all.FirstOrDefault(x => x.State == KeyLifecycleState.Active);
 
             await keycloak.ActivateAsync(options.Realm, current.KeycloakComponentId!, ct);
-            var activated = current with {State = KeyLifecycleState.Active, ActivatedAt = now};
+            var activated = current with { State = KeyLifecycleState.Active, ActivatedAt = now };
             await repo.UpsertAsync(activated, ct);
             await repo.AddHistoryAsync(options.Realm, kid, current.State.ToString(), activated.State.ToString(), now,
                 actor, null, ct);
@@ -239,11 +239,11 @@ public sealed class KeyRotationService(
             if (previousActive is not null)
             {
                 await keycloak.PassivateAsync(options.Realm, previousActive.KeycloakComponentId!, ct);
-                var passivated = previousActive with {State = KeyLifecycleState.InGrace, PassivatedAt = now};
+                var passivated = previousActive with { State = KeyLifecycleState.InGrace, PassivatedAt = now };
                 await repo.UpsertAsync(passivated, ct);
                 await repo.AddHistoryAsync(options.Realm, previousActive.Kid, previousActive.State.ToString(),
                     passivated.State.ToString(), now, actor, $"superseded by {kid}", ct);
-                op = op with {PreviousKid = previousActive.Kid};
+                op = op with { PreviousKid = previousActive.Kid };
             }
 
             // Convergence poll: new kid present, old kid still present.
@@ -252,7 +252,7 @@ public sealed class KeyRotationService(
             op = op.Advanced(KeyLifecycleState.Active, SagaStatus.Completed, clock.GetUtcNow(), kid, op.PreviousKid);
             await repo.UpsertOperationAsync(op, ct);
             await audit.RecordAsync(new AuditEvent(actor, "key.activated", kid, now,
-                new Dictionary<string, string?> {["kid"] = kid, ["previous_kid"] = previousActive?.Kid}), ct);
+                new Dictionary<string, string?> { ["kid"] = kid, ["previous_kid"] = previousActive?.Kid }), ct);
             return ToDto(activated);
         }
         finally
@@ -294,8 +294,8 @@ public sealed class KeyRotationService(
         string targetKid = request.TargetKid?.Trim() ?? string.Empty;
         if (string.IsNullOrEmpty(targetKid))
         {
-            var size = request.Size is 2048 or 3072 or 4096 ? (RsaKeySize) request.Size.Value : options.DefaultSize;
-            var gen = await GenerateAsync(new Identity.Contracts.GenerateKeyRequest((int) size, Reason: request.Reason),
+            var size = request.Size is 2048 or 3072 or 4096 ? (RsaKeySize)request.Size.Value : options.DefaultSize;
+            var gen = await GenerateAsync(new Identity.Contracts.GenerateKeyRequest((int)size, Reason: request.Reason),
                 actor, ct);
             targetKid = gen.Kid;
         }
@@ -362,10 +362,10 @@ public sealed class KeyRotationService(
         {
             var now = clock.GetUtcNow();
             await keycloak.ActivateAsync(options.Realm, previous.KeycloakComponentId!, ct);
-            var reactivated = previous with {State = KeyLifecycleState.Active, ActivatedAt = now};
+            var reactivated = previous with { State = KeyLifecycleState.Active, ActivatedAt = now };
             await repo.UpsertAsync(reactivated, ct);
             await keycloak.PassivateAsync(options.Realm, failed.KeycloakComponentId!, ct);
-            var demoted = failed with {State = KeyLifecycleState.Passive};
+            var demoted = failed with { State = KeyLifecycleState.Passive };
             await repo.UpsertAsync(demoted, ct);
             await repo.AddHistoryAsync(options.Realm, previous.Kid, previous.State.ToString(),
                 reactivated.State.ToString(), now, actor, $"rollback from {failedKid}: {request.Reason}", ct);
@@ -376,7 +376,7 @@ public sealed class KeyRotationService(
                 KeyLifecycleState.RollbackPending, SagaStatus.RolledBack, now, now, actor);
             await repo.UpsertOperationAsync(op, ct);
             await audit.RecordAsync(new AuditEvent(actor, "key.rollback", failedKid, now,
-                new Dictionary<string, string?> {["failed_kid"] = failedKid, ["restored_kid"] = previous.Kid}), ct);
+                new Dictionary<string, string?> { ["failed_kid"] = failedKid, ["restored_kid"] = previous.Kid }), ct);
             return ToOpDto(op);
         }
         finally
@@ -398,7 +398,7 @@ public sealed class KeyRotationService(
         if (now < eligibleAt)
             throw new InvalidOperationException($"Key '{kid}' is still in grace until {eligibleAt:O}.");
         await keycloak.DisableAsync(options.Realm, meta.KeycloakComponentId!, ct);
-        var next = meta with {State = KeyLifecycleState.Retired, RetiredAt = now};
+        var next = meta with { State = KeyLifecycleState.Retired, RetiredAt = now };
         await repo.UpsertAsync(next, ct);
         await repo.AddHistoryAsync(options.Realm, kid, meta.State.ToString(), next.State.ToString(), now, actor, null,
             ct);
@@ -420,12 +420,12 @@ public sealed class KeyRotationService(
         await vault.DestroyAsync(kid, ct);
         if (meta.KeycloakComponentId is not null)
             await keycloak.RemoveAsync(options.Realm, meta.KeycloakComponentId, ct);
-        var next = meta with {State = KeyLifecycleState.Destroyed, DestroyedAt = now};
+        var next = meta with { State = KeyLifecycleState.Destroyed, DestroyedAt = now };
         await repo.UpsertAsync(next, ct);
         await repo.AddHistoryAsync(options.Realm, kid, meta.State.ToString(), next.State.ToString(), now, actor,
             request.Reason, ct);
         await audit.RecordAsync(new AuditEvent(actor, "key.destroyed", kid, now,
-            new Dictionary<string, string?> {["kid"] = kid}), ct);
+            new Dictionary<string, string?> { ["kid"] = kid }), ct);
     }
 
     // ---- Reads ----

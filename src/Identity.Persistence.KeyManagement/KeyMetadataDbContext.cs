@@ -61,7 +61,7 @@ public sealed class KeyMetadataDbContext(DbContextOptions<KeyMetadataDbContext> 
     {
         b.Entity<SigningKeyEntity>(e =>
         {
-            e.HasKey(x => new {x.Realm, x.Kid});
+            e.HasKey(x => new { x.Realm, x.Kid });
             e.HasIndex(x => x.Kid).IsUnique(false);
             e.Property(x => x.State).HasMaxLength(32).IsRequired();
             e.Property(x => x.PublicPemFingerprint).HasMaxLength(128).IsRequired();
@@ -72,12 +72,12 @@ public sealed class KeyMetadataDbContext(DbContextOptions<KeyMetadataDbContext> 
         b.Entity<KeyHistoryEntity>(e =>
         {
             e.HasKey(x => x.Id);
-            e.HasIndex(x => new {x.Realm, x.Kid, x.OccurredAt});
+            e.HasIndex(x => new { x.Realm, x.Kid, x.OccurredAt });
         });
         b.Entity<RotationOperationEntity>(e =>
         {
             e.HasKey(x => x.OperationId);
-            e.HasIndex(x => new {x.Realm, x.IdempotencyKey}).IsUnique();
+            e.HasIndex(x => new { x.Realm, x.IdempotencyKey }).IsUnique();
         });
     }
 
@@ -170,13 +170,13 @@ public sealed class EfKeyLifecycleRepository(KeyMetadataDbContext db) : IKeyLife
         return list.Select(MapOp).ToList();
     }
 
-    private static SigningKeyMetadata Map(SigningKeyEntity e) => new(e.Kid, (RsaKeySize) e.Size, e.PublicPemFingerprint,
+    private static SigningKeyMetadata Map(SigningKeyEntity e) => new(e.Kid, (RsaKeySize)e.Size, e.PublicPemFingerprint,
         e.VaultPath, e.VaultVersion, Enum.Parse<KeyLifecycleState>(e.State), e.CreatedAt, e.Realm,
         e.KeycloakComponentId, e.ActivatedAt, e.PassivatedAt, e.RetiredAt, e.DestroyedAt, e.Origin);
 
     private static SigningKeyEntity ToEntity(SigningKeyMetadata m) => new()
     {
-        Kid = m.Kid, Realm = m.Realm, Size = (int) m.Size, PublicPemFingerprint = m.PublicPemFingerprint,
+        Kid = m.Kid, Realm = m.Realm, Size = (int)m.Size, PublicPemFingerprint = m.PublicPemFingerprint,
         VaultPath = m.VaultPath, VaultVersion = m.VaultVersion, State = m.State.ToString(), CreatedAt = m.CreatedAt,
         KeycloakComponentId = m.KeycloakComponentId, ActivatedAt = m.ActivatedAt, PassivatedAt = m.PassivatedAt,
         RetiredAt = m.RetiredAt, DestroyedAt = m.DestroyedAt, Origin = m.Origin
@@ -184,7 +184,7 @@ public sealed class EfKeyLifecycleRepository(KeyMetadataDbContext db) : IKeyLife
 
     private static void UpdateEntity(SigningKeyEntity e, SigningKeyMetadata m)
     {
-        e.Size = (int) m.Size;
+        e.Size = (int)m.Size;
         e.PublicPemFingerprint = m.PublicPemFingerprint;
         e.VaultPath = m.VaultPath;
         e.VaultVersion = m.VaultVersion;

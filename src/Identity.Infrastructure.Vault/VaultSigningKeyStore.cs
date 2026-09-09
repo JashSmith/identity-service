@@ -30,7 +30,7 @@ public sealed class VaultSigningKeyStore(
             {
                 data = new
                 {
-                    kid, realm, size = (int) size, private_pem = privatePem, public_pem = publicPem,
+                    kid, realm, size = (int)size, private_pem = privatePem, public_pem = publicPem,
                     fingerprint = publicFingerprint
                 }
             })
