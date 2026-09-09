@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><RootNamespace>Identity.Application</RootNamespace><AssemblyName>Identity.Application</AssemblyName></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../Identity.Domain/Identity.Domain.csproj" />
-    <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj" /></ItemGroup>
+    <PropertyGroup>
+        <RootNamespace>Identity.Application</RootNamespace>
+        <AssemblyName>Identity.Application</AssemblyName>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Identity.Domain/Identity.Domain.csproj"/>
+        <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj"/>
+    </ItemGroup>
 </Project>

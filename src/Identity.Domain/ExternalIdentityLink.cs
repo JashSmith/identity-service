@@ -7,7 +7,9 @@ namespace Identity.Domain;
 /// </summary>
 public sealed class ExternalIdentityLink
 {
-    private ExternalIdentityLink() { }
+    private ExternalIdentityLink()
+    {
+    }
 
     public ExternalIdentityLink(Guid id, Guid userId, string provider, string subject, DateTimeOffset linkedAt)
     {

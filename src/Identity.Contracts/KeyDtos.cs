@@ -71,8 +71,17 @@ public sealed record RetirementSafetyDto(
 
 /// <summary>Admin write requests. Private import material travels only on the Import path and is zeroized.</summary>
 public sealed record GenerateKeyRequest(int Size, string? Kid = null, string? Reason = null);
+
 public sealed record ImportKeyRequest(string Pem, string? Kid = null, string? Reason = null);
-public sealed record RotateRequest(string Reason, string? IdempotencyKey = null, int? Size = null, string? TargetKid = null);
+
+public sealed record RotateRequest(
+    string Reason,
+    string? IdempotencyKey = null,
+    int? Size = null,
+    string? TargetKid = null);
+
 public sealed record EmergencyRotateRequest(string Reason, string? IdempotencyKey = null, int? Size = null);
+
 public sealed record RollbackRequest(string Reason, string? IdempotencyKey = null);
+
 public sealed record DestroyRequest(string ConfirmKid, string Reason);

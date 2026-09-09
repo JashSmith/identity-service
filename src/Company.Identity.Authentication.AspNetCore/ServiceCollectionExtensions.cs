@@ -7,12 +7,15 @@ namespace Company.Identity.Authentication.AspNetCore;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddCompanyAuthentication(this IServiceCollection services, Action<IdentityAuthenticationOptions> configure)
+    public static IServiceCollection AddCompanyAuthentication(this IServiceCollection services,
+        Action<IdentityAuthenticationOptions> configure)
     {
         var options = new IdentityAuthenticationOptions();
         configure(options);
-        if (string.IsNullOrWhiteSpace(options.Authority)) throw new InvalidOperationException("Identity authority is required.");
-        var audiences = options.Audiences.Length > 0 ? options.Audiences : string.IsNullOrWhiteSpace(options.Audience) ? [] : [options.Audience];
+        if (string.IsNullOrWhiteSpace(options.Authority))
+            throw new InvalidOperationException("Identity authority is required.");
+        var audiences = options.Audiences.Length > 0 ? options.Audiences :
+            string.IsNullOrWhiteSpace(options.Audience) ? [] : [options.Audience];
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(jwt =>
         {
             jwt.Authority = options.Authority.TrimEnd('/');
@@ -29,10 +32,13 @@ public static class ServiceCollectionExtensions
             {
                 OnTokenValidated = context =>
                 {
-                    if (!options.ValidateTokenType || context.SecurityToken is not System.IdentityModel.Tokens.Jwt.JwtSecurityToken token) return Task.CompletedTask;
+                    if (!options.ValidateTokenType ||
+                        context.SecurityToken is not System.IdentityModel.Tokens.Jwt.JwtSecurityToken token)
+                        return Task.CompletedTask;
                     if (token.Header.TryGetValue("typ", out var value) && value is string type &&
                         !string.Equals(type, "Bearer", StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(type, "at+jwt", StringComparison.OrdinalIgnoreCase)) context.Fail("Unexpected token type.");
+                        !string.Equals(type, "at+jwt", StringComparison.OrdinalIgnoreCase))
+                        context.Fail("Unexpected token type.");
                     return Task.CompletedTask;
                 }
             };

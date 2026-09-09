@@ -9,7 +9,9 @@ public interface IIdentityProvider
 
 public interface IUserDirectory
 {
-    Task<PagedResponse<UserDto>> GetUsersAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PagedResponse<UserDto>> GetUsersAsync(string? search, int page, int pageSize,
+        CancellationToken cancellationToken);
+
     Task<UserDto?> GetUserAsync(string id, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<RoleDto>> GetUserRolesAsync(string id, CancellationToken cancellationToken);
     Task<IReadOnlyCollection<PermissionDto>> GetUserPermissionsAsync(string id, CancellationToken cancellationToken);
@@ -17,7 +19,9 @@ public interface IUserDirectory
 
 public interface IRoleDirectory
 {
-    Task<PagedResponse<RoleDto>> GetRolesAsync(string? clientId, int page, int pageSize, CancellationToken cancellationToken);
+    Task<PagedResponse<RoleDto>> GetRolesAsync(string? clientId, int page, int pageSize,
+        CancellationToken cancellationToken);
+
     Task<RoleDto?> GetRoleAsync(string id, CancellationToken cancellationToken);
 }
 
@@ -25,6 +29,7 @@ public interface IPermissionRegistry
 {
     Task<ManifestRegistrationResponse> RegisterAsync(PermissionManifestRequest manifest, string authenticatedServiceId,
         CancellationToken cancellationToken);
+
     Task<IReadOnlyCollection<PermissionDto>> GetPermissionsAsync(string? serviceId, bool includeDeprecated,
         CancellationToken cancellationToken);
 }

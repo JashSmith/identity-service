@@ -1,1 +1,6 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><RootNamespace>Identity.Contracts</RootNamespace><AssemblyName>Identity.Contracts</AssemblyName></PropertyGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <RootNamespace>Identity.Contracts</RootNamespace>
+        <AssemblyName>Identity.Contracts</AssemblyName>
+    </PropertyGroup>
+</Project>

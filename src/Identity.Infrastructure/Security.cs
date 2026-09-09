@@ -146,5 +146,6 @@ public sealed class RedactingAuditSink(IAuditSink inner) : IAuditSink
 
 public sealed class NoopAuditSink : Identity.Application.IAuditSink
 {
-    public Task RecordAsync(Identity.Domain.AuditEvent auditEvent, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task RecordAsync(Identity.Domain.AuditEvent auditEvent, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }

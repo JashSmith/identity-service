@@ -1,4 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><RootNamespace>Identity.Infrastructure.Keycloak</RootNamespace><AssemblyName>Identity.Infrastructure.Keycloak</AssemblyName></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../Identity.Application/Identity.Application.csproj" /><ProjectReference Include="../Identity.Domain/Identity.Domain.csproj" /><PackageReference Include="Polly.Core" /><PackageReference Include="Polly.Extensions" /></ItemGroup>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Identity.Infrastructure.Keycloak</RootNamespace>
+        <AssemblyName>Identity.Infrastructure.Keycloak</AssemblyName>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Identity.Application/Identity.Application.csproj"/>
+        <ProjectReference Include="../Identity.Domain/Identity.Domain.csproj"/>
+        <PackageReference Include="Polly.Core"/>
+        <PackageReference Include="Polly.Extensions"/>
+    </ItemGroup>
 </Project>

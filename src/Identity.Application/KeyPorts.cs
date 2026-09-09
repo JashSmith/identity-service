@@ -63,6 +63,7 @@ public sealed class TransientPrivatePem : IDisposable
             _pem = new string('\0', _pem.Length);
             _pem = null;
         }
+
         GC.SuppressFinalize(this);
     }
 
@@ -79,7 +80,8 @@ public interface IKeyGenerationService
     (string PublicPem, TransientPrivatePem Private, string PublicFingerprint) Generate(RsaKeySize size, string kid);
 
     /// <summary>Parse an externally supplied private PEM PKCS#1/PKCS#8 and derive public material.</summary>
-    (string PublicPem, TransientPrivatePem Private, RsaKeySize Size, string PublicFingerprint) ParseImport(string privatePem, string kid);
+    (string PublicPem, TransientPrivatePem Private, RsaKeySize Size, string PublicFingerprint) ParseImport(
+        string privatePem, string kid);
 }
 
 /// <summary>Minimal Keycloak Admin component view. Internal representation, never returned to clients.</summary>
@@ -93,24 +95,30 @@ public sealed record KeycloakComponentDto(
 /// <summary>Port to Keycloak Admin REST (<c>components</c>) and realm JWKS.</summary>
 public interface IKeycloakKeyManager
 {
-    Task<IReadOnlyCollection<KeycloakComponentDto>> ListRsaComponentsAsync(string realm, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<KeycloakComponentDto>> ListRsaComponentsAsync(string realm,
+        CancellationToken cancellationToken);
+
     Task<KeycloakComponentDto> RegisterPassiveAsync(
         string realm, string kid, RsaKeySize size,
         string privatePem, string publicPem, CancellationToken cancellationToken);
+
     Task ActivateAsync(string realm, string componentId, CancellationToken cancellationToken);
     Task PassivateAsync(string realm, string componentId, CancellationToken cancellationToken);
     Task DisableAsync(string realm, string componentId, CancellationToken cancellationToken);
     Task RemoveAsync(string realm, string componentId, CancellationToken cancellationToken);
 
     /// <summary>Read the realm JWKS and assert presence/modulus of <paramref name="kid"/>.</summary>
-    Task<JwksVerificationResult> VerifyInJwksAsync(string realm, string kid, string publicPem, CancellationToken cancellationToken);
+    Task<JwksVerificationResult> VerifyInJwksAsync(string realm, string kid, string publicPem,
+        CancellationToken cancellationToken);
 
     /// <summary>Raw JWKS fetch for cluster-convergence polling and the smoke-token verifier.</summary>
     Task<JwksSnapshot> GetJwksAsync(string realm, CancellationToken cancellationToken);
 }
 
 public sealed record JwksVerificationResult(bool Present, bool FingerprintMatches, string? Reason = null);
+
 public sealed record JwksSnapshot(DateTimeOffset FetchedAt, IReadOnlyCollection<JwkEntry> Keys);
+
 public sealed record JwkEntry(string Kid, string Kty, string Alg, string Use, string N, string E);
 
 /// <summary>Per-realm distributed rotation lock (Redis <c>SET NX PX</c>). Holds a fencing token.</summary>
@@ -127,16 +135,28 @@ public sealed record RotationLockHandle(string Realm, string OwnerToken, DateTim
 public interface IKeyLifecycleRepository
 {
     Task<SigningKeyMetadata?> GetAsync(string realm, string kid, CancellationToken cancellationToken);
-    Task<IReadOnlyCollection<SigningKeyMetadata>> ListAsync(string realm, int page, int pageSize, CancellationToken cancellationToken);
+
+    Task<IReadOnlyCollection<SigningKeyMetadata>> ListAsync(string realm, int page, int pageSize,
+        CancellationToken cancellationToken);
+
     Task<int> CountAsync(string realm, CancellationToken cancellationToken);
     Task UpsertAsync(SigningKeyMetadata meta, CancellationToken cancellationToken);
-    Task AddHistoryAsync(string realm, string kid, string fromState, string toState, DateTimeOffset when, string actor, string? reason, CancellationToken cancellationToken);
-    Task<IReadOnlyCollection<Identity.Contracts.KeyHistoryEntryDto>> GetHistoryAsync(string realm, string kid, CancellationToken cancellationToken);
+
+    Task AddHistoryAsync(string realm, string kid, string fromState, string toState, DateTimeOffset when, string actor,
+        string? reason, CancellationToken cancellationToken);
+
+    Task<IReadOnlyCollection<Identity.Contracts.KeyHistoryEntryDto>> GetHistoryAsync(string realm, string kid,
+        CancellationToken cancellationToken);
 
     Task<KeyRotationOperation?> GetOperationAsync(string operationId, CancellationToken cancellationToken);
-    Task<KeyRotationOperation?> GetOperationByIdempotencyAsync(string realm, string idempotencyKey, CancellationToken cancellationToken);
+
+    Task<KeyRotationOperation?> GetOperationByIdempotencyAsync(string realm, string idempotencyKey,
+        CancellationToken cancellationToken);
+
     Task UpsertOperationAsync(KeyRotationOperation op, CancellationToken cancellationToken);
-    Task<IReadOnlyCollection<KeyRotationOperation>> ListInFlightAsync(string realm, CancellationToken cancellationToken);
+
+    Task<IReadOnlyCollection<KeyRotationOperation>>
+        ListInFlightAsync(string realm, CancellationToken cancellationToken);
 }
 
 /// <summary>

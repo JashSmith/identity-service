@@ -26,7 +26,7 @@ public sealed class DomainTests
     public void Audit_events_never_carry_raw_secrets_in_details_keys()
     {
         var evt = new AuditEvent("svc:order-service", "manifest.registered", "service=order-service",
-            DateTimeOffset.UtcNow, new Dictionary<string, string?> { ["manifest_hash"] = "sha256:abc" });
+            DateTimeOffset.UtcNow, new Dictionary<string, string?> {["manifest_hash"] = "sha256:abc"});
         Assert.DoesNotContain(evt.Details.Keys, k => k.Equals("access_token", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(evt.Details.Keys, k => k.Equals("private_key", StringComparison.OrdinalIgnoreCase));
     }

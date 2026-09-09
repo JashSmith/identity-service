@@ -16,28 +16,40 @@ public enum KeyLifecycleState
 {
     /// <summary>Material just produced (generated or parsed on import). Not yet persisted.</summary>
     Generated,
+
     /// <summary>Stored under its immutable Vault path/version, not yet visible to Keycloak.</summary>
     VaultStored,
+
     /// <summary>Registered as a Passive Keycloak component. Enabled for verification, not signing.</summary>
     Passive,
+
     /// <summary>Passive key whose presence and modulus have been validated against realm JWKS.</summary>
     Validated,
+
     /// <summary>Currently signing. At most one key per realm is Active at any instant.</summary>
     Active,
+
     /// <summary>Was Active, atomically passivated on activation of its successor; still verifies.</summary>
     InGrace,
+
     /// <summary>Grace window elapsed; retirement is pending operator or policy action.</summary>
     Retiring,
+
     /// <summary>Retired from verification. Enabled=false in Keycloak. Retained for audit and rollback.</summary>
     Retired,
+
     /// <summary>Explicitly Disabled by operator. Not signing, not verifying, retained for emergency.</summary>
     Disabled,
+
     /// <summary>Terminal. Vault version purged and Keycloak component removed. Never reused.</summary>
     Destroyed,
+
     /// <summary>Validation of a staged or newly-activated key failed; automatic rollback begins.</summary>
     ValidationFailed,
+
     /// <summary>A rollback has been requested but not yet completed.</summary>
     RollbackPending,
+
     /// <summary>A rotation was aborted before activation. No production impact.</summary>
     RotationAborted
 }
@@ -47,8 +59,10 @@ public enum KeycloakKeyState
 {
     /// <summary>Signing tokens. <c>config.active=true</c>, <c>enabled=true</c>.</summary>
     Active,
+
     /// <summary>Verifying tokens with the old kid. <c>config.active=false</c>, <c>enabled=true</c>.</summary>
     Passive,
+
     /// <summary>Neither signing nor verifying. <c>config.enabled=false</c>.</summary>
     Disabled
 }
@@ -59,19 +73,24 @@ public static class KeyLifecycleTransitions
     private static readonly IReadOnlyDictionary<KeyLifecycleState, KeyLifecycleState[]> Allowed =
         new Dictionary<KeyLifecycleState, KeyLifecycleState[]>
         {
-            [KeyLifecycleState.Generated]        = [KeyLifecycleState.VaultStored, KeyLifecycleState.RotationAborted],
-            [KeyLifecycleState.VaultStored]      = [KeyLifecycleState.Passive, KeyLifecycleState.RotationAborted, KeyLifecycleState.Destroyed],
-            [KeyLifecycleState.Passive]          = [KeyLifecycleState.Validated, KeyLifecycleState.RotationAborted, KeyLifecycleState.Destroyed],
-            [KeyLifecycleState.Validated]        = [KeyLifecycleState.Active, KeyLifecycleState.RotationAborted, KeyLifecycleState.Destroyed],
-            [KeyLifecycleState.Active]           = [KeyLifecycleState.InGrace, KeyLifecycleState.RollbackPending],
-            [KeyLifecycleState.InGrace]          = [KeyLifecycleState.Retiring, KeyLifecycleState.RollbackPending],
-            [KeyLifecycleState.Retiring]         = [KeyLifecycleState.Retired],
-            [KeyLifecycleState.Retired]          = [KeyLifecycleState.Disabled, KeyLifecycleState.Destroyed],
-            [KeyLifecycleState.Disabled]         = [KeyLifecycleState.Destroyed, KeyLifecycleState.RollbackPending],
-            [KeyLifecycleState.ValidationFailed] = [KeyLifecycleState.RollbackPending, KeyLifecycleState.RotationAborted],
-            [KeyLifecycleState.RollbackPending]  = [KeyLifecycleState.Passive, KeyLifecycleState.Disabled, KeyLifecycleState.RotationAborted],
-            [KeyLifecycleState.RotationAborted]  = [KeyLifecycleState.Destroyed],
-            [KeyLifecycleState.Destroyed]        = []
+            [KeyLifecycleState.Generated] = [KeyLifecycleState.VaultStored, KeyLifecycleState.RotationAborted],
+            [KeyLifecycleState.VaultStored] =
+                [KeyLifecycleState.Passive, KeyLifecycleState.RotationAborted, KeyLifecycleState.Destroyed],
+            [KeyLifecycleState.Passive] =
+                [KeyLifecycleState.Validated, KeyLifecycleState.RotationAborted, KeyLifecycleState.Destroyed],
+            [KeyLifecycleState.Validated] =
+                [KeyLifecycleState.Active, KeyLifecycleState.RotationAborted, KeyLifecycleState.Destroyed],
+            [KeyLifecycleState.Active] = [KeyLifecycleState.InGrace, KeyLifecycleState.RollbackPending],
+            [KeyLifecycleState.InGrace] = [KeyLifecycleState.Retiring, KeyLifecycleState.RollbackPending],
+            [KeyLifecycleState.Retiring] = [KeyLifecycleState.Retired],
+            [KeyLifecycleState.Retired] = [KeyLifecycleState.Disabled, KeyLifecycleState.Destroyed],
+            [KeyLifecycleState.Disabled] = [KeyLifecycleState.Destroyed, KeyLifecycleState.RollbackPending],
+            [KeyLifecycleState.ValidationFailed] =
+                [KeyLifecycleState.RollbackPending, KeyLifecycleState.RotationAborted],
+            [KeyLifecycleState.RollbackPending] =
+                [KeyLifecycleState.Passive, KeyLifecycleState.Disabled, KeyLifecycleState.RotationAborted],
+            [KeyLifecycleState.RotationAborted] = [KeyLifecycleState.Destroyed],
+            [KeyLifecycleState.Destroyed] = []
         };
 
     public static bool CanTransition(KeyLifecycleState from, KeyLifecycleState to)
@@ -114,10 +133,10 @@ public sealed record SigningKeyMetadata(
         {
             State = state,
             KeycloakComponentId = keycloakComponentId ?? KeycloakComponentId,
-            ActivatedAt   = state == KeyLifecycleState.Active    ? now : ActivatedAt,
-            PassivatedAt  = state == KeyLifecycleState.InGrace   ? now : PassivatedAt,
-            RetiredAt     = state == KeyLifecycleState.Retired   ? now : RetiredAt,
-            DestroyedAt   = state == KeyLifecycleState.Destroyed ? now : DestroyedAt
+            ActivatedAt = state == KeyLifecycleState.Active ? now : ActivatedAt,
+            PassivatedAt = state == KeyLifecycleState.InGrace ? now : PassivatedAt,
+            RetiredAt = state == KeyLifecycleState.Retired ? now : RetiredAt,
+            DestroyedAt = state == KeyLifecycleState.Destroyed ? now : DestroyedAt
         };
     }
 }

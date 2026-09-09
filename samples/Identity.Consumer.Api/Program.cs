@@ -21,7 +21,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapOpenApi();
 
-app.MapGet("/api/sample/orders", () => Results.Ok(new[] { "order-1001", "order-1002" }))
+app.MapGet("/api/sample/orders", () => Results.Ok(new[] {"order-1001", "order-1002"}))
     .RequireAuthorization("Orders.Read");
 app.MapGet("/api/sample/permissions", () => Results.Ok(PermissionDiscovery.Discover(typeof(Program).Assembly)))
     .RequireAuthorization();
