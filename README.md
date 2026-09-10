@@ -4,7 +4,7 @@ This repository defines a production-oriented **Keycloak-centric Identity Platfo
 
 It does **not** implement passwords, credentials, sessions, MFA, access-token or refresh-token minting, token revocation, user federation, role semantics, or JWT signing. Application services accept genuine Keycloak-issued JWTs and validate them locally.
 
-See [docs/architecture.md](docs/architecture.md) for the complete architecture, diagrams, ownership table, flows, extension design, threat model, cache policy, Vault key rotation, deployment model, and test strategy.
+See [docs/architecture.md](docs/architecture.md) for the complete architecture, diagrams, ownership table, flows, extension design, threat model, cache policy, Vault key rotation, deployment model, and test strategy. See [docs/running.md](docs/running.md) for the step-by-step server run guide (compose up → login → call the facade and the order-service sample).
 
 ## Developer integration
 

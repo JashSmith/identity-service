@@ -1,6 +1,7 @@
 using Company.Identity.Authentication.AspNetCore;
 using Company.Identity.Authorization.AspNetCore;
 using Company.Identity.PermissionRegistration;
+using Scalar.AspNetCore;
 using SampleApp;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -36,9 +37,51 @@ builder.Services.AddPermissionRegistration(o =>
     o.MaximumRetries = 8;
 });
 
+// Scalar API reference + OpenAPI document — every guarded endpoint is listed with its
+// required permission and accepts a Bearer token from the facade login proxy.
+builder.Services.AddOpenApi("v1", o =>
+{
+    o.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Info.Title = "Order Service (sample)";
+        document.Info.Description =
+            "Sample consumer of the Identity Facade. Every endpoint requires one of the ten " +
+            "Orders.* permissions this service registered at startup via [RequirePermission]. " +
+            "Get a token from POST /api/identity/auth/login on the Identity Facade and paste it " +
+            "into the Bearer authentication dialog.";
+        var components = document.Components ?? new Microsoft.OpenApi.OpenApiComponents();
+        document.Components = components;
+        components.SecuritySchemes ??= new Dictionary<string, Microsoft.OpenApi.IOpenApiSecurityScheme>();
+        components.SecuritySchemes["Bearer"] = new Microsoft.OpenApi.OpenApiSecurityScheme
+        {
+            Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "Keycloak-issued JWT obtained through the Identity Facade"
+        };
+        document.Security =
+        [
+            new Microsoft.OpenApi.OpenApiSecurityRequirement
+            {
+                [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer", document)] = []
+            }
+        ];
+        return Task.CompletedTask;
+    });
+});
+
 var app = builder.Build();
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapOpenApi();
+if (app.Environment.IsDevelopment())
+{
+    app.MapScalarApiReference(options => options
+        .WithTitle("Order Service (sample)")
+        .WithOpenApiRoutePattern("/openapi/v1.json")
+        .AddPreferredSecuritySchemes(["Bearer"]));
+}
 
 app.MapGet("/health/live", () => Results.Ok(new {status = "alive"}));
 

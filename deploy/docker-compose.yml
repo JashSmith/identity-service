@@ -11,7 +11,8 @@ services:
       Identity__Keycloak__BaseUrl: http://keycloak:8080
       Identity__Keycloak__Realm: company
       # Public self-URL used to rewrite jwks_uri in the proxied discovery document.
-      Identity__PublicBaseUrl: http://localhost:5081
+      # Must match the host port published for the facade (FACADE_HTTP_PORT, default 5080).
+      Identity__PublicBaseUrl: http://localhost:${FACADE_HTTP_PORT:-5080}
       # Tokens are minted for the facade's own Keycloak client, so its audience is that client id.
       Identity__Audience: identity-facade
       Identity__KeyMetadata__Provider: oracle

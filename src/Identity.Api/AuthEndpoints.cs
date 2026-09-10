@@ -44,7 +44,13 @@ public static class AuthEndpoints
         CancellationToken ct)
     {
         var form = await ReadFormAsync(ctx, ct);
-        if (!form.TryGetValue("username", out var u) || !form.TryGetValue("password", out _))
+        // Machine clients authenticate with client_credentials (no username/password) —
+        // forward as received, exactly like the password grant.
+        var isClientCredentials =
+            form.TryGetValue("grant_type", out var gt) &&
+            gt.Equals("client_credentials", StringComparison.OrdinalIgnoreCase);
+        if (!isClientCredentials &&
+            (!form.ContainsKey("username") || !form.ContainsKey("password")))
             return Results.BadRequest(new ProblemResponse("validation_error", "username and password required",
                 Correlation(ctx)));
         // Forward exactly as received to Keycloak to avoid re-interpreting credential handling.

@@ -14,8 +14,8 @@ public static class OidcProxyEndpoints
     public static void MapOidcProxy(this IEndpointRouteBuilder app)
     {
         app.MapGet("/.well-known/openid-configuration",
-                (IConfiguration cfg, IHttpClientFactory fac, CancellationToken ct) =>
-                    DiscoverAsync(cfg, fac, ct))
+                (HttpContext ctx, IConfiguration cfg, IHttpClientFactory fac, CancellationToken ct) =>
+                    DiscoverAsync(ctx, cfg, fac, ct))
             .AllowAnonymous().WithTags("Auth").WithName("OidcDiscovery")
             .Produces<object>(200);
 
@@ -26,7 +26,8 @@ public static class OidcProxyEndpoints
             .Produces<object>(200);
     }
 
-    internal static async Task<IResult> DiscoverAsync(IConfiguration cfg, IHttpClientFactory fac, CancellationToken ct)
+    internal static async Task<IResult> DiscoverAsync(HttpContext httpCtx, IConfiguration cfg,
+        IHttpClientFactory fac, CancellationToken ct)
     {
         var (baseUrl, realm) = (Keycloak(cfg).baseUrl, Keycloak(cfg).realm);
         using var http = fac.CreateClient();
@@ -37,9 +38,12 @@ public static class OidcProxyEndpoints
         var node = JsonNode.Parse(await res.Content.ReadAsStringAsync(ct));
         if (node is not JsonObject doc)
             return Results.StatusCode(StatusCodes.Status502BadGateway);
-        // Rewrite only the key-material location. The issuer and every endpoint stay
-        // exactly as Keycloak published them so genuine tokens validate unchanged.
-        doc["jwks_uri"] = $"{SelfBase(cfg)}/api/identity/oidc/jwks";
+        // Rewrite only the key-material location, relative to the requesting consumer so the
+        // discovery document works both from the host (localhost:5080) and from containers
+        // (identity-facade:5080). The issuer and every endpoint stay exactly as Keycloak
+        // published them so genuine tokens validate unchanged.
+        doc["jwks_uri"] = $"{httpCtx.Request.Scheme}://{httpCtx.Request.Host.Value}" +
+                          "/api/identity/oidc/jwks";
         return Results.Content(doc.ToJsonString(), "application/json", System.Text.Encoding.UTF8, 200);
     }
 
@@ -57,7 +61,4 @@ public static class OidcProxyEndpoints
         ((c["Identity:Keycloak:BaseUrl"] ?? c["Identity:KeycloakAdmin:BaseUrl"] ?? "http://localhost:8080")
             .TrimEnd('/'),
             c["Identity:Keycloak:Realm"] ?? c["Identity:KeycloakAdmin:Realm"] ?? "company");
-
-    private static string SelfBase(IConfiguration c) =>
-        (c["Identity:PublicBaseUrl"] ?? "http://localhost:5080").TrimEnd('/');
 }

@@ -212,7 +212,9 @@
       "directAccessGrantsEnabled": false,
       "standardFlowEnabled": false,
       "protocol": "openid-connect",
-      "attributes": {},
+      "attributes": {
+        "client.secret.creation.time": "0"
+      },
       "protocolMappers": [
         {
           "name": "permission-claim",

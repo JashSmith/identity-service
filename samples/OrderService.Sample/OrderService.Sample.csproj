@@ -9,5 +9,7 @@
         <ProjectReference Include="../../src/Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj"/>
         <ProjectReference Include="../../src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj"/>
         <ProjectReference Include="../../src/Company.Identity.PermissionRegistration/Company.Identity.PermissionRegistration.csproj"/>
+        <PackageReference Include="Scalar.AspNetCore"/>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi"/>
     </ItemGroup>
 </Project>
