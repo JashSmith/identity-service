@@ -83,7 +83,7 @@ if (app.Environment.IsDevelopment())
         .AddPreferredSecuritySchemes(["Bearer"]));
 }
 
-app.MapGet("/health/live", () => Results.Ok(new {status = "alive"}));
+app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
 
 // One endpoint per permission — the policy name IS the permission name, resolved dynamically
 // by PermissionPolicyProvider and enforced against the token's permission claims.
@@ -123,7 +123,7 @@ app.MapPost("/api/orders/{orderId}/refunds/approve", (string orderId, decimal am
     .RequireAuthorization(OrderPermissions.ApproveRefunds).WithTags("Refunds");
 
 app.MapPost("/api/reports/export",
-        (string format, OrderService svc) => Results.Ok(new {file = svc.ExportReport(format)}))
+        (string format, OrderService svc) => Results.Ok(new { file = svc.ExportReport(format) }))
     .RequireAuthorization(OrderPermissions.ExportReports).WithTags("Reports");
 
 app.Run();

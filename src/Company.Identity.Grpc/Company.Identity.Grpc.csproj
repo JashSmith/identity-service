@@ -5,14 +5,14 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
     <ItemGroup>
-        <ProjectReference Include="../Identity.Application/Identity.Application.csproj" />
-        <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj" />
-        <PackageReference Include="Grpc.AspNetCore" />
-        <PackageReference Include="Grpc.Net.Client" />
-        <PackageReference Include="Grpc.Core.Api" />
-        <PackageReference Include="Grpc.Tools" PrivateAssets="All" />
-        <FrameworkReference Include="Microsoft.AspNetCore.App" />
-        <Protobuf Include="Protos/identity.proto" GrpcServices="Both" />
-        <Protobuf Include="Protos/key_admin.proto" GrpcServices="Both" />
+        <ProjectReference Include="../Identity.Application/Identity.Application.csproj"/>
+        <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj"/>
+        <PackageReference Include="Grpc.AspNetCore"/>
+        <PackageReference Include="Grpc.Net.Client"/>
+        <PackageReference Include="Grpc.Core.Api"/>
+        <PackageReference Include="Grpc.Tools" PrivateAssets="All"/>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+        <Protobuf Include="Protos/identity.proto" GrpcServices="Both"/>
+        <Protobuf Include="Protos/key_admin.proto" GrpcServices="Both"/>
     </ItemGroup>
 </Project>

@@ -34,7 +34,7 @@ public static class OidcProxyEndpoints
         var res = await http.GetAsync(
             $"{baseUrl}/realms/{realm}/.well-known/openid-configuration", ct);
         if (!res.IsSuccessStatusCode)
-            return Results.StatusCode((int) res.StatusCode);
+            return Results.StatusCode((int)res.StatusCode);
         var node = JsonNode.Parse(await res.Content.ReadAsStringAsync(ct));
         if (node is not JsonObject doc)
             return Results.StatusCode(StatusCodes.Status502BadGateway);
@@ -54,7 +54,7 @@ public static class OidcProxyEndpoints
         var res = await http.GetAsync(
             $"{baseUrl}/realms/{realm}/protocol/openid-connect/certs", ct);
         var body = await res.Content.ReadAsStringAsync(ct);
-        return Results.Content(body, "application/json", System.Text.Encoding.UTF8, (int) res.StatusCode);
+        return Results.Content(body, "application/json", System.Text.Encoding.UTF8, (int)res.StatusCode);
     }
 
     private static (string baseUrl, string realm) Keycloak(IConfiguration c) =>
