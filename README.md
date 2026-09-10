@@ -12,8 +12,9 @@ See [docs/architecture.md](docs/architecture.md) for the complete architecture, 
 builder.Services
     .AddCompanyAuthentication(options =>
     {
-        options.Authority = configuration["Identity:Authority"]!;
+        options.Authority = configuration["Identity:Authority"]!; // the facade URL
         options.Audience = configuration["Identity:Audience"]!;
+        options.AcceptIssuerFromDiscovery = true; // issuer comes from the proxied discovery doc
     })
     .AddCompanyAuthorization();
 
@@ -21,9 +22,8 @@ builder.Services.AddPermissionRegistration(options =>
 {
     options.IdentityServer = new Uri(configuration["PermissionRegistration:IdentityServer"]!);
     options.ServiceName = "order-service";
-    options.KeycloakBaseUrl = "http://localhost:8080";
-    options.KeycloakClientId = "order-service";
-    options.KeycloakClientSecret = configuration["PermissionRegistration:KeycloakClientSecret"];
+    options.ClientId = "order-service";
+    options.ClientSecret = configuration["PermissionRegistration:ClientSecret"];
 });
 ```
 
@@ -49,8 +49,13 @@ Permissions are mirrored by the facade into Keycloak **realm roles** (for exampl
 
 ```bash
 cd deploy
-docker compose up --build -d        # Oracle XE 21 for Keycloak + facade metadata, Keycloak 26.4, Vault, Redis
+docker compose up --build -d
+# Oracle XE 21 (Keycloak DB + facade metadata), Keycloak 26.4, Vault, Redis,
+# Identity Facade, and the order-service sample — all healthchecked.
 ```
+
+Ports are overridable when the host already uses them: `FACADE_HTTP_PORT`,
+`KEYCLOAK_HTTP_PORT`, `ORDER_HTTP_PORT` (defaults 5080/8080/5180).
 
 Wait for the healthchecks (Oracle XE takes ~60s), then:
 
@@ -59,15 +64,32 @@ Wait for the healthchecks (Oracle XE takes ~60s), then:
 | Identity Facade REST | http://localhost:5080 |
 | Scalar API reference (interactive, full Bearer "Try it" support) | http://localhost:5080/scalar |
 | OpenAPI document | http://localhost:5080/openapi/v1.json |
-| Keycloak Admin Console | http://localhost:8080 (realm `company`, admin/admin) |
+| OIDC discovery + JWKS proxy (consumers point here) | http://localhost:5080/.well-known/openid-configuration |
+| Keycloak Admin Console | http://localhost:8080 (realm `company`) |
+| order-service sample | http://localhost:5180/api/orders |
 | Vault dev UI | http://localhost:8200 (token `root`) |
 | gRPC (IdentityService, KeyAdminService) | http://localhost:5080 |
 
-In Scalar, click **Authenticate**, paste a Keycloak-issued JWT, and call any group:
-Auth (login/refresh/introspect/logout), Users, Roles, Permissions, Keys (Admin).
-Dev credentials: user `admin` / password `admin` (all `Identity.*` permissions), or a
-client-credentials token for client `identity-facade` (secret `facade-development-only`).
+**Services never see Keycloak.** A consumer points `Identity:Authority` at the facade; the
+facade proxies OIDC discovery and rewrites `jwks_uri` to itself, and registration tokens are
+obtained through the facade's login proxy. Keycloak's URL/realm/secrets exist only in the
+facade's configuration.
 
+Quick test sequence:
+
+```bash
+# 1. Login through the facade (Keycloak-issued token, never minted by .NET)
+curl -s -X POST http://localhost:5080/api/identity/auth/login \
+  -d "grant_type=password&client_id=identity-facade&client_secret=facade-development-only&username=admin&password=admin"
+
+# 2. Call a protected facade route with the returned access_token
+curl -s http://localhost:5080/api/identity/me -H "Authorization: Bearer <token>"
+
+# 3. Call the sample service — its token comes from step 1, the audience already matches
+curl -s http://localhost:5180/api/orders -H "Authorization: Bearer <token>"
+```
+
+Dev credentials: user `admin` / password `admin` (all `Identity.*` permissions).
 CI/laptops that cannot run Oracle XE can fall back to PostgreSQL:
 
 ```bash

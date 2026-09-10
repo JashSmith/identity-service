@@ -9,28 +9,88 @@
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
-  "defaultRoles": ["offline_access", "uma_authorization"],
+  "defaultRoles": [
+    "offline_access",
+    "uma_authorization"
+  ],
   "roles": {
     "realm": [
-      { "name": "offline_access", "description": "Offline access" },
-      { "name": "uma_authorization", "description": "UMA authorization" },
-      { "name": "Identity.Users.Read", "description": "Read users / directory" },
-      { "name": "Identity.Roles.Read", "description": "Read roles" },
-      { "name": "Identity.Permissions.Read", "description": "Read/list permissions" },
-      { "name": "Identity.Permissions.Register", "description": "Register permission manifests" },
-      { "name": "Identity.Keys.View", "description": "View signing keys" },
-      { "name": "Identity.Keys.Generate", "description": "Generate signing keys" },
-      { "name": "Identity.Keys.Import", "description": "Import signing keys" },
-      { "name": "Identity.Keys.Stage", "description": "Stage keys passive" },
-      { "name": "Identity.Keys.Validate", "description": "Validate keys" },
-      { "name": "Identity.Keys.Activate", "description": "Activate keys" },
-      { "name": "Identity.Keys.Passivate", "description": "Passivate keys" },
-      { "name": "Identity.Keys.Retire", "description": "Retire keys" },
-      { "name": "Identity.Keys.Destroy", "description": "Destroy keys" },
-      { "name": "Identity.Keys.Rotate", "description": "Rotate keys" },
-      { "name": "Identity.Keys.EmergencyRotate", "description": "Emergency rotate" },
-      { "name": "Identity.Keys.Rollback", "description": "Rollback keys" },
-      { "name": "Identity.Keys.History", "description": "View key history" }
+      {
+        "name": "offline_access",
+        "description": "Offline access"
+      },
+      {
+        "name": "uma_authorization",
+        "description": "UMA authorization"
+      },
+      {
+        "name": "Identity.Users.Read",
+        "description": "Read users / directory"
+      },
+      {
+        "name": "Identity.Roles.Read",
+        "description": "Read roles"
+      },
+      {
+        "name": "Identity.Permissions.Read",
+        "description": "Read/list permissions"
+      },
+      {
+        "name": "Identity.Permissions.Register",
+        "description": "Register permission manifests"
+      },
+      {
+        "name": "Identity.Keys.View",
+        "description": "View signing keys"
+      },
+      {
+        "name": "Identity.Keys.Generate",
+        "description": "Generate signing keys"
+      },
+      {
+        "name": "Identity.Keys.Import",
+        "description": "Import signing keys"
+      },
+      {
+        "name": "Identity.Keys.Stage",
+        "description": "Stage keys passive"
+      },
+      {
+        "name": "Identity.Keys.Validate",
+        "description": "Validate keys"
+      },
+      {
+        "name": "Identity.Keys.Activate",
+        "description": "Activate keys"
+      },
+      {
+        "name": "Identity.Keys.Passivate",
+        "description": "Passivate keys"
+      },
+      {
+        "name": "Identity.Keys.Retire",
+        "description": "Retire keys"
+      },
+      {
+        "name": "Identity.Keys.Destroy",
+        "description": "Destroy keys"
+      },
+      {
+        "name": "Identity.Keys.Rotate",
+        "description": "Rotate keys"
+      },
+      {
+        "name": "Identity.Keys.EmergencyRotate",
+        "description": "Emergency rotate"
+      },
+      {
+        "name": "Identity.Keys.Rollback",
+        "description": "Rollback keys"
+      },
+      {
+        "name": "Identity.Keys.History",
+        "description": "View key history"
+      }
     ]
   },
   "groups": [
@@ -57,7 +117,7 @@
     {
       "clientId": "identity-facade",
       "name": "Identity Facade",
-      "description": "Public facade — proxy for login/refresh/introspect/logout",
+      "description": "Public facade \u2014 proxy for login/refresh/introspect/logout",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "facade-development-only",
@@ -74,13 +134,75 @@
         "access.token.lifespan": "300",
         "client.secret.creation.time": "0"
       },
-      "defaultClientScopes": ["profile", "email", "roles", "permissions-mapper"],
-      "optionalClientScopes": ["offline_access", "microprofile-jwt"]
+      "protocolMappers": [
+        {
+          "name": "permission-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "permissions",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "permission-singular-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "permission",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "facade-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "identity-facade",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "sub-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "subject-sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "id",
+            "claim.name": "sub",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "clientId": "order-service",
       "name": "Order Service (sample permission registrant)",
-      "description": "Sample consumer — registers its [RequirePermission] actions at startup",
+      "description": "Sample consumer \u2014 registers its [RequirePermission] actions at startup",
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
@@ -90,8 +212,34 @@
       "directAccessGrantsEnabled": false,
       "standardFlowEnabled": false,
       "protocol": "openid-connect",
-      "defaultClientScopes": ["profile", "roles", "permissions-mapper"],
+      "attributes": {},
       "protocolMappers": [
+        {
+          "name": "permission-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "permissions",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "permission-singular-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "permission",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
         {
           "name": "identity-facade-audience",
           "protocol": "openid-connect",
@@ -101,9 +249,21 @@
             "id.token.claim": "false",
             "access.token.claim": "true"
           }
+        },
+        {
+          "name": "subject-sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "id",
+            "claim.name": "sub",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
         }
-      ],
-      "attributes": {}
+      ]
     }
   ],
   "clientScopes": [
@@ -111,7 +271,10 @@
       "name": "permissions-mapper",
       "description": "Maps realm roles into permission / permissions claims for the facade authorizer",
       "protocol": "openid-connect",
-      "attributes": { "include.in.token.scope": "false", "display.on.consent.screen": "false" },
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
       "protocolMappers": [
         {
           "name": "permission-claim",
@@ -149,7 +312,10 @@
       "serviceAccountClientId": "order-service",
       "realmRoles": [
         "Identity.Permissions.Register"
-      ]
+      ],
+      "email": "service-account-order-service@company.local",
+      "emailVerified": true,
+      "requiredActions": []
     },
     {
       "username": "admin",
@@ -157,7 +323,13 @@
       "emailVerified": true,
       "firstName": "Admin",
       "lastName": "User",
-      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
       "realmRoles": [
         "Identity.Users.Read",
         "Identity.Roles.Read",
@@ -171,7 +343,11 @@
         "Identity.Keys.Rollback",
         "Identity.Keys.Destroy"
       ],
-      "groups": ["key-admins"]
+      "groups": [
+        "key-admins"
+      ],
+      "email": "admin@company.local",
+      "requiredActions": []
     }
   ]
 }

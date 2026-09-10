@@ -58,14 +58,14 @@ public sealed class OrderService
         ArgumentException.ThrowIfNullOrWhiteSpace(orderId);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(newTotal);
         var order = Find(orderId);
-        return order with { Total = newTotal };
+        return order with {Total = newTotal};
     }
 
     [RequirePermission(OrderPermissions.CancelOrders)]
     public OrderDto CancelOrder(string orderId)
     {
         var order = Find(orderId);
-        return order with { Status = "cancelled" };
+        return order with {Status = "cancelled"};
     }
 
     [RequirePermission(OrderPermissions.ViewInvoices)]
@@ -108,7 +108,7 @@ public sealed class OrderService
     [RequirePermission(OrderPermissions.ExportReports)]
     public string ExportReport(string format)
     {
-        var allowed = new[] { "csv", "json" };
+        var allowed = new[] {"csv", "json"};
         if (!allowed.Contains(format, StringComparer.OrdinalIgnoreCase))
             throw new ArgumentException($"Unsupported format '{format}'.", nameof(format));
         return $"report.{format.ToLowerInvariant()}";

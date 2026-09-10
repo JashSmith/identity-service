@@ -9,8 +9,9 @@ public static class PermissionEndpoints
     public static RouteGroupBuilder MapPermissions(this IEndpointRouteBuilder app)
     {
         var g = app.MapGroup("/api/identity/permissions").WithTags("Permissions");
-        g.MapPost("/register", async (PermissionManifestRequest req, PermissionRegistrationService svc, HttpContext ctx,
-                CancellationToken ct) =>
+        g.MapPost("/register", async (
+                PermissionManifestRequest req, PermissionRegistrationService svc, HttpContext ctx, CancellationToken ct
+            ) =>
             {
                 var serviceId = ctx.User.FindFirst("client_id")?.Value ??
                                 ctx.User.FindFirst("azp")?.Value ?? req.ServiceId;

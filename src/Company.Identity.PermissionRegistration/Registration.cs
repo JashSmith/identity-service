@@ -16,11 +16,9 @@ public sealed class PermissionRegistrationOptions
     public TimeSpan InitialRetryDelay { get; set; } = TimeSpan.FromSeconds(2);
     public int MaximumRetries { get; set; } = 8;
 
-    // Keycloak client-credentials configuration for automatic token acquisition.
-    public string? KeycloakBaseUrl { get; set; }
-    public string KeycloakRealm { get; set; } = "company";
-    public string? KeycloakClientId { get; set; }
-    public string? KeycloakClientSecret { get; set; }
+    // Service client credentials, sent through the facade's login proxy — no Keycloak config needed.
+    public string? ClientId { get; set; }
+    public string? ClientSecret { get; set; }
 
     // Assembly to scan for [RequirePermission] attributes. Defaults to the entry assembly.
     internal Assembly? RegistrationAssembly { get; set; }

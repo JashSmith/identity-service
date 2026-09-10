@@ -7,6 +7,11 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5080
       Identity__Authority: http://keycloak:8080/realms/company
+      # Keycloak proxy/admin base — the only place the facade's Keycloak address is configured.
+      Identity__Keycloak__BaseUrl: http://keycloak:8080
+      Identity__Keycloak__Realm: company
+      # Public self-URL used to rewrite jwks_uri in the proxied discovery document.
+      Identity__PublicBaseUrl: http://localhost:5081
       # Tokens are minted for the facade's own Keycloak client, so its audience is that client id.
       Identity__Audience: identity-facade
       Identity__KeyMetadata__Provider: oracle
@@ -22,6 +27,13 @@ services:
       Identity__KeycloakAdmin__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD:-admin-development-only}
       Identity__Redis__Configuration: redis:6379
     ports: ["${FACADE_HTTP_PORT:-5080}:5080"]
+    healthcheck:
+      # aspnet image ships no curl — probe over /dev/tcp.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/5080 && printf \"GET /health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && timeout 3 head -1 <&3 | grep -q 200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       keycloak:
         condition: service_healthy
@@ -53,11 +65,12 @@ services:
       keycloak-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health/ready || exit 1"]
+      # Keycloak 26.4 images ship no curl/wget; probe the management port (9000) over /dev/tcp.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000 && printf \"GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && timeout 3 head -1 <&3 | grep -q 200'"]
       interval: 10s
       timeout: 5s
       retries: 30
-      start_period: 60s
+      start_period: 90s
 
   keycloak-db:
     image: gvenzl/oracle-xe:21-slim
@@ -90,6 +103,31 @@ services:
       retries: 40
       start_period: 60s
 
+  # Sample consumer — discovers its 10 [RequirePermission] actions at startup and registers
+  # them through the facade; it never contacts Keycloak directly. Validates tokens via the
+  # facade's discovery/JWKS proxy (AcceptIssuerFromDiscovery).
+  order-service:
+    build:
+      context: ..
+      dockerfile: deploy/OrderService.Sample.Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5180
+      Identity__Authority: http://identity-facade:5080
+      PermissionRegistration__IdentityServer: http://identity-facade:5080
+      PermissionRegistration__ClientId: order-service
+      PermissionRegistration__ClientSecret: order-service-development-only
+    ports: ["${ORDER_HTTP_PORT:-5180}:5180"]
+    depends_on:
+      identity-facade:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/5180 && printf \"GET /health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && timeout 3 head -1 <&3 | grep -q 200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
   vault:
     image: hashicorp/vault:1.20
     cap_add: [IPC_LOCK]
@@ -98,7 +136,8 @@ services:
       VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
     ports: ["8200:8200"]
     healthcheck:
-      test: ["CMD-SHELL", "vault status || exit 1"]
+      # Dev server is plain HTTP — force VAULT_ADDR so `vault status` does not probe https.
+      test: ["CMD-SHELL", "VAULT_ADDR=http://127.0.0.1:8200 vault status || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10

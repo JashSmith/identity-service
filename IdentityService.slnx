@@ -1,5 +1,5 @@
 <Solution>
-  <Folder Name="/deploy/"><File Path="deploy/docker-compose.yml"/><File Path="deploy/Identity.Api.Dockerfile"/></Folder>
+  <Folder Name="/deploy/"><File Path="deploy/docker-compose.yml"/><File Path="deploy/Identity.Api.Dockerfile"/><File Path="deploy/OrderService.Sample.Dockerfile"/></Folder>
   <Folder Name="/docs/"/>
   <Folder Name="/src/"/>
   <Folder Name="/src/Domain/"><Project Path="src/Identity.Domain/Identity.Domain.csproj"/></Folder>

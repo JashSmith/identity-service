@@ -21,9 +21,16 @@ public static class ServiceCollectionExtensions
             jwt.Authority = options.Authority.TrimEnd('/');
             jwt.RequireHttpsMetadata = options.RequireHttpsMetadata;
             jwt.RefreshOnIssuerKeyNotFound = true;
+            // Keycloak-centric facade: keep OIDC claim names as issued ("sub", "preferred_username",
+            // "sid", "permissions") instead of letting the handler rewrite them to SOAP claim types.
+            jwt.MapInboundClaims = false;
+            // With AcceptIssuerFromDiscovery, ValidIssuer stays unset so the JwtBearer
+            // post-configure fills it from the discovery document's "issuer" claim —
+            // the facade-proxied Keycloak issuer, not the facade URL itself.
             jwt.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuer = true, ValidIssuer = options.Authority.TrimEnd('/'),
+                ValidateIssuer = true,
+                ValidIssuer = options.AcceptIssuerFromDiscovery ? null : options.Authority.TrimEnd('/'),
                 ValidateAudience = audiences.Length > 0, ValidAudiences = audiences,
                 ValidateLifetime = true, ValidateIssuerSigningKey = true,
                 ClockSkew = options.ClockSkew, ValidAlgorithms = options.ValidAlgorithms

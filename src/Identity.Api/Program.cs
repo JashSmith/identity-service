@@ -31,7 +31,7 @@ builder.Services.Configure<Identity.Infrastructure.Keycloak.KeycloakOptions>(
 builder.Services.AddSingleton(sp =>
     sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyManagementOptions>>().Value);
 builder.Services.AddSingleton<IKeyGenerationService, Identity.Infrastructure.RsaKeyGenerationService>();
-builder.Services.AddSingleton<IKeyRetirementSafety, Identity.Infrastructure.KeyRetirementSafety>();
+builder.Services.AddScoped<IKeyRetirementSafety, Identity.Infrastructure.KeyRetirementSafety>();
 builder.Services.AddSingleton<IKeyRotationLock, Identity.Infrastructure.Redis.InMemoryKeyRotationLock>();
 builder.Services.AddSingleton<IAuditSink>(sp => new Identity.Infrastructure.NoopAuditSink());
 builder.Services.AddHttpClient<Identity.Infrastructure.Vault.VaultSigningKeyStore>();
@@ -120,12 +120,16 @@ if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");
+app.MapOidcProxy();
 app.MapGet("/api/identity/me", (ICurrentUserContext current) =>
         current.UserId is null
             ? Results.Unauthorized()
             : Results.Ok(
                 new { current.UserId, current.Username, current.Roles, current.Permissions, current.SessionId }))
-    .RequireAuthorization().WithTags("Users").WithName("Me").Produces<object>(200);
+    .RequireAuthorization()
+    .WithTags("Users")
+    .WithName("Me")
+    .Produces<object>(200);
 app.MapAuth();
 app.MapUsers();
 app.MapPermissions();
