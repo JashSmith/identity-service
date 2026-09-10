@@ -15,13 +15,20 @@ builder.Services
         options.Authority = configuration["Identity:Authority"]!;
         options.Audience = configuration["Identity:Audience"]!;
     })
-    .AddCompanyAuthorization()
-    .AddCompanyPermissionRegistration(options =>
-    {
-        options.IdentityServer = configuration["Identity:Server"]!;
-        options.ServiceName = "order-service";
-    });
+    .AddCompanyAuthorization();
+
+builder.Services.AddPermissionRegistration(options =>
+{
+    options.IdentityServer = new Uri(configuration["PermissionRegistration:IdentityServer"]!);
+    options.ServiceName = "order-service";
+    options.KeycloakBaseUrl = "http://localhost:8080";
+    options.KeycloakClientId = "order-service";
+    options.KeycloakClientSecret = configuration["PermissionRegistration:KeycloakClientSecret"];
+});
 ```
+
+A complete working consumer — ten `[RequirePermission]`-guarded endpoints plus the
+startup registration wiring — lives in [samples/OrderService.Sample](samples/OrderService.Sample/).
 
 Protect an operation with a stable application permission:
 
@@ -34,9 +41,38 @@ Authentication and authorization are independently installable. Authentication p
 
 ## Permission registration
 
-`Company.Identity.PermissionRegistration` discovers permission metadata, creates a deterministic manifest hash, and registers directly with the facade over REST or gRPC using Keycloak client credentials or mTLS. Registration is idempotent, namespace-scoped, retryable in the background, and never blocks application startup. RabbitMQ is not part of permission registration.
+`Company.Identity.PermissionRegistration` discovers permission metadata, creates a deterministic manifest hash, and registers directly with the facade over REST using Keycloak client credentials. Registration is idempotent, namespace-scoped, retryable in the background (exponential backoff, default 8 retries), and never blocks application startup. RabbitMQ is not part of permission registration.
 
-Permissions are represented as Keycloak client roles, for example `order-service:Orders.Cancel`. Business roles are realm/client roles with composites that include client permission roles. Missing permissions are deprecated, not automatically deleted.
+Permissions are mirrored by the facade into Keycloak **realm roles** (for example `Orders.Cancel`), so the existing `oidc-usermodel-realm-role-mapper` surfaces them in the `permissions`/`permission` token claims that `Company.Identity.Authorization` evaluates locally. Role provisioning is best-effort — a Keycloak outage never fails the registration response. Missing permissions are deprecated, not automatically deleted, and deprecation never removes the Keycloak role.
+
+## Run with Docker (Oracle 21 default)
+
+```bash
+cd deploy
+docker compose up --build -d        # Oracle XE 21 for Keycloak + facade metadata, Keycloak 26.4, Vault, Redis
+```
+
+Wait for the healthchecks (Oracle XE takes ~60s), then:
+
+| Endpoint | URL |
+| --- | --- |
+| Identity Facade REST | http://localhost:5080 |
+| Scalar API reference (interactive, full Bearer "Try it" support) | http://localhost:5080/scalar |
+| OpenAPI document | http://localhost:5080/openapi/v1.json |
+| Keycloak Admin Console | http://localhost:8080 (realm `company`, admin/admin) |
+| Vault dev UI | http://localhost:8200 (token `root`) |
+| gRPC (IdentityService, KeyAdminService) | http://localhost:5080 |
+
+In Scalar, click **Authenticate**, paste a Keycloak-issued JWT, and call any group:
+Auth (login/refresh/introspect/logout), Users, Roles, Permissions, Keys (Admin).
+Dev credentials: user `admin` / password `admin` (all `Identity.*` permissions), or a
+client-credentials token for client `identity-facade` (secret `facade-development-only`).
+
+CI/laptops that cannot run Oracle XE can fall back to PostgreSQL:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build -d
+```
 
 ## External organization SSO
 

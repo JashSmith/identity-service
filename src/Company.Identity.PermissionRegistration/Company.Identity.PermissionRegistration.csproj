@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><RootNamespace>Company.Identity.PermissionRegistration</RootNamespace><AssemblyName>Company.Identity.PermissionRegistration</AssemblyName><PackageId>Company.Identity.PermissionRegistration</PackageId></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../Company.Identity.Abstractions/Company.Identity.Abstractions.csproj" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Company.Identity.Abstractions/Company.Identity.Abstractions.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
 </Project>

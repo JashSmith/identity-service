@@ -167,8 +167,8 @@ There is no second `Users`, `PasswordCredentials`, `Sessions`, `RefreshTokens`, 
 Use a version-pinned realm and import/configuration reviewed as code.
 
 - One client per microservice where practical, such as `order-service`.
-- Client roles are stable permission names: `Orders.Read`, `Orders.Create`, `Orders.Update`, and `Orders.Cancel`.
-- Realm roles represent business roles shared across services. Composite roles include the appropriate client roles, for example `OrderManager` includes `order-service:Orders.Cancel`.
+- Permissions are stable realm role names: `Orders.Read`, `Orders.Create`, `Orders.Update`, and `Orders.Cancel`. The realm's `permissions-mapper` client scope maps realm roles into the `permissions`/`permission` token claims.
+- Business roles are realm roles with composites that include the appropriate permission roles, for example `OrderManager` includes `Orders.Cancel`.
 - Configure audience and role mappers so tokens contain only the roles needed by the target services. Do not place unbounded profile data or an unnecessarily large permission list in tokens.
 - The facade has a confidential service account with only the Admin REST permissions required for directory queries and constrained role/client management.
 - Each registering microservice has a distinct client credential or mTLS identity. It can manage only its own client and permission namespace.
@@ -191,12 +191,11 @@ GET  /api/identity/roles/{id}
 GET  /api/identity/permissions?serviceId=&includeDeprecated=
 GET  /api/identity/users/{id}/roles
 GET  /api/identity/users/{id}/permissions
-POST /api/identity/permission-manifests
-GET  /api/identity/permission-manifests/{serviceId}
+POST /api/identity/permissions/register
 POST /api/identity/external/organization-token
 ```
 
-`POST /permission-manifests` requires an authenticated service identity using Keycloak client credentials or mTLS. The facade derives the authenticated service ID from the validated credential, compares it to `manifest.serviceId`, rejects namespace violations, and records an audit event. Administrative user/role APIs require separate administrator scopes and are not exposed to ordinary service clients.
+`POST /api/identity/permissions/register` requires the `Identity.Permissions.Register` permission. The facade derives the authenticated service ID from the validated credential (`client_id`/`azp` claim), compares it to `manifest.serviceId`, and records the manifest. Administrative user/role APIs require separate administrator permissions (`Identity.Users.Read`, `Identity.Roles.Read`, `Identity.Keys.*`) and are not exposed to ordinary service clients. The full REST surface is browsable and callable in Scalar at `/scalar` (Development) or via `/openapi/v1.json`.
 
 Equivalent gRPC operations use the same DTO semantics and authorization. Error responses contain a correlation ID, not secret material.
 
@@ -230,9 +229,9 @@ The identity facade:
 
 1. authenticates the service;
 2. validates service ID, namespace, count/length limits, manifest version, and hash;
-3. inserts or updates the application manifest history idempotently;
-4. creates/gets each client role in Keycloak, treating an already-existing equivalent role as success;
-5. marks permissions missing from a newer accepted manifest as deprecated, never deletes them automatically;
+3. inserts or updates the permission catalog idempotently;
+4. creates/gets each permission as a Keycloak **realm role** (best-effort, conflict-aware — an already-existing role is success, and a Keycloak outage never fails the response); the realm's `oidc-usermodel-realm-role-mapper` then surfaces the role in the `permissions`/`permission` token claims;
+5. marks permissions missing from a newer accepted manifest as deprecated, never deletes them automatically — and never removes the Keycloak role;
 6. invalidates L1/L2 catalogs and increments authorization version;
 7. records audit data without raw tokens or secrets.
 
@@ -249,13 +248,19 @@ builder.Services
         options.Authority = configuration["Identity:Authority"]!;
         options.Audience = configuration["Identity:Audience"]!;
     })
-    .AddCompanyAuthorization()
-    .AddCompanyPermissionRegistration(options =>
-    {
-        options.IdentityServer = configuration["Identity:Server"]!;
-        options.ServiceName = "order-service";
-    });
+    .AddCompanyAuthorization();
+
+builder.Services.AddPermissionRegistration(options =>
+{
+    options.IdentityServer = new Uri(configuration["PermissionRegistration:IdentityServer"]!);
+    options.ServiceName = "order-service";
+    options.KeycloakBaseUrl = "http://localhost:8080";
+    options.KeycloakClientId = "order-service";
+    options.KeycloakClientSecret = configuration["PermissionRegistration:KeycloakClientSecret"];
+});
 ```
+
+A runnable reference consumer with ten permission-guarded endpoints is in [samples/OrderService.Sample](../samples/OrderService.Sample/); its tests are in [tests/Identity.Sample.Tests](../tests/Identity.Sample.Tests/).
 
 Then an endpoint needs only:
 

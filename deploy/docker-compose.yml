@@ -10,7 +10,7 @@ services:
       # Tokens are minted for the facade's own Keycloak client, so its audience is that client id.
       Identity__Audience: identity-facade
       Identity__KeyMetadata__Provider: oracle
-      ConnectionStrings__KeyMetadata: "User Id=identity_meta;Password=identity-development-only;Data Source=identity-meta-db:1521/FREEPDB1"
+      ConnectionStrings__KeyMetadata: "User Id=identity_meta;Password=identity-development-only;Data Source=identity-meta-db:1521/XEPDB1"
       Identity__Vault__Address: http://vault:8200
       Identity__Vault__Token: root
       Identity__KeycloakAdmin__BaseUrl: http://keycloak:8080
@@ -21,7 +21,7 @@ services:
       Identity__KeycloakAdmin__AdminUsername: ${KEYCLOAK_ADMIN:-admin}
       Identity__KeycloakAdmin__AdminPassword: ${KEYCLOAK_ADMIN_PASSWORD:-admin-development-only}
       Identity__Redis__Configuration: redis:6379
-    ports: ["5080:5080"]
+    ports: ["${FACADE_HTTP_PORT:-5080}:5080"]
     depends_on:
       keycloak:
         condition: service_healthy
@@ -39,14 +39,14 @@ services:
     command: start-dev --http-port=8080 --import-realm
     environment:
       KC_DB: oracle
-      KC_DB_URL: jdbc:oracle:thin:@keycloak-db:1521/FREEPDB1
+      KC_DB_URL: jdbc:oracle:thin:@keycloak-db:1521/XEPDB1
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak-development-only}
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin-development-only}
-    ports: ["8080:8080"]
+    ports: ["${KEYCLOAK_HTTP_PORT:-8080}:8080"]
     volumes:
       - ./realm-company.json:/opt/keycloak/data/import/realm-company.json:ro
     depends_on:
@@ -60,7 +60,7 @@ services:
       start_period: 60s
 
   keycloak-db:
-    image: gvenzl/oracle-free:23-slim
+    image: gvenzl/oracle-xe:21-slim
     environment:
       ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle-development-only}
       APP_USER: keycloak
@@ -77,7 +77,7 @@ services:
   # Key-metadata DB (signing keys / rotation ops) — the only facade-owned DB.
   # Kept on a separate Oracle instance so key lifecycle is not coupled to Keycloak's DB.
   identity-meta-db:
-    image: gvenzl/oracle-free:23-slim
+    image: gvenzl/oracle-xe:21-slim
     environment:
       ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle-development-only}
       APP_USER: identity_meta

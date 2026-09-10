@@ -15,6 +15,15 @@ public sealed class PermissionRegistrationOptions
     public string ManifestVersion { get; set; } = "1";
     public TimeSpan InitialRetryDelay { get; set; } = TimeSpan.FromSeconds(2);
     public int MaximumRetries { get; set; } = 8;
+
+    // Keycloak client-credentials configuration for automatic token acquisition.
+    public string? KeycloakBaseUrl { get; set; }
+    public string KeycloakRealm { get; set; } = "company";
+    public string? KeycloakClientId { get; set; }
+    public string? KeycloakClientSecret { get; set; }
+
+    // Assembly to scan for [RequirePermission] attributes. Defaults to the entry assembly.
+    internal Assembly? RegistrationAssembly { get; set; }
 }
 
 public sealed record PermissionManifest(

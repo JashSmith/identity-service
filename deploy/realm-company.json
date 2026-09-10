@@ -79,11 +79,31 @@
     },
     {
       "clientId": "order-service",
-      "name": "Order Service (audience example)",
+      "name": "Order Service (sample permission registrant)",
+      "description": "Sample consumer — registers its [RequirePermission] actions at startup",
       "enabled": true,
       "publicClient": false,
-      "bearerOnly": true,
-      "protocol": "openid-connect"
+      "clientAuthenticatorType": "client-secret",
+      "secret": "order-service-development-only",
+      "bearerOnly": false,
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": false,
+      "protocol": "openid-connect",
+      "defaultClientScopes": ["profile", "roles", "permissions-mapper"],
+      "protocolMappers": [
+        {
+          "name": "identity-facade-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "identity-facade",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ],
+      "attributes": {}
     }
   ],
   "clientScopes": [
@@ -123,6 +143,14 @@
     }
   ],
   "users": [
+    {
+      "username": "service-account-order-service",
+      "enabled": true,
+      "serviceAccountClientId": "order-service",
+      "realmRoles": [
+        "Identity.Permissions.Register"
+      ]
+    },
     {
       "username": "admin",
       "enabled": true,

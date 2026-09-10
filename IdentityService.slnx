@@ -11,5 +11,6 @@
   <Folder Name="/src/Packages/PermissionRegistration/"><Project Path="src/Company.Identity.PermissionRegistration/Company.Identity.PermissionRegistration.csproj"/><Project Path="src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj"/></Folder>
   <Folder Name="/src/Packages/Transport/"><Project Path="src/Company.Identity.Grpc/Company.Identity.Grpc.csproj"/></Folder>
   <Folder Name="/src/Host/"><Project Path="src/Identity.Api/Identity.Api.csproj"/></Folder>
-  <Folder Name="/tests/"><Project Path="tests/Identity.ArchitectureTests/Identity.ArchitectureTests.csproj"/><Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj"/><Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj"/><Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj"/></Folder>
+  <Folder Name="/samples/"><Project Path="samples/OrderService.Sample/OrderService.Sample.csproj"/></Folder>
+  <Folder Name="/tests/"><Project Path="tests/Identity.ArchitectureTests/Identity.ArchitectureTests.csproj"/><Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj"/><Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj"/><Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj"/><Project Path="tests/Identity.Sample.Tests/Identity.Sample.Tests.csproj"/></Folder>
 </Solution>

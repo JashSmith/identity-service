@@ -16,7 +16,7 @@
         <ProjectReference Include="../Company.Identity.Grpc/Company.Identity.Grpc.csproj"/>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi"/>
         <PackageReference Include="Grpc.AspNetCore"/>
-        <PackageReference Include="Swashbuckle.AspNetCore"/>
+        <PackageReference Include="Scalar.AspNetCore"/>
         <PackageReference Include="Microsoft.OpenApi"/>
     </ItemGroup>
 </Project>

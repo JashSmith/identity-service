@@ -11,5 +11,6 @@
         <ProjectReference Include="../Identity.Domain/Identity.Domain.csproj"/>
         <PackageReference Include="Polly.Core"/>
         <PackageReference Include="Polly.Extensions"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
     </ItemGroup>
 </Project>

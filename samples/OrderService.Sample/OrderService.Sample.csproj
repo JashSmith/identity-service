@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+    <PropertyGroup>
+        <RootNamespace>OrderService.Sample</RootNamespace>
+        <AssemblyName>OrderService.Sample</AssemblyName>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../src/Company.Identity.Abstractions/Company.Identity.Abstractions.csproj"/>
+        <ProjectReference Include="../../src/Company.Identity.Authentication.AspNetCore/Company.Identity.Authentication.AspNetCore.csproj"/>
+        <ProjectReference Include="../../src/Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj"/>
+        <ProjectReference Include="../../src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj"/>
+        <ProjectReference Include="../../src/Company.Identity.PermissionRegistration/Company.Identity.PermissionRegistration.csproj"/>
+    </ItemGroup>
+</Project>

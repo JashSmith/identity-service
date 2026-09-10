@@ -3,6 +3,7 @@ using Company.Identity.Authorization.AspNetCore;
 using Identity.Api;
 using Identity.Application;
 using Identity.Contracts;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 var authority = builder.Configuration["Identity:Authority"] ??
@@ -46,7 +47,17 @@ builder.Services.AddSingleton<IUserDirectory>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
 builder.Services.AddSingleton<IRoleDirectory>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
-builder.Services.AddSingleton<IPermissionRegistry, InMemoryPermissionRegistry>();
+// Registered permissions are mirrored into Keycloak realm roles so they reach token claims
+// through the existing oidc-usermodel-realm-role-mapper. Mirroring is best-effort and never
+// blocks registration or startup.
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakRoleProvisioner>();
+builder.Services.AddSingleton<IKeycloakRoleProvisioner>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakRoleProvisioner>());
+builder.Services.AddSingleton<InMemoryPermissionRegistry>();
+builder.Services.AddSingleton<IPermissionRegistry>(sp => new KeycloakSyncingPermissionRegistry(
+    sp.GetRequiredService<InMemoryPermissionRegistry>(),
+    sp.GetRequiredService<IKeycloakRoleProvisioner>(),
+    sp.GetRequiredService<ILogger<KeycloakSyncingPermissionRegistry>>()));
 builder.Services.AddSingleton<PermissionRegistrationService>();
 
 builder.Services.AddDbContext<Identity.Persistence.KeyManagement.KeyMetadataDbContext>((sp, o) =>
@@ -61,28 +72,46 @@ builder.Services.AddScoped<KeyRotationService>();
 builder.Services.AddHealthChecks();
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(o =>
+builder.Services.AddOpenApi("v1", o =>
 {
-    o.SwaggerDoc("v1",
-        new Microsoft.OpenApi.OpenApiInfo
+    o.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Info.Title = "Identity Facade";
+        document.Info.Description =
+            "Keycloak-centric facade — auth proxy, directory, permissions, key lifecycle. " +
+            "Present a Keycloak-issued JWT via the Bearer scheme below; privileged groups need the " +
+            "matching Identity.* permission claims (e.g. Identity.Keys.Generate for key admin routes).";
+        var bearer = new Microsoft.OpenApi.OpenApiSecurityScheme
         {
-            Title = "Identity Facade", Version = "v1",
-            Description = "Keycloak-centric facade — auth proxy, directory, permissions, key lifecycle"
-        });
-    o.AddSecurityDefinition("Bearer",
-        new Microsoft.OpenApi.OpenApiSecurityScheme
-        {
-            Type = Microsoft.OpenApi.SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT",
+            Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
             Description = "Keycloak-issued JWT"
-        });
+        };
+        var components = document.Components ?? new Microsoft.OpenApi.OpenApiComponents();
+        document.Components = components;
+        components.SecuritySchemes ??= new Dictionary<string, Microsoft.OpenApi.IOpenApiSecurityScheme>();
+        components.SecuritySchemes["Bearer"] = bearer;
+        document.Security =
+        [
+            new Microsoft.OpenApi.OpenApiSecurityRequirement
+            {
+                [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer", document)] = []
+            }
+        ];
+        return Task.CompletedTask;
+    });
 });
-builder.Services.AddOpenApi();
 
 var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Identity Facade v1"));
+    // Scalar reads the Microsoft.OpenApi document at /openapi/v1.json — full interactive UI
+    // with "Try it" requests against every REST group.
+    app.MapScalarApiReference(options => options
+        .WithTitle("Identity Facade")
+        .WithOpenApiRoutePattern("/openapi/v1.json")
+        .AddPreferredSecuritySchemes(["Bearer"]));
 }
 
 app.MapOpenApi();
