@@ -22,7 +22,8 @@ public sealed class KeycloakKeyManager(HttpClient http, IOptions<KeycloakOptions
         if (!string.IsNullOrEmpty(_o.AdminClientSecret))
             formValues = new Dictionary<string, string>
             {
-                ["grant_type"] = "client_credentials", ["client_id"] = _o.AdminClientId,
+                ["grant_type"] = "client_credentials",
+                ["client_id"] = _o.AdminClientId,
                 ["client_secret"] = _o.AdminClientSecret
             };
         else if (!string.IsNullOrEmpty(_o.AdminUsername) && !string.IsNullOrEmpty(_o.AdminPassword))
