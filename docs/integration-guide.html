@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>راهنمای یکپارچه‌سازی Identity Facade</title>
+<style>
+body{font-family:Tahoma,"Segoe UI",sans-serif;line-height:2;max-width:1100px;margin:auto;padding:24px;color:#202124;background:#fff}h1,h2,h3{color:#17365d}h1{border-bottom:3px solid #2f75b5;padding-bottom:8px}.box{padding:14px 18px;border-radius:8px;margin:16px 0;background:#eef5fc;border-right:5px solid #2f75b5}.warn{background:#fff4e5;border-right-color:#e69138}.ok{background:#edf7ed;border-right-color:#43a047}.code{direction:ltr;text-align:left;background:#111827;color:#e5e7eb;padding:15px;border-radius:8px;overflow:auto;white-space:pre;font-family:Consolas,"Courier New",monospace;font-size:14px;line-height:1.55}code{direction:ltr;unicode-bidi:embed;font-family:Consolas,monospace;background:#f1f3f4;padding:1px 4px;border-radius:3px}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{border:1px solid #d9e2f3;padding:8px;text-align:right;vertical-align:top}th{background:#d9eaf7}.ltr{direction:ltr;text-align:left}.small{color:#5f6368;font-size:.9em}
+</style>
+</head>
+<body>
+<h1>راهنمای عملی یکپارچه‌سازی سرویس‌ها با Identity Facade</h1>
+<p>این سند مسیر کامل اتصال سرویس‌های بیرونی مانند <strong>Order Service</strong> و <strong>Product Service</strong> را به این پروژه توضیح می‌دهد. مرز استاندارد یکپارچه‌سازی، خود <strong>Identity Facade</strong> است؛ سرویس‌های مصرف‌کننده نباید آدرس Keycloak، نام Realm یا اعتبارنامهٔ مدیر را بدانند.</p>
+<div class="box ok"><strong>اصل معماری:</strong> Keycloak مالک کاربران، گذرواژه‌ها، نشست‌ها، نقش‌ها، صدور توکن و کلیدهای امضای JWT است. Facade فقط درخواست‌های احراز هویت را عبور می‌دهد، اطلاعات امن را ارائه می‌کند، مجوزهای سرویس‌ها را ثبت می‌کند و Discovery/JWKS را پروکسی می‌کند. Facade هیچ توکنی تولید نمی‌کند.</div>
+
+<h2>۱. تصویر کلی مسیرها</h2>
+<table><tr><th>کاربرد</th><th>مسیر Facade</th><th>دسترسی</th></tr>
+<tr><td>اطلاعات استاندارد OIDC</td><td><code>GET /.well-known/openid-configuration</code></td><td>عمومی</td></tr>
+<tr><td>کلیدهای عمومی JWT (JWKS)</td><td><code>GET /api/identity/oidc/jwks</code></td><td>عمومی</td></tr>
+<tr><td>ورود کاربر یا سرویس</td><td><code>POST /api/identity/auth/login</code></td><td>عمومی؛ اعتبارنامه داخل درخواست</td></tr>
+<tr><td>تازه‌سازی توکن</td><td><code>POST /api/identity/auth/refresh</code></td><td>عمومی؛ Refresh Token</td></tr>
+<tr><td>بررسی وضعیت توکن</td><td><code>POST /api/identity/auth/introspect</code></td><td>عمومی؛ احراز هویت کلاینت</td></tr>
+<tr><td>خروج و ابطال</td><td><code>POST /api/identity/auth/logout</code></td><td>عمومی؛ Refresh Token</td></tr>
+<tr><td>اطلاعات کاربر جاری</td><td><code>GET /api/identity/me</code></td><td>Bearer Token</td></tr>
+<tr><td>ثبت مجوزهای یک سرویس</td><td><code>POST /api/identity/permissions/register</code></td><td><code>Identity.Permissions.Register</code></td></tr>
+<tr><td>خواندن کاربران و نقش‌ها</td><td><code>/api/identity/users...</code> و <code>/roles</code></td><td>مجوزهای <code>Identity.*.Read</code></td></tr>
+<tr><td>چرخهٔ کلید</td><td><code>/api/admin/identity/keys/*</code></td><td>مجوزهای <code>Identity.Keys.*</code></td></tr></table>
+<div class="box warn"><strong>محدودیت فعلی:</strong> Facade در حال حاضر API عمومی برای ساخت کاربر، ساخت نقش تجاری یا اختصاص نقش به کاربر ندارد. این عملیات مدیریتی باید در Keycloak Admin Console یا Keycloak Admin REST انجام شود. نقش‌های مربوط به Permission هنگام ثبت Manifest به‌صورت خودکار ساخته می‌شوند.</div>
+
+<h2>۲. راه‌اندازی و کنترل سلامت</h2>
+<div class="code">cd deploy
+docker compose up --build -d
+docker compose ps</div>
+<p>باید سرویس‌های <code>identity-facade</code>، <code>keycloak</code>، دو Oracle، Vault، Redis و <code>order-service</code> سالم شوند. راه‌اندازی اولیهٔ Oracle ممکن است چند دقیقه طول بکشد.</p>
+<div class="code">curl -fsS http://localhost:5080/health/live
+curl -fsS http://localhost:5180/health/live
+curl -fsS http://localhost:8080/health/ready -o /dev/null -w "%{http_code}\n"</div>
+<p>مستندات تعاملی Scalar:</p><ul><li>Facade: <code>http://localhost:5080/scalar</code></li><li>Order Service: <code>http://localhost:5180/scalar</code></li></ul>
+
+<h2>۳. اتصال هر سرویس جدید؛ مثال Order و Product</h2>
+<h3>۳.۱ اطلاعاتی که هر Consumer لازم دارد</h3>
+<ol><li>یک Client محرمانه و یکتا در Keycloak؛ مانند <code>order-service</code> یا <code>product-service</code>.</li><li>Client Secret در Secret Store یا متغیر محیطی سرور.</li><li>فقط آدرس Facade؛ داخل Compose برابر <code>http://identity-facade:5080</code>.</li><li>نام Permissionهای مخصوص خودش؛ مانند <code>Orders.View</code> و <code>Products.Read</code>.</li><li>تنظیم اعتبارسنجی JWT با Authority برابر Facade.</li><li>ثبت Manifest در زمان شروع برنامه.</li></ol>
+<div class="box warn">در تنظیمات Consumer نباید <code>Identity:Keycloak:BaseUrl</code>، Realm، رمز مدیر یا تنظیمات Admin Keycloak وجود داشته باشد.</div>
+<h3>۳.۲ تنظیمات Consumer</h3>
+<div class="code">{
+  "Identity": {
+    "Authority": "http://identity-facade:5080",
+    "Audience": "identity-facade"
+  },
+  "PermissionRegistration": {
+    "IdentityServer": "http://identity-facade:5080",
+    "ClientId": "order-service",
+    "ClientSecret": "از Secret Store خوانده شود"
+  }
+}</div>
+<div class="code">builder.Services.AddCompanyAuthentication(options =&gt;
+{
+    options.Authority = builder.Configuration["Identity:Authority"]!;
+    options.Audience = "identity-facade";
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+    options.AcceptIssuerFromDiscovery = true;
+});
+builder.Services.AddCompanyAuthorization();</div>
+<p><code>AcceptIssuerFromDiscovery=true</code> لازم است، چون Authority آدرس Facade است اما مقدار <code>iss</code> توکن واقعی همچنان Issuer متعلق به Keycloak است.</p>
+
+<h2>۴. ورود سرویس‌ها</h2>
+<h3>۴.۱ ورود سرویس به سرویس (Client Credentials)</h3>
+<p>وقتی Order Service می‌خواهد بدون حضور کاربر به یک API محافظت‌شده دسترسی پیدا کند، از Client Credentials استفاده می‌کند. درخواست به Facade می‌رود و Facade آن را به Keycloak عبور می‌دهد.</p>
+<div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/login \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'grant_type=client_credentials' \
+  -d 'client_id=order-service' \
+  -d 'client_secret=order-service-development-only'</div>
+<p>فقط فیلد <code>access_token</code> را در حافظهٔ موقت بخوانید و در هدر Bearer استفاده کنید؛ کل توکن را چاپ یا ذخیره نکنید.</p>
+<div class="code">TOKEN=$(curl -s -X POST http://localhost:5080/api/identity/auth/login \
+  -d 'grant_type=client_credentials' \
+  -d 'client_id=order-service' \
+  -d 'client_secret=order-service-development-only' \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+curl -s http://localhost:5180/api/orders -H "Authorization: Bearer $TOKEN"</div>
+<div class="box warn">Service Account نمونه فقط مجوز <code>Identity.Permissions.Register</code> دارد. بنابراین ثبت Manifest مجاز است، اما دسترسی خواندن سفارش‌ها به‌طور خودکار به آن داده نمی‌شود؛ باید Permission صریحاً به Client یا کاربر اختصاص داده شود.</div>
+<h3>۴.۲ ورود کاربر</h3>
+<p>در محیط توسعهٔ فعلی کاربر <code>admin</code> با گذرواژهٔ <code>admin</code> وجود دارد. در محیط واقعی این مقادیر باید تغییر کنند و درخواست باید فقط روی HTTPS ارسال شود.</p>
+<div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/login \
+  -d 'grant_type=password' \
+  -d 'client_id=identity-facade' \
+  -d 'client_secret=facade-development-only' \
+  -d 'username=admin' \
+  -d 'password=admin'</div>
+<p>رمز کاربر فقط باید به Endpoint ورود ارسال شود. Secret کلاینت را هرگز در JavaScript مرورگر قرار ندهید.</p>
+
+<h2>۵. ثبت Permissionهای سرویس</h2>
+<p>هر سرویس عملیات خود را با <code>[RequirePermission]</code> علامت‌گذاری می‌کند. کتابخانهٔ <code>Company.Identity.PermissionRegistration</code> در زمان شروع، Assembly را اسکن، Manifest را Hash و با Client Credentials به Facade ارسال می‌کند.</p>
+<div class="code">public static class ProductPermissions
+{
+    public const string Read = "Products.Read";
+    public const string Create = "Products.Create";
+}
+
+public sealed class ProductService
+{
+    [RequirePermission(ProductPermissions.Read)]
+    public IReadOnlyCollection&lt;ProductDto&gt; List() =&gt; ...;
+
+    [RequirePermission(ProductPermissions.Create)]
+    public ProductDto Create(...) =&gt; ...;
+}</div>
+<div class="code">builder.Services.AddPermissionRegistration(o =&gt;
+{
+    o.IdentityServer = new Uri(
+        builder.Configuration["PermissionRegistration:IdentityServer"]!);
+    o.ServiceName = "product-service";
+    o.ServiceVersion = "1.0.0";
+    o.ClientId = builder.Configuration["PermissionRegistration:ClientId"];
+    o.ClientSecret = builder.Configuration["PermissionRegistration:ClientSecret"];
+    o.MaximumRetries = 8;
+});</div>
+<p>Facade برای هر Permission یک Realm Role در Keycloak ایجاد می‌کند. شکست ثبت، شروع سرویس را متوقف نمی‌کند و با Backoff تصاعدی دوباره امتحان می‌شود. Permission حذف‌شده از Manifest حذف خودکار نمی‌شود و فقط در کاتالوگ Facade Deprecated می‌شود.</p>
+
+<h2>۶. Well-known، Discovery، JWKS و اطلاع از کلیدها</h2>
+<p>سرویس مصرف‌کننده نباید مسیر Keycloak را حدس بزند. Discovery استاندارد را از Facade بخواند:</p>
+<div class="code">curl -s http://localhost:5080/.well-known/openid-configuration | python3 -m json.tool
+curl -s http://localhost:5080/api/identity/oidc/jwks | python3 -m json.tool</div>
+<p>Facade سند Discovery را از Keycloak عبور می‌دهد و فقط <code>jwks_uri</code> را به مسیر خودش تغییر می‌دهد. Issuer، Token Endpoint و سایر مقادیر متعلق به توکن واقعی Keycloak باقی می‌مانند.</p>
+<div class="code">{
+  "issuer": "http://keycloak:8080/realms/company",
+  "token_endpoint": "http://keycloak:8080/realms/company/protocol/openid-connect/token",
+  "introspection_endpoint": "http://keycloak:8080/realms/company/protocol/openid-connect/token/introspect",
+  "end_session_endpoint": "http://keycloak:8080/realms/company/protocol/openid-connect/logout",
+  "jwks_uri": "http://localhost:5080/api/identity/oidc/jwks"
+}</div>
+<p>کتابخانهٔ JWT کلیدها را Cache می‌کند و در صورت مشاهدهٔ <code>kid</code> جدید، JWKS را دوباره می‌خواند. Rotation باید <code>kid</code> جدید بسازد؛ کلید قبلی در Grace Period برای اعتبارسنجی باقی می‌ماند. کلید خصوصی هرگز در تنظیمات، API، لاگ یا Redis قرار نمی‌گیرد.</p>
+
+<h2>۷. دریافت اطلاعات کاربر، Introspect، خروج و بستن نشست</h2>
+<h3>۷.۱ اطلاعات کاربر جاری</h3>
+<div class="code">curl -s http://localhost:5080/api/identity/me \
+  -H "Authorization: Bearer $ACCESS_TOKEN"</div>
+<p>این پاسخ <code>sub</code>، نام کاربری، Roles، Permissions و <code>sid</code> را از JWT اعتبارسنجی‌شده می‌خواند. برای دادهٔ مدیریتی نیز این مسیرها وجود دارند:</p>
+<div class="code">GET /api/identity/users
+GET /api/identity/users/{id}
+GET /api/identity/users/{id}/roles
+GET /api/identity/users/{id}/permissions
+GET /api/identity/roles
+GET /api/identity/permissions?serviceId=order-service</div>
+<p>این مسیرها به‌ترتیب به مجوزهای <code>Identity.Users.Read</code>، <code>Identity.Roles.Read</code> و <code>Identity.Permissions.Read</code> نیاز دارند.</p>
+<h3>۷.۲ Introspection</h3>
+<p>برای JWT، اعتبارسنجی محلی روش عادی و سریع است. زمانی از Introspection استفاده کنید که Backend به پاسخ فعال/غیرفعال بودن توکن از Keycloak نیاز دارد.</p>
+<div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/introspect \
+  -d "token=$ACCESS_TOKEN" \
+  -d 'client_id=identity-facade' \
+  -d 'client_secret=facade-development-only'</div>
+<p>اگر پاسخ <code>active=false</code> بود، عملیات را رد کنید. توکن را لاگ نکنید.</p>
+<h3>۷.۳ Refresh</h3>
+<div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/refresh \
+  -d 'client_id=identity-facade' \
+  -d 'client_secret=facade-development-only' \
+  -d "refresh_token=$REFRESH_TOKEN"</div>
+<p>Facade نوع Grant را روی <code>refresh_token</code> تنظیم و درخواست را به Keycloak می‌فرستد.</p>
+<h3>۷.۴ Logout و بستن نشست</h3>
+<div class="code">curl -i -X POST http://localhost:5080/api/identity/auth/logout \
+  -d "refresh_token=$REFRESH_TOKEN" \
+  -d 'client_id=identity-facade' \
+  -d 'client_secret=facade-development-only'</div>
+<p>Facade ابتدا Logout و در صورت نیاز Revoke را روی Keycloak صدا می‌زند. پس از موفقیت، Session یا Cookie محلی برنامه را هم پاک کنید. در Client Credentials نشست کاربری وجود ندارد؛ فقط Access Token را از حافظه حذف و برای درخواست بعدی توکن جدید بگیرید.</p>
+<div class="box warn">Access Token خودبسنده تا زمان انقضا ممکن است از نظر امضایی معتبر بماند. برای قطع سریع دسترسی، سیاست کوتاه‌مدت Access Token و در موارد لازم Introspection فعال داشته باشید؛ حذف توکن از حافظه به‌تنهایی Logout سمت سرور نیست.</div>
+
+<h2>۸. ساخت نقش و اعطای دسترسی</h2>
+<h3>۸.۱ مدل Permission و Role</h3>
+<ul><li><strong>Permission:</strong> نام یک عملیات، مانند <code>Orders.View</code>.</li><li><strong>Realm Role:</strong> در این پروژه مکانیزم Keycloak برای ذخیره و اختصاص همان Permission است.</li><li><strong>Assignment:</strong> عملیات صریح مدیر برای اتصال Role به User یا Service Account.</li></ul>
+<h3>۸.۲ گرفتن Token مدیر Keycloak در توسعه</h3>
+<div class="code">KC_ADMIN_TOKEN=$(curl -s -X POST \
+  http://localhost:8080/realms/master/protocol/openid-connect/token \
+  -d 'grant_type=password' -d 'client_id=admin-cli' \
+  -d 'username=admin' -d 'password=admin-development-only' \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")</div>
+<p>این مسیر فقط برای توسعه است. در تولید از Client محرمانه با حداقل مجوز Admin API استفاده کنید.</p>
+<h3>۸.۳ اختصاص Permission به کاربر</h3>
+<div class="code">curl -s 'http://localhost:8080/admin/realms/company/users?username=admin&exact=true' \
+  -H "Authorization: Bearer $KC_ADMIN_TOKEN"
+
+curl -s http://localhost:8080/admin/realms/company/roles/Orders.View \
+  -H "Authorization: Bearer $KC_ADMIN_TOKEN"
+
+curl -i -X POST \
+  http://localhost:8080/admin/realms/company/users/&lt;USER_ID&gt;/role-mappings/realm \
+  -H "Authorization: Bearer $KC_ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '[{"id":"&lt;ROLE_ID&gt;","name":"Orders.View"}]'</div>
+<p>یا در Console مسیر <span class="ltr">company → Users → admin → Role mapping → Orders.View</span> را انجام دهید. بعد از Assignment باید کاربر دوباره Login یا Refresh کند؛ Token قبلی خودکار تغییر نمی‌کند.</p>
+<h3>۸.۴ ساخت نقش تجاری</h3>
+<div class="code">curl -i -X POST http://localhost:8080/admin/realms/company/roles \
+  -H "Authorization: Bearer $KC_ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"name":"OrderManager","description":"مدیریت سفارش‌ها"}'</div>
+<p>سپس Permissionهای لازم را صریحاً به آن Role به‌صورت Composite اضافه و آن را به کاربر اختصاص دهید. هیچ Role بیرونی نباید بدون Mapping صریح به Role privileged داخلی تبدیل شود.</p>
+
+<h2>۹. فراخوانی استاندارد API؛ مثال دریافت سفارش‌ها</h2>
+<ol><li><strong>Discover:</strong> Consumer با Authority برابر Facade، Discovery و JWKS را می‌گیرد.</li><li><strong>Acquire:</strong> توکن واقعی Keycloak را از Login Facade می‌گیرد.</li><li><strong>Validate:</strong> API مقصد امضا، Issuer، Audience، Lifetime و نوع توکن را با JWKS Cacheشده بررسی می‌کند.</li><li><strong>Authorize:</strong> دقیقاً Permission مسیر، مانند <code>Orders.View</code>، بررسی می‌شود.</li><li><strong>Call:</strong> درخواست با <code>Authorization: Bearer</code> و روی TLS ارسال می‌شود.</li><li><strong>Interpret:</strong> پاسخ 401 یعنی احراز هویت نامعتبر/منقضی؛ 403 یعنی توکن معتبر است ولی Permission ندارد.</li><li><strong>Recover:</strong> برای 401 توکن را Refresh یا دوباره Login کنید؛ برای 403 صرفاً Retry نکنید، Assignment را اصلاح کنید.</li></ol>
+<div class="code">using System.Net.Http.Headers;
+
+public sealed class OrdersClient(HttpClient http)
+{
+    public async Task&lt;HttpResponseMessage&gt; GetOrdersAsync(
+        string accessToken, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/orders");
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", accessToken);
+        return await http.SendAsync(request, ct);
+    }
+}</div>
+<p>در ASP.NET می‌توان از <code>BearerTokenDelegatingHandler</code> برای عبور دادن Bearer ورودی به سرویس پایین‌دستی مورد اعتماد استفاده کرد. این کار فقط در مرز اعتماد مشخص و کنترل‌شده انجام شود.</p>
+
+<h2>۱۰. تست کامل Order Service</h2>
+<div class="code"># دریافت توکن مدیر از Facade
+ADMIN_RESPONSE=$(curl -s -X POST http://localhost:5080/api/identity/auth/login \
+  -d 'grant_type=password' -d 'client_id=identity-facade' \
+  -d 'client_secret=facade-development-only' \
+  -d 'username=admin' -d 'password=admin')
+ADMIN_TOKEN=$(echo "$ADMIN_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+
+# بررسی ثبت ۱۰ Permission
+curl -s 'http://localhost:5080/api/identity/permissions?serviceId=order-service' \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool
+
+# پس از اختصاص Orders.View به admin و Login مجدد:
+curl -i http://localhost:5180/api/orders \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# قبل از Assignment: 403
+# پس از Assignment و گرفتن Token جدید: 200</div>
+<p>ده عملیات نمونه شامل سفارش، فاکتور، ارسال، Refund و گزارش است. مسیر کامل آن‌ها در <code>http://localhost:5180/scalar</code> قابل مشاهده است.</p>
+
+<h2>۱۱. چک‌لیست تولید</h2>
+<ul><li>HTTPS و <code>RequireHttpsMetadata=true</code>.</li><li>تعویض همهٔ Password، Client Secret، Vault Token و Admin پیش‌فرض.</li><li>نگهداری Secretها در Secret Manager و نه Git یا appsettings عمومی.</li><li>عدم ثبت Password، Access/Refresh Token، Private Key و Vault Secret در Log.</li><li>استفاده از Access Token کوتاه‌عمر و سیاست روشن Refresh/Revoke.</li><li>بررسی دقیق Role Mapping و عدم ارتقای خودکار نقش خارجی.</li><li>تست Rotation، تغییر <code>kid</code>، JWKS Refresh، Grace Period و Rollback.</li></ul>
+<p class="small">مراجع سورس: <code>docs/running.md</code>، <code>docs/architecture.md</code>، <code>docs/key-lifecycle.md</code> و پروژهٔ <code>samples/OrderService.Sample</code>.</p>
+</body></html>
