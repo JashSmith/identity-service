@@ -18,9 +18,11 @@ public static class AuthorizationExtensions
 public sealed class PermissionPolicyProvider(Microsoft.Extensions.Options.IOptions<AuthorizationOptions> options)
     : DefaultAuthorizationPolicyProvider(options)
 {
-    public override async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName)
-        => await base.GetPolicyAsync(policyName) ?? new AuthorizationPolicyBuilder().RequireAuthenticatedUser()
-            .AddRequirements(new PermissionRequirement(policyName)).Build();
+    public override async Task<AuthorizationPolicy?> GetPolicyAsync(string policyName) =>
+        await base.GetPolicyAsync(policyName) ?? new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .AddRequirements(new PermissionRequirement(policyName))
+            .Build();
 }
 
 public sealed class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>

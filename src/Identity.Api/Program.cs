@@ -9,6 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 var authority = builder.Configuration["Identity:Authority"] ??
                 throw new InvalidOperationException("Identity:Authority is required.");
 var audience = builder.Configuration["Identity:Audience"] ?? string.Empty;
+var requireHttpsMetadata = builder.Configuration["Identity:RequireHttpsMetadata"] ?? "false";
+
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
@@ -17,7 +19,7 @@ builder.Services.AddCompanyAuthentication(options =>
 {
     options.Authority = authority;
     options.Audience = audience;
-    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+    options.RequireHttpsMetadata = bool.TryParse(requireHttpsMetadata, out var result) && result;
 });
 builder.Services.AddCompanyAuthorization();
 builder.Services.AddGrpc();
