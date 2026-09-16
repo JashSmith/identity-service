@@ -23,7 +23,7 @@ public static class OrderPermissions
     public const string ExportReports = "Orders.Reports.Export";
 }
 
-public sealed record OrderDto(string Id, string CustomerUsername, decimal Total, string Status);
+public sealed record OrderDto(string Id, string CustomerUsername, decimal Total, string Status, string Region = "global");
 
 public sealed record InvoiceDto(string Id, string OrderId, decimal Amount, bool Issued);
 
@@ -36,9 +36,9 @@ public sealed class OrderService
 {
     private static readonly OrderDto[] s_orders =
     [
-        new("ord-1", "admin", 120.50m, "open"),
-        new("ord-2", "alice", 49.99m, "shipped"),
-        new("ord-3", "bob", 310.00m, "cancelled"),
+        new("ord-1", "admin", 120.50m, "open", "tehran-1"),
+        new("ord-2", "alice", 49.99m, "shipped", "tehran-2"),
+        new("ord-3", "bob", 310.00m, "cancelled", "global"),
     ];
 
     [RequirePermission(OrderPermissions.ViewOrders)]
@@ -113,6 +113,10 @@ public sealed class OrderService
             throw new ArgumentException($"Unsupported format '{format}'.", nameof(format));
         return $"report.{format.ToLowerInvariant()}";
     }
+
+    /// <summary>EF-Core-friendly scoped filter — caller does Where(allowed.Contains(x.Region)) in the DB query.</summary>
+    public IReadOnlyCollection<OrderDto> ListOrdersFiltered(IReadOnlyCollection<string> allowedRegions)
+        => s_orders.Where(o => allowedRegions.Contains(o.Region, StringComparer.Ordinal)).ToArray();
 
     private static OrderDto Find(string orderId) =>
         s_orders.FirstOrDefault(o => o.Id == orderId) ??

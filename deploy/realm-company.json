@@ -90,6 +90,30 @@
       {
         "name": "Identity.Keys.History",
         "description": "View key history"
+      },
+      {
+        "name": "identity.users.read",
+        "description": "Read users / directory"
+      },
+      {
+        "name": "identity.users.manage",
+        "description": "Manage users including scoped assignments"
+      },
+      {
+        "name": "identity.roles.read",
+        "description": "Read business roles"
+      },
+      {
+        "name": "identity.roles.manage",
+        "description": "Manage business (composite) roles"
+      },
+      {
+        "name": "identity.scopes.read",
+        "description": "Read scoped access assignments"
+      },
+      {
+        "name": "identity.scopes.manage",
+        "description": "Manage scoped access assignments"
       }
     ]
   },
@@ -302,6 +326,34 @@
             "userinfo.token.claim": "true",
             "access.token.claim": "true",
             "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "iam-access",
+      "description": "Maps iam.scoped_access user attribute to iam_access claim",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false",
+        "gui.order": "",
+        "consent.screen.text": ""
+      },
+      "protocolMappers": [
+        {
+          "name": "iam-access-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "iam.scoped_access",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "claim.name": "iam_access",
+            "jsonType.label": "String",
+            "multivalued": "false"
           }
         }
       ]

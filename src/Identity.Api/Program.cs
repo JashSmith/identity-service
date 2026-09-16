@@ -62,6 +62,28 @@ builder.Services.AddSingleton<IPermissionRegistry>(sp => new KeycloakSyncingPerm
     sp.GetRequiredService<ILogger<KeycloakSyncingPermissionRegistry>>()));
 builder.Services.AddSingleton<PermissionRegistrationService>();
 
+// Dynamic roles/scope infrastructure
+builder.Services.Configure<Identity.Application.ScopedAccessOptions>(
+    builder.Configuration.GetSection("Identity:ScopedAccess"));
+builder.Services.AddSingleton<Identity.Application.IScopedAccessSerializer, Identity.Application.ScopedAccessSerializer>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakCompositeRoleStore>();
+builder.Services.AddSingleton<Identity.Application.IBusinessRoleStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakCompositeRoleStore>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopedAccessStore>();
+builder.Services.AddSingleton<Identity.Application.IScopedAccessStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakScopedAccessStore>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();
+builder.Services.AddSingleton<Identity.Application.IUserProvisioningService>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserRoleMapping>();
+builder.Services.AddSingleton<Identity.Application.IUserRoleMapping>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserRoleMapping>());
+builder.Services.AddScoped<Identity.Application.ProvisioningOrchestrator>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.FacadePermissionRegistrar>();
+
+
 builder.Services.AddDbContext<Identity.Persistence.KeyManagement.KeyMetadataDbContext>((sp, o) =>
 {
     var cfg = sp.GetRequiredService<IConfiguration>();
@@ -134,10 +156,34 @@ app.MapGet("/api/identity/me", (ICurrentUserContext current) =>
     .Produces<object>(200);
 app.MapAuth();
 app.MapUsers();
+app.MapUserManagement();
+app.MapBusinessRoles();
+app.MapAccessContext();
 app.MapPermissions();
 app.MapAdminKeys();
 app.MapGrpcService<Company.Identity.Grpc.IdentityGrpcService>();
 app.MapGrpcService<Company.Identity.Grpc.KeyAdminGrpcService>();
+// Seed facade-owned permissions through the existing registry so they are mirrored to Keycloak.
+try
+{
+    using var scope = app.Services.CreateScope();
+    var registrar = scope.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.FacadePermissionRegistrar>();
+    var asm = typeof(Program).Assembly;
+    // Use a short timeout for seeding; don't block startup on Keycloak availability.
+    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    await registrar.RegisterAsync(asm, cts.Token);
+}
+catch { /* best-effort */ }
+
+try
+{
+    using var scope2 = app.Services.CreateScope();
+    var mapper = scope2.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
+    using var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    await mapper.EnsureAsync(cts2.Token);
+}
+catch { /* best-effort */ }
+
 app.MapPost("/api/identity/external/organization-token",
         (OrganizationTokenRequest request) => Results.StatusCode(StatusCodes.Status501NotImplemented))
     .WithTags("Auth").WithName("ExchangeOrganizationToken");

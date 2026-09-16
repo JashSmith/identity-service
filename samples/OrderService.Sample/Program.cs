@@ -21,6 +21,7 @@ builder.Services.AddCompanyAuthentication(options =>
     options.AcceptIssuerFromDiscovery = true;
 });
 builder.Services.AddCompanyAuthorization();
+builder.Services.AddCompanyAccessContext();
 builder.Services.AddSingleton<OrderService>();
 
 // Discover [RequirePermission] attributes in this assembly and push the manifest to the
@@ -121,6 +122,28 @@ app.MapPost("/api/orders/{orderId}/shipments/schedule", (string orderId, DateTim
 app.MapPost("/api/orders/{orderId}/refunds/approve", (string orderId, decimal amount, OrderService svc) =>
         Results.Ok(svc.ApproveRefund(orderId, amount)))
     .RequireAuthorization(OrderPermissions.ApproveRefunds).WithTags("Refunds");
+
+// Scoped-access demo: permission + scope are both required. Region comes from the persisted
+// OrderDto.Region; allowed regions come from iam_access via ICurrentAccessContext.
+// In a real DB-backed service this would be query.Where(o => allowed.Contains(o.Region)).
+app.MapGet("/api/orders/scoped", (Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc) =>
+{
+    if (!access.HasPermission(SampleApp.OrderPermissions.ViewOrders))
+        return Results.Forbid();
+    var allowed = access.GetScopeValues("region");
+    // Empty scope set means no region grant — fail closed.
+    if (allowed.Count == 0) return Results.Forbid();
+    // EF-Core-friendly: materialize allowed set once, then Contains in the query.
+    var filtered = svc.ListOrdersFiltered(allowed);
+    return Results.Ok(filtered);
+}).RequireAuthorization().WithTags("Orders").WithName("ListOrdersScoped");
+
+app.MapGet("/api/orders/{orderId}/scoped-check", (string orderId, string region, Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc) =>
+{
+    if (!access.HasPermission(SampleApp.OrderPermissions.ViewOrders, "region", region))
+        return Results.Forbid();
+    return Results.Ok(svc.ListOrders().FirstOrDefault(o => o.Id == orderId));
+}).RequireAuthorization().WithTags("Orders").WithName("GetOrderScopedCheck");
 
 app.MapPost("/api/reports/export",
         (string format, OrderService svc) => Results.Ok(new { file = svc.ExportReport(format) }))

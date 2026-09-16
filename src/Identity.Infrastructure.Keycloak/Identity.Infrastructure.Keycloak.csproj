@@ -9,6 +9,8 @@
     <ItemGroup>
         <ProjectReference Include="../Identity.Application/Identity.Application.csproj"/>
         <ProjectReference Include="../Identity.Domain/Identity.Domain.csproj"/>
+        <ProjectReference Include="../Company.Identity.Abstractions/Company.Identity.Abstractions.csproj"/>
+        <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj"/>
         <PackageReference Include="Polly.Core"/>
         <PackageReference Include="Polly.Extensions"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
