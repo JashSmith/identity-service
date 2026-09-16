@@ -9,5 +9,6 @@
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="../Company.Identity.Abstractions/Company.Identity.Abstractions.csproj"/>
+        <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj"/>
     </ItemGroup>
 </Project>
