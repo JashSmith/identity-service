@@ -1,7 +1,9 @@
+using System.Net.Http;
 using System.Security.Claims;
 using Company.Identity.Authorization;
 using Identity.Application;
 using Identity.Contracts;
+using Microsoft.AspNetCore.Http;
 
 namespace Identity.Sample.Tests;
 
@@ -255,3 +257,147 @@ public sealed class FacadePermissionsRegistrationTests
         Assert.Equal(10, discovered.Count);
     }
 }
+
+public sealed class FacadeResolvingAccessContextTests
+{
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    {
+        public List<string> Urls { get; } = [];
+        public List<string?> AuthorizationHeaders { get; } = [];
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Urls.Add(request.RequestUri!.ToString());
+            AuthorizationHeaders.Add(request.Headers.Authorization?.ToString());
+            return Task.FromResult(responder(request));
+        }
+    }
+
+    private sealed class StubFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+    }
+
+    private static ClaimsPrincipal Principal(string[] permissions, string? iam)
+    {
+        var claims = permissions.Select(p => new Claim("permission", p)).ToList();
+        if (iam is not null) claims.Add(new Claim(ScopedAccessConstants.ClaimName, iam));
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, "test", "name", "role"));
+    }
+
+    private static HttpContext CtxWith(string authHeader)
+    {
+        var c = new DefaultHttpContext();
+        c.Request.Headers.Authorization = authHeader;
+        return c;
+    }
+
+    private static FacadeResolvingAccessContext Svc(ClaimsPrincipal principal, string authHeader, HttpMessageHandler handler, AccessContextOptions? opts = null)
+    {
+        opts ??= new AccessContextOptions { FacadeBaseUrl = "http://facade.test" };
+        var accessor = new HttpContextAccessor { HttpContext = CtxWith(authHeader) };
+        return new FacadeResolvingAccessContext(principal, accessor, new StubFactory(handler), Microsoft.Extensions.Options.Options.Create(opts));
+    }
+
+    [Fact]
+    public async Task InlineClaim_Present_NoFacadeHit()
+    {
+        var iam = """[{"role":"Manager","scopes":{"region":["tehran-1"]}}]""";
+        var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        var ctx = Svc(Principal(["Orders.View"], iam), "Bearer tok", handler);
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        Assert.Empty(handler.Urls);
+        Assert.Contains("tehran-1", ctx.GetScopeValues("region"));
+    }
+
+    [Fact]
+    public async Task MissingFacadeUrl_NoFacadeHit()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        var opts = new AccessContextOptions { FacadeBaseUrl = null };
+        var ctx = Svc(Principal(["Orders.View"], null), "Bearer tok", handler, opts);
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        Assert.Empty(handler.Urls);
+    }
+
+    [Fact]
+    public async Task Absent_Iam_Access_Calls_Facade_And_Populates_Scopes()
+    {
+        var body = """{"userId":"u1","username":"alice","permissions":["Orders.View"],"assignments":[{"role":"Manager","scopes":{"region":["tehran-2"]}}]}""";
+        var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+        });
+        var ctx = Svc(Principal(["Orders.View"], null), "Bearer tok", handler);
+        Assert.Empty(ctx.GetScopeValues("region"));
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        Assert.Single(handler.Urls);
+        Assert.Equal("http://facade.test/api/identity/access-context", handler.Urls[0]);
+        Assert.Equal("Bearer tok", handler.AuthorizationHeaders[0]);
+        Assert.Contains("tehran-2", ctx.GetScopeValues("region"));
+    }
+
+    [Fact]
+    public async Task Idempotent_SecondCall_NoExtraRequest()
+    {
+        var body = """{"permissions":["Orders.View"],"assignments":[{"role":"M","scopes":{"region":["x"]}}]}""";
+        var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") });
+        var ctx = Svc(Principal(["Orders.View"], null), "Bearer tok", handler);
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        Assert.Single(handler.Urls);
+    }
+
+    [Fact]
+    public async Task NonBearer_Authorization_IsIgnored()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        var ctx = Svc(Principal(["Orders.View"], null), "Basic abc", handler);
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        Assert.Empty(handler.Urls);
+    }
+
+    [Fact]
+    public async Task MissingAuthorization_IsNoOp()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        var ctx = Svc(Principal(["Orders.View"], null), string.Empty, handler);
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        Assert.Empty(handler.Urls);
+    }
+
+    [Fact]
+    public async Task FacadeError_KeepsClaimsOnlyView_BestEffort()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable));
+        var ctx = Svc(Principal(["Orders.View"], null), "Bearer tok", handler);
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        Assert.False(ctx.HasScope("region", "tehran-9"));
+        Assert.True(ctx.HasPermission("Orders.View"));
+    }
+
+    [Fact]
+    public async Task FacadePerms_Overlay_PrincipalPerms()
+    {
+        var body = """{"permissions":["Orders.View","Orders.Create"],"assignments":[{"role":"M","scopes":{"branch":["b-1"]}}]}""";
+        var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") });
+        // Only Orders.View on the token, facade returns more.
+        var ctx = Svc(Principal(["Orders.View"], null), "Bearer tok", handler);
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        Assert.True(ctx.HasPermission("Orders.Create"));
+        Assert.Contains("b-1", ctx.GetScopeValues("branch"));
+    }
+
+    [Fact]
+    public async Task NullHttpContext_DoesNotCrash()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        var opts = new AccessContextOptions { FacadeBaseUrl = "http://facade.test" };
+        var accessor = new HttpContextAccessor { HttpContext = null };
+        var ctx = new FacadeResolvingAccessContext(Principal(["Orders.View"], null), accessor, new StubFactory(handler), Microsoft.Extensions.Options.Options.Create(opts));
+        await ctx.EnsureLoadedAsync(CancellationToken.None);
+        Assert.Empty(handler.Urls);
+    }
+}
+

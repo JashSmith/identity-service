@@ -21,7 +21,15 @@ builder.Services.AddCompanyAuthentication(options =>
     options.AcceptIssuerFromDiscovery = true;
 });
 builder.Services.AddCompanyAuthorization();
-builder.Services.AddCompanyAccessContext();
+builder.Services.AddCompanyAccessContext(o =>
+{
+    // Never point at Keycloak directly — always resolve via the facade that already proxies OIDC.
+    // Wire from the same setting consumers already configure for auth.
+    var facade = builder.Configuration["Identity:AccessContext:FacadeBaseUrl"]
+                 ?? builder.Configuration["PermissionRegistration:IdentityServer"]
+                 ?? builder.Configuration["Identity:Authority"];
+    o.FacadeBaseUrl = string.IsNullOrWhiteSpace(facade) ? null : facade.TrimEnd('/');
+});
 builder.Services.AddSingleton<OrderService>();
 
 // Discover [RequirePermission] attributes in this assembly and push the manifest to the
@@ -126,8 +134,11 @@ app.MapPost("/api/orders/{orderId}/refunds/approve", (string orderId, decimal am
 // Scoped-access demo: permission + scope are both required. Region comes from the persisted
 // OrderDto.Region; allowed regions come from iam_access via ICurrentAccessContext.
 // In a real DB-backed service this would be query.Where(o => allowed.Contains(o.Region)).
-app.MapGet("/api/orders/scoped", (Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc) =>
+// Oversized tokens omit iam_access — EnsureLoadedAsync lazily GETs /api/identity/access-context
+// from the facade (no-op when the claim was present).
+app.MapGet("/api/orders/scoped", async (Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc, CancellationToken ct) =>
 {
+    await access.EnsureLoadedAsync(ct);
     if (!access.HasPermission(SampleApp.OrderPermissions.ViewOrders))
         return Results.Forbid();
     var allowed = access.GetScopeValues("region");
@@ -138,8 +149,9 @@ app.MapGet("/api/orders/scoped", (Company.Identity.Authorization.ICurrentAccessC
     return Results.Ok(filtered);
 }).RequireAuthorization().WithTags("Orders").WithName("ListOrdersScoped");
 
-app.MapGet("/api/orders/{orderId}/scoped-check", (string orderId, string region, Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc) =>
+app.MapGet("/api/orders/{orderId}/scoped-check", async (string orderId, string region, Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc, CancellationToken ct) =>
 {
+    await access.EnsureLoadedAsync(ct);
     if (!access.HasPermission(SampleApp.OrderPermissions.ViewOrders, "region", region))
         return Results.Forbid();
     return Results.Ok(svc.ListOrders().FirstOrDefault(o => o.Id == orderId));
