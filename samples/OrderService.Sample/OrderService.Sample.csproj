@@ -5,6 +5,8 @@
     </PropertyGroup>
     <ItemGroup>
         <ProjectReference Include="../../src/Company.Identity.Abstractions/Company.Identity.Abstractions.csproj"/>
+        <ProjectReference Include="../../src/Identity.Application/Identity.Application.csproj"/>
+        <ProjectReference Include="../../src/Identity.Contracts/Identity.Contracts.csproj"/>
         <ProjectReference Include="../../src/Company.Identity.Authentication.AspNetCore/Company.Identity.Authentication.AspNetCore.csproj"/>
         <ProjectReference Include="../../src/Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj"/>
         <ProjectReference Include="../../src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj"/>

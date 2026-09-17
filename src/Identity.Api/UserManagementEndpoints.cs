@@ -1,6 +1,7 @@
 #pragma warning disable ASPDEPR002
 using Company.Identity.Abstractions;
 using Identity.Application;
+using Identity.Application.Scope;
 using Identity.Contracts;
 
 namespace Identity.Api;
@@ -11,6 +12,9 @@ public static class UserManagementEndpoints
     {
         var g = app.MapGroup("/api/identity/users").WithTags("Users");
 
+        static IResult ValidationError(ScopedValidationException ex)
+            => Results.ValidationProblem(ex.Errors, title: "One or more validation errors occurred.", statusCode: 400);
+
         g.MapPost("", async (CreateUserRequest req, ProvisioningOrchestrator orch, CancellationToken ct) =>
             {
                 if (string.IsNullOrWhiteSpace(req.Username))
@@ -20,6 +24,7 @@ public static class UserManagementEndpoints
                     var (user, _) = await orch.CreateUserWithAssignmentsAsync(req, ct);
                     return Results.Created($"/api/identity/users/{Uri.EscapeDataString(user.Id)}", user);
                 }
+                catch (ScopedValidationException ex) { return ValidationError(ex); }
                 catch (InvalidOperationException ex)
                 {
                     return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
@@ -57,6 +62,7 @@ public static class UserManagementEndpoints
                     var doc = await orch.ReplaceAssignmentsAsync(id, req.Assignments, ct);
                     return Results.Ok(new ScopedAccessResponse(id, doc.Assignments.ToArray()));
                 }
+                catch (ScopedValidationException ex) { return ValidationError(ex); }
                 catch (InvalidOperationException ex)
                 {
                     return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
@@ -76,6 +82,7 @@ public static class UserManagementEndpoints
                     var doc = await orch.AddScopedAssignmentAsync(id, req, ct);
                     return Results.Ok(new ScopedAccessResponse(id, doc.Assignments.ToArray()));
                 }
+                catch (ScopedValidationException ex) { return ValidationError(ex); }
                 catch (InvalidOperationException ex)
                 {
                     return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));

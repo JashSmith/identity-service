@@ -53,6 +53,7 @@ public sealed record CredentialRequest(
 
 public sealed record ScopedRoleAssignmentDto(
     string Role,
+    [property: System.Text.Json.Serialization.JsonConverter(typeof(ScopeDictionaryConverter))]
     IReadOnlyDictionary<string, IReadOnlyCollection<string>> Scopes);
 
 // ── Scoped-access management DTOs ──────────────────────────────────────────

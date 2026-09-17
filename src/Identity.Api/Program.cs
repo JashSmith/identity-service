@@ -63,9 +63,20 @@ builder.Services.AddSingleton<IPermissionRegistry>(sp => new KeycloakSyncingPerm
 builder.Services.AddSingleton<PermissionRegistrationService>();
 
 // Dynamic roles/scope infrastructure
+builder.Services.AddMemoryCache();
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ScopeDictionaryConverter()));
 builder.Services.Configure<Identity.Application.ScopedAccessOptions>(
     builder.Configuration.GetSection("Identity:ScopedAccess"));
 builder.Services.AddSingleton<Identity.Application.IScopedAccessSerializer, Identity.Application.ScopedAccessSerializer>();
+builder.Services.AddSingleton<Identity.Application.Scope.IScopeValueValidator, Identity.Application.Scope.DefaultScopeValueValidator>();
+builder.Services.AddSingleton<Identity.Application.Scope.IScopeValueValidatorRegistry, Identity.Application.Scope.ScopeValueValidatorRegistry>();
+builder.Services.AddSingleton<Identity.Application.Scope.ScopeAssignmentValidator>();
+builder.Services.AddScoped<Identity.Application.Scope.IScopeDefinitionLookup, Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>();
+builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>();
+builder.Services.AddScoped<Identity.Application.Scope.IResourceScopeResolver, Identity.Persistence.KeyManagement.EfResourceScopeResolver>();
+builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader, Identity.Persistence.KeyManagement.EfUserScopeStore>();
+builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter, Identity.Persistence.KeyManagement.EfUserScopeStore>();
+builder.Services.AddScoped<Identity.Application.Scope.IScopeCacheInvalidator>(sp => sp.GetRequiredService<Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakCompositeRoleStore>();
 builder.Services.AddSingleton<Identity.Application.IBusinessRoleStore>(sp =>
@@ -79,7 +90,15 @@ builder.Services.AddSingleton<Identity.Application.IUserProvisioningService>(sp 
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserRoleMapping>();
 builder.Services.AddSingleton<Identity.Application.IUserRoleMapping>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserRoleMapping>());
-builder.Services.AddScoped<Identity.Application.ProvisioningOrchestrator>();
+builder.Services.AddScoped<Identity.Application.ProvisioningOrchestrator>(sp =>
+    new Identity.Application.ProvisioningOrchestrator(
+        sp.GetRequiredService<Identity.Application.IUserProvisioningService>(),
+        sp.GetRequiredService<Identity.Application.IScopedAccessStore>(),
+        sp.GetRequiredService<Identity.Application.IBusinessRoleStore>(),
+        sp.GetRequiredService<Identity.Application.IUserRoleMapping>(),
+        sp.GetRequiredService<Identity.Application.IPermissionRegistry>(),
+        sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>(),
+        sp.GetRequiredService<Identity.Application.Scope.IUserScopeWriter>()));
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.FacadePermissionRegistrar>();
 
@@ -158,6 +177,7 @@ app.MapAuth();
 app.MapUsers();
 app.MapUserManagement();
 app.MapBusinessRoles();
+app.MapScopeAdmin();
 app.MapAccessContext();
 app.MapPermissions();
 app.MapAdminKeys();
@@ -181,6 +201,15 @@ try
     var mapper = scope2.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
     using var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
     await mapper.EnsureAsync(cts2.Token);
+}
+catch { /* best-effort */ }
+
+try
+{
+    using var scope3 = app.Services.CreateScope();
+    var db = scope3.ServiceProvider.GetRequiredService<Identity.Persistence.KeyManagement.KeyMetadataDbContext>();
+    using var cts3 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    await Identity.Persistence.KeyManagement.ScopeSeed.EnsureSeededAsync(db, cts3.Token);
 }
 catch { /* best-effort */ }
 

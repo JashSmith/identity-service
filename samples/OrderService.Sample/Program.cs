@@ -1,6 +1,7 @@
 using Company.Identity.Authentication.AspNetCore;
 using Company.Identity.Authorization.AspNetCore;
 using Company.Identity.PermissionRegistration;
+using Identity.Application.Scope;
 using Scalar.AspNetCore;
 using SampleApp;
 
@@ -9,10 +10,6 @@ var builder = WebApplication.CreateBuilder(args);
 var authority = builder.Configuration["Identity:Authority"] ?? "http://localhost:8080/realms/company";
 var audience = builder.Configuration["Identity:Audience"] ?? string.Empty;
 
-// Authority is the Identity Facade itself — the facade proxies OIDC discovery + JWKS and
-// rewrites jwks_uri to itself, so this service never learns where Keycloak is.
-// AcceptIssuerFromDiscovery validates the issuer claim from the proxied discovery document
-// (the genuine Keycloak issuer) instead of the facade URL.
 builder.Services.AddCompanyAuthentication(options =>
 {
     options.Authority = authority;
@@ -23,17 +20,25 @@ builder.Services.AddCompanyAuthentication(options =>
 builder.Services.AddCompanyAuthorization();
 builder.Services.AddCompanyAccessContext(o =>
 {
-    // Never point at Keycloak directly — always resolve via the facade that already proxies OIDC.
-    // Wire from the same setting consumers already configure for auth.
     var facade = builder.Configuration["Identity:AccessContext:FacadeBaseUrl"]
                  ?? builder.Configuration["PermissionRegistration:IdentityServer"]
                  ?? builder.Configuration["Identity:Authority"];
     o.FacadeBaseUrl = string.IsNullOrWhiteSpace(facade) ? null : facade.TrimEnd('/');
 });
+
+// DB-driven scope filter — safe, type-safe, deny-by-default.
+// IResourceScopeResolver is the DB mapping (in-memory mirror here); handlers are strongly-typed.
+builder.Services.AddSingleton<IResourceScopeResolver, SampleResourceScopeResolver>();
+builder.Services.AddSingleton<ScopeFilterService>(sp =>
+{
+    var svc = new ScopeFilterService(sp.GetRequiredService<IResourceScopeResolver>());
+    svc.Register(new RegionOrderFilter());
+    svc.Register(new BranchOrderFilter());
+    svc.Register(new TestKeyResourceAFilter());
+    return svc;
+});
 builder.Services.AddSingleton<OrderService>();
 
-// Discover [RequirePermission] attributes in this assembly and push the manifest to the
-// Identity Facade in the background. Registration failure never blocks startup.
 builder.Services.AddPermissionRegistration(o =>
 {
     o.IdentityServer = new Uri(builder.Configuration["PermissionRegistration:IdentityServer"] ??
@@ -46,8 +51,6 @@ builder.Services.AddPermissionRegistration(o =>
     o.MaximumRetries = 8;
 });
 
-// Scalar API reference + OpenAPI document — every guarded endpoint is listed with its
-// required permission and accepts a Bearer token from the facade login proxy.
 builder.Services.AddOpenApi("v1", o =>
 {
     o.AddDocumentTransformer((document, _, _) =>
@@ -94,8 +97,6 @@ if (app.Environment.IsDevelopment())
 
 app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
 
-// One endpoint per permission — the policy name IS the permission name, resolved dynamically
-// by PermissionPolicyProvider and enforced against the token's permission claims.
 app.MapGet("/api/orders", (OrderService svc) => Results.Ok(svc.ListOrders()))
     .RequireAuthorization(OrderPermissions.ViewOrders).WithTags("Orders");
 
@@ -131,21 +132,23 @@ app.MapPost("/api/orders/{orderId}/refunds/approve", (string orderId, decimal am
         Results.Ok(svc.ApproveRefund(orderId, amount)))
     .RequireAuthorization(OrderPermissions.ApproveRefunds).WithTags("Refunds");
 
-// Scoped-access demo: permission + scope are both required. Region comes from the persisted
-// OrderDto.Region; allowed regions come from iam_access via ICurrentAccessContext.
-// In a real DB-backed service this would be query.Where(o => allowed.Contains(o.Region)).
-// Oversized tokens omit iam_access — EnsureLoadedAsync lazily GETs /api/identity/access-context
-// from the facade (no-op when the claim was present).
-app.MapGet("/api/orders/scoped", async (Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc, CancellationToken ct) =>
+// DB-driven scoped demo: ScopeFilterService intersects caller's effective scopes with the
+// resource's allowed scopes (via IResourceScopeResolver), then applies only registered
+// IScopeFilterHandler<T> predicates. No raw SQL, no EF.Property on client-supplied names,
+// deny-by-default when mapping missing, OR within a scope / AND across scopes.
+app.MapGet("/api/orders/scoped", async (Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc, ScopeFilterService filter, CancellationToken ct) =>
 {
     await access.EnsureLoadedAsync(ct);
     if (!access.HasPermission(SampleApp.OrderPermissions.ViewOrders))
         return Results.Forbid();
-    var allowed = access.GetScopeValues("region");
-    // Empty scope set means no region grant — fail closed.
-    if (allowed.Count == 0) return Results.Forbid();
-    // EF-Core-friendly: materialize allowed set once, then Contains in the query.
-    var filtered = svc.ListOrdersFiltered(allowed);
+    var effective = access.GetAssignments()
+        .SelectMany(a => a.Scopes)
+        .GroupBy(kv => kv.Key, StringComparer.Ordinal)
+        .ToDictionary(g => g.Key, g => (IReadOnlyCollection<string>)g.SelectMany(v => v.Value).Distinct(StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+    var query = svc.ListOrders().AsQueryable();
+    query = await filter.ApplyAsync(query, effective, ResourceKeys.Orders, ct);
+    var filtered = query.ToArray();
+    if (filtered.Length == 0) return Results.Forbid();
     return Results.Ok(filtered);
 }).RequireAuthorization().WithTags("Orders").WithName("ListOrdersScoped");
 

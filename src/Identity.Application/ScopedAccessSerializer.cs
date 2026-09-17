@@ -18,9 +18,10 @@ public sealed class ScopedAccessSerializer : IScopedAccessSerializer
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = false,
+        Converters = { new ScopeDictionaryConverter() },
     };
 
-    private sealed record RawAssignment(string Role, Dictionary<string, string[]> Scopes);
+    private sealed record RawAssignment(string Role, Dictionary<string, IReadOnlyCollection<string>> Scopes);
 
     public string Serialize(ScopedAccessDocument document)
     {
@@ -92,7 +93,7 @@ public sealed class ScopedAccessSerializer : IScopedAccessSerializer
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyCollection<string>> NormalizeScopes(
-        Dictionary<string, string[]>? scopes)
+        Dictionary<string, IReadOnlyCollection<string>>? scopes)
     {
         if (scopes is null || scopes.Count == 0)
             return new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
