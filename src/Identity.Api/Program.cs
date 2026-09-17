@@ -49,16 +49,21 @@ builder.Services.AddSingleton<IUserDirectory>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
 builder.Services.AddSingleton<IRoleDirectory>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
-// Registered permissions are mirrored into Keycloak realm roles so they reach token claims
-// through the existing oidc-usermodel-realm-role-mapper. Mirroring is best-effort and never
-// blocks registration or startup.
+// Registered permissions are mirrored into Keycloak client roles per owning service client
+// so they reach token claims through the per-client oidc-usermodel-client-role-mapper.
+// Legacy realm-role path kept as fallback for tests / not-yet-migrated callers.
+// Mirroring is best-effort and never blocks registration or startup.
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakRoleProvisioner>();
 builder.Services.AddSingleton<IKeycloakRoleProvisioner>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakRoleProvisioner>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakClientRoleProvisioner>();
+builder.Services.AddSingleton<Identity.Application.IKeycloakClientRoleProvisioner>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakClientRoleProvisioner>());
 builder.Services.AddSingleton<InMemoryPermissionRegistry>();
 builder.Services.AddSingleton<IPermissionRegistry>(sp => new KeycloakSyncingPermissionRegistry(
     sp.GetRequiredService<InMemoryPermissionRegistry>(),
     sp.GetRequiredService<IKeycloakRoleProvisioner>(),
+    sp.GetRequiredService<Identity.Application.IKeycloakClientRoleProvisioner>(),
     sp.GetRequiredService<ILogger<KeycloakSyncingPermissionRegistry>>()));
 builder.Services.AddSingleton<PermissionRegistrationService>();
 
@@ -71,12 +76,18 @@ builder.Services.AddSingleton<Identity.Application.IScopedAccessSerializer, Iden
 builder.Services.AddSingleton<Identity.Application.Scope.IScopeValueValidator, Identity.Application.Scope.DefaultScopeValueValidator>();
 builder.Services.AddSingleton<Identity.Application.Scope.IScopeValueValidatorRegistry, Identity.Application.Scope.ScopeValueValidatorRegistry>();
 builder.Services.AddSingleton<Identity.Application.Scope.ScopeAssignmentValidator>();
-builder.Services.AddScoped<Identity.Application.Scope.IScopeDefinitionLookup, Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>();
+// Primary (Keycloak) scope registry — backed by the dedicated Group iam-scope-registry + authz.* attributes.
+// EF fallbacks kept as secondary registrations (tests / migration window) but not the default resolution.
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>();
+builder.Services.AddScoped<Identity.Application.Scope.IScopeDefinitionLookup>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IResourceScopeResolver>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IScopeCacheInvalidator>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
 builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>();
-builder.Services.AddScoped<Identity.Application.Scope.IResourceScopeResolver, Identity.Persistence.KeyManagement.EfResourceScopeResolver>();
-builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader, Identity.Persistence.KeyManagement.EfUserScopeStore>();
-builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter, Identity.Persistence.KeyManagement.EfUserScopeStore>();
-builder.Services.AddScoped<Identity.Application.Scope.IScopeCacheInvalidator>(sp => sp.GetRequiredService<Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>());
+builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfResourceScopeResolver>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>();
+builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
+builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfUserScopeStore>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakCompositeRoleStore>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>();

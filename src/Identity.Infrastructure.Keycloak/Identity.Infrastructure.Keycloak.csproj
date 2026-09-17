@@ -14,5 +14,6 @@
         <PackageReference Include="Polly.Core"/>
         <PackageReference Include="Polly.Extensions"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory"/>
     </ItemGroup>
 </Project>
