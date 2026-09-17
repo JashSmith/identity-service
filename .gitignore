@@ -489,3 +489,5 @@ identity-design-time.db
 identity.db
 identity-data-protection-keys/
 identity-signing-keys.json
+
+.claude-sync/conflicts/
