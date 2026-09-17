@@ -1267,6 +1267,243 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Create user with scalar scope (normalization demo)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"bob\",\n  \"email\": \"bob@example.com\",\n  \"enabled\": true,\n  \"credentials\": { \"password\": \"Secret123!\", \"temporary\": false },\n  \"assignments\": [{ \"role\": \"RegionalManager\", \"scopes\": { \"test-key\": \"items-1\" } }]\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Scopes (registry, DB-driven)",
+      "item": [
+        {
+          "name": "List scopes",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/scopes",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "scopes"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get scope",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/scopes/region",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "scopes",
+                "region"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get scope resources",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/scopes/region/resources",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "scopes",
+                "region",
+                "resources"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List resources",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/scopes/resources/list",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "scopes",
+                "resources",
+                "list"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create scope",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"cost-center\",\n  \"displayName\": \"Cost Center\",\n  \"description\": \"Finance cost center\"\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/scopes",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "scopes"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update scope (disable)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": false\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/scopes/cost-center",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "scopes",
+                "cost-center"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     }

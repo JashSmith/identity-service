@@ -169,7 +169,7 @@ Use a version-pinned realm and import/configuration reviewed as code.
 - One client per microservice where practical, such as `order-service`.
 - Permissions are stable realm role names: `Orders.Read`, `Orders.Create`, `Orders.Update`, and `Orders.Cancel`. The realm's `permissions-mapper` client scope maps realm roles into the `permissions`/`permission` token claims.
 - Business roles are realm roles with composites that include the appropriate permission roles, for example `OrderManager` includes `Orders.Cancel`.
-- Scoped assignments are stored as a single Keycloak user attribute `iam.scoped_access` (JSON array of `{role, scopes}`) and surfaced as the `iam_access` JWT claim via an `oidc-usermodel-attribute-mapper` (`iam-access`). Large payloads fall back to `GET /api/identity/access-context`.
+- Scoped assignments are **DB-driven and normalized** (tables `ScopeDefinition`, `ApplicationResource`, `ScopeResourceMapping`, `RoleAllowedScope`, `UserRoleAssignment`, `AssignmentScope`, `AssignmentScopeValue` in the facade metadata DB, same provider as key-metadata). The facade's `GET /api/identity/access-context` is authoritative; the legacy Keycloak user attribute `iam.scoped_access` → `iam_access` claim mapper is kept only as a migration fallback and is dual-written during the transition. Large payloads still fall back to `GET /api/identity/access-context` via `ICurrentAccessContext.EnsureLoadedAsync`.
 - Configure audience and role mappers so tokens contain only the roles needed by the target services. Do not place unbounded profile data or an unnecessarily large permission list in tokens.
 - The facade has a confidential service account with only the Admin REST permissions required for directory queries and constrained role/client management.
 - Each registering microservice has a distinct client credential or mTLS identity. It can manage only its own client and permission namespace.
@@ -211,6 +211,13 @@ POST   /api/identity/users/{id}/scoped-assignments
 PUT    /api/identity/users/{id}/scoped-assignments/{role}
 DELETE /api/identity/users/{id}/scoped-assignments/{role}
 GET    /api/identity/access-context
+# Scope registry (DB-driven) + admin
+GET    /api/identity/scopes
+GET    /api/identity/scopes/{key}
+GET    /api/identity/scopes/{key}/resources
+GET    /api/identity/scopes/resources/list
+POST   /api/identity/scopes
+PUT    /api/identity/scopes/{key}
 ```
 
 `POST /api/identity/permissions/register` requires the `Identity.Permissions.Register` permission. The facade derives the authenticated service ID from the validated credential (`client_id`/`azp` claim), compares it to `manifest.serviceId`, and records the manifest. Administrative user/role APIs require separate administrator permissions (`Identity.Users.Read`, `Identity.Roles.Read`, `Identity.Keys.*`) and are not exposed to ordinary service clients. The full REST surface is browsable and callable in Scalar at `/scalar` (Development) or via `/openapi/v1.json`.

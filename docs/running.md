@@ -136,7 +136,7 @@ curl -s -X POST http://localhost:5080/api/identity/users \
 curl -s http://localhost:5080/api/identity/access-context -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 ```
 
-Consumer services read scopes via `ICurrentAccessContext.GetScopeValues("region")` / `HasPermission(..., "region", value)` — see `samples/OrderService.Sample/Program.cs` (`/api/orders/scoped`, `/api/orders/{id}/scoped-check`). `EnsureLoadedAsync()` resolves via the facade when `iam_access` was omitted for size.
+Consumer services read scopes via `ICurrentAccessContext.GetScopeValues("region")` / `HasPermission(..., "region", value)` — see `samples/OrderService.Sample/Program.cs` (`/api/orders/scoped`, `/api/orders/{id}/scoped-check`). `EnsureLoadedAsync()` resolves via the facade when `iam_access` was omitted for size. The DB-driven scope system accepts both `"test-key": "items-1"` (scalar, normalized) and `"test-key": ["items-1"]`; unknown/inactive/disallowed scopes return `400 ValidationProblem` with `assignments[0].scopes.<key>` errors. Manage the registry at `GET/POST /api/identity/scopes` (Scalar: Scopes tag); filtering in consumers uses `ScopeFilterService.ApplyAsync` (see `samples/OrderService.Sample/ScopeFilters.cs`) — deny-by-default, no raw SQL.
 
 ## 8. What lives where (config ownership)
 

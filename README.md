@@ -109,7 +109,11 @@ Keycloak signs JWTs with RSA keys. Vault is the source of truth through release-
 
 ## Business roles & scoped access
 
-Business roles are Keycloak composite realm roles. Scoped assignments (`{role, scopes: {region:[...], branch:[...]}}`) live in the single user attribute `iam.scoped_access` and are exposed as the `iam_access` claim (mapper `iam-access`). Consumers use `Company.Identity.Authorization.ICurrentAccessContext` (`GetScopeValues`/`HasPermission(scopeKey,scopeValue)` + `EnsureLoadedAsync()` facade fallback) — see `samples/OrderService.Sample` (`/api/orders/scoped`).
+Business roles are Keycloak composite realm roles. Scoped assignments (`{role, scopes: {region:[...], branch:[...]}}`) are **DB-driven, normalized and validated** (`ScopeDefinition`, `ApplicationResource`, `ScopeResourceMapping`, `RoleAllowedScope`, `UserRoleAssignment` tables in the facade metadata DB). The scalar `"test-key": "items-1"` form is normalized to `["items-1"]` via `ScopeDictionaryConverter`; unknown/inactive/disallowed scopes return field-level `400 ValidationProblem` (`assignments[0].scopes.test-key`). Facade `GET /api/identity/access-context` is authoritative (dual-written to the legacy `iam.scoped_access` → `iam_access` mapper during migration). Scope registry is managed at `GET/POST /api/identity/scopes` and filtered safely in consumers via `ScopeFilterService.ApplyAsync(query, effectiveScopes, ResourceKeys.Orders)` — deny-by-default, parameterized `Contains`/`IN`, no `EF.Property` on client-supplied names. See `samples/OrderService.Sample` (`ScopeFilters.cs`, `/api/orders/scoped`).
+
+### Adding a new scope (5 steps, no DTO change)
+
+1. Seed `ScopeDefinition { Key = "cost-center" }` (or `POST /api/identity/scopes`). 2. Insert `ScopeResourceMapping(cost-center → Orders)`. 3. Optionally `RoleAllowedScope(role, cost-center)`. 4. Optionally register `IScopeValueValidator { ScopeKey = "cost-center" }`. 5. Register `IScopeFilterHandler<OrderDto> { ScopeKey = "cost-center", ResourceKey = ResourceKeys.Orders }` — unknown keys are rejected until step 1.
 
 ## Build and test
 
