@@ -132,11 +132,26 @@ curl -s -X POST http://localhost:5080/api/identity/users \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"username":"alice","email":"alice@example.com","enabled":true,"credentials":{"password":"Secret123!","temporary":false},"assignments":[{"role":"RegionalManager","scopes":{"region":["tehran-1"]}}]}' | python3 -m json.tool
 
-# Read back scoped access or use the token claim iam_access / fallback
+# Read back effective authorization (authoritative) — also available as flat JWT claims authz.scope.<key>
 curl -s http://localhost:5080/api/identity/access-context -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+# Inspect the token itself (flat per-scope claims, plus legacy iam_access kept during migration)
+echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool | grep -E "authz\.scope|iam_access|permissions"
+
+# Add a new scope value without touching DTOs — arbitrary keys via the registry (backed by Keycloak group /iam-scope-registry)
+curl -s http://localhost:5080/api/identity/scopes -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+# Assign test-key to a user: both scalar and array forms normalize ("test-key": "items-1"  ==  "test-key": ["items-1"])
+curl -s -X PUT http://localhost:5080/api/identity/users/<userId>/scoped-access \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"assignments":[{"role":"RegionalManager","scopes":{"test-key":"items-1"}}]}' | python3 -m json.tool
+# Re-login (or refresh) — new JWT now carries "authz.scope.test-key": ["items-1"] via the authz-scopes clientScope
+
+# New service permission appears on Admin without re-login / without Keycloak console:
+# after the service registers its manifest, reconcile any missing mappings:
+curl -s -X POST http://localhost:5080/api/identity/permissions/reconcile-admin -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+# then POST /api/identity/auth/refresh with the refresh_token — new access token already has the permission
 ```
 
-Consumer services read scopes via `ICurrentAccessContext.GetScopeValues("region")` / `HasPermission(..., "region", value)` — see `samples/OrderService.Sample/Program.cs` (`/api/orders/scoped`, `/api/orders/{id}/scoped-check`). `EnsureLoadedAsync()` resolves via the facade when `iam_access` was omitted for size. The DB-driven scope system accepts both `"test-key": "items-1"` (scalar, normalized) and `"test-key": ["items-1"]`; unknown/inactive/disallowed scopes return `400 ValidationProblem` with `assignments[0].scopes.<key>` errors. Manage the registry at `GET/POST /api/identity/scopes` (Scalar: Scopes tag); filtering in consumers uses `ScopeFilterService.ApplyAsync` (see `samples/OrderService.Sample/ScopeFilters.cs`) — deny-by-default, no raw SQL.
+Consumer services read scopes via `ICurrentAccessContext.GetScopeValues("region")` / `HasPermission(..., "region", value)` — see `samples/OrderService.Sample/Program.cs` (`/api/orders/scoped`, `/api/orders/{id}/scoped-check`). `EnsureLoadedAsync()` resolves via the facade when the claim was omitted for size. The scope system is **Keycloak-attribute-driven** (`authz.scope.<key>` multivalued on user/group + registry group `/iam-scope-registry` holding `scope.<key>`/`resource.<name>`); it accepts both `"test-key": "items-1"` (scalar, normalized by `ScopeDictionaryConverter`) and `"test-key": ["items-1"]`; unknown/inactive/disallowed scopes return `400 ValidationProblem` with `assignments[0].scopes.<key>` errors. Filtering in consumers uses `ScopeFilterService.ApplyAsync` (see `samples/OrderService.Sample/ScopeFilters.cs`) — deny-by-default, per-`IScopeFilterHandler` (no raw SQL), resource isolation enforced (e.g. `test-key` only on `ResourceA`). The declarative User Profile hardens `authz.scope.*` to `admin`-only (`PUT /admin/realms/{realm}/users/profile`).
 
 ## 8. What lives where (config ownership)
 

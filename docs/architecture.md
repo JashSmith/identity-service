@@ -167,9 +167,9 @@ There is no second `Users`, `PasswordCredentials`, `Sessions`, `RefreshTokens`, 
 Use a version-pinned realm and import/configuration reviewed as code.
 
 - One client per microservice where practical, such as `order-service`.
-- Permissions are stable realm role names: `Orders.Read`, `Orders.Create`, `Orders.Update`, and `Orders.Cancel`. The realm's `permissions-mapper` client scope maps realm roles into the `permissions`/`permission` token claims.
-- Business roles are realm roles with composites that include the appropriate permission roles, for example `OrderManager` includes `Orders.Cancel`.
-- Scoped assignments are **DB-driven and normalized** (tables `ScopeDefinition`, `ApplicationResource`, `ScopeResourceMapping`, `RoleAllowedScope`, `UserRoleAssignment`, `AssignmentScope`, `AssignmentScopeValue` in the facade metadata DB, same provider as key-metadata). The facade's `GET /api/identity/access-context` is authoritative; the legacy Keycloak user attribute `iam.scoped_access` → `iam_access` claim mapper is kept only as a migration fallback and is dual-written during the transition. Large payloads still fall back to `GET /api/identity/access-context` via `ICurrentAccessContext.EnsureLoadedAsync`.
+- Permissions are **per-service client roles** (e.g. client `order-service` owns `Orders.Read`, `Orders.Create`, `Orders.Update`, `Orders.Cancel`). Each service client carries an `oidc-usermodel-client-role-mapper` with `claim.name=permissions` / `claim.name=permission` so Keycloak aggregates all client roles into the `permissions`/`permission` claims. No realm roles are used for application permissions.
+- Business roles are **Keycloak Groups** (e.g. `/Admin`, `/Manager`, `/RegionalManager`). The facade's `IBusinessRoleStore` is `KeycloakGroupBusinessRoleStore` — CRUD via `POST/GET /admin/realms/{realm}/groups`, members via `/groups/{id}/members`, membership via `PUT /admin/realms/{realm}/users/{id}/groups/{groupId}`. The special groups `/iam-scope-registry` (scope/resource registry, see below) and `/key-admins` (Admin group receiving every newly registered permission) are excluded from business-role listings.
+- Scoped assignments are **Keycloak-attribute-driven, no Oracle authorization tables** (Oracle `identity-meta-db` retains only signing-key/Vault metadata). Each scope value is a multivalued user/group attribute `authz.scope.<key>` (one entry per value) plus a dedicated config group `/iam-scope-registry` whose attributes hold `scope.<key>={displayName,description,isActive,valueType}` and `resource.<name>=[scopes]` (resource-to-scope map) and whose business-role groups hold `authz.allowed-scopes`. Effective scopes are the union `Group ∪ User` per key, merged server-side and enforced at write. Tokens carry flat claims `authz.scope.<key>` via the `authz-scopes` clientScope (one `oidc-usermodel-attribute-mapper` per scope, `multivalued+aggregate.attrs`). The declarative User Profile is hardened so `authz.scope.*` / `iam.scoped_access` are `admin`-only (`view:["admin"], edit:["admin"]`). The legacy claim `iam_access` (from attribute `iam.scoped_access`) is dual-written for one migration window but is not the source of truth; `GET /api/identity/access-context` remains authoritative and large payloads fall back to it via `ICurrentAccessContext.EnsureLoadedAsync`. Already-issued JWTs do not mutate — freshness is via short-lived access tokens (300 s for `identity-facade`) + refresh-token rotation.
 - Configure audience and role mappers so tokens contain only the roles needed by the target services. Do not place unbounded profile data or an unnecessarily large permission list in tokens.
 - The facade has a confidential service account with only the Admin REST permissions required for directory queries and constrained role/client management.
 - Each registering microservice has a distinct client credential or mTLS identity. It can manage only its own client and permission namespace.
@@ -193,6 +193,7 @@ GET  /api/identity/permissions?serviceId=&includeDeprecated=
 GET  /api/identity/users/{id}/roles
 GET  /api/identity/users/{id}/permissions
 POST /api/identity/permissions/register
+POST /api/identity/permissions/reconcile-admin
 POST /api/identity/external/organization-token
 # Business roles (composite realm roles) + scoped access
 GET    /api/identity/business-roles
@@ -255,8 +256,8 @@ The identity facade:
 1. authenticates the service;
 2. validates service ID, namespace, count/length limits, manifest version, and hash;
 3. inserts or updates the permission catalog idempotently;
-4. creates/gets each permission as a Keycloak **realm role** (best-effort, conflict-aware — an already-existing role is success, and a Keycloak outage never fails the response); the realm's `oidc-usermodel-realm-role-mapper` then surfaces the role in the `permissions`/`permission` token claims;
-5. marks permissions missing from a newer accepted manifest as deprecated, never deletes them automatically — and never removes the Keycloak role;
+4. ensures the service's **Keycloak client** exists and creates/gets each permission as a **client role** of that client (best-effort, conflict-aware — `GET /admin/realms/{realm}/clients/{uuid}/roles/{name}` then `POST` if missing; already-existing is success, and a Keycloak outage never fails the response); ensures an `oidc-usermodel-client-role-mapper` on the client (`claim.name=permissions`/`permission`) so Keycloak aggregates client roles into the token claims; namespace enforcement rejects cross-service prefixes (`Identity.*` only for `identity-facade`, `Orders.*` only for `order-service`) with `400`; new client roles are auto-mapped to the `/key-admins` group via `POST /admin/realms/{realm}/groups/{adminGroupId}/role-mappings/clients/{uuid}` so admins see them after refresh without re-login or manual Admin Console work;
+5. marks permissions missing from a newer accepted manifest as deprecated **locally**, never deletes them automatically — and **never deletes the Keycloak client role** when it vanishes from the manifest (soft-deprecate only);
 6. invalidates L1/L2 catalogs and increments authorization version;
 7. records audit data without raw tokens or secrets.
 

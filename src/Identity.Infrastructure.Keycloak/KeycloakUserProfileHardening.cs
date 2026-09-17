@@ -129,6 +129,18 @@ public sealed class KeycloakUserProfileHardening(
             w.WritePropertyName("view"); w.WriteStartArray(); w.WriteStringValue("admin"); w.WriteEndArray();
             w.WritePropertyName("edit"); w.WriteStartArray(); w.WriteStringValue("admin"); w.WriteEndArray();
             w.WriteEndObject();
+            w.WritePropertyName("validations"); w.WriteStartObject(); w.WriteEndObject();
+            w.WritePropertyName("annotations"); w.WriteStartObject(); w.WriteEndObject();
+            w.WriteEndObject();
+            w.WriteStartObject();
+            w.WriteString("name", "iam.scoped_access");
+            w.WritePropertyName("permissions"); w.WriteStartObject();
+            w.WritePropertyName("view"); w.WriteStartArray(); w.WriteStringValue("admin"); w.WriteEndArray();
+            w.WritePropertyName("edit"); w.WriteStartArray(); w.WriteStringValue("admin"); w.WriteEndArray();
+            w.WriteEndObject();
+            w.WritePropertyName("validations"); w.WriteStartObject(); w.WriteEndObject();
+            w.WritePropertyName("annotations"); w.WriteStartObject(); w.WriteEndObject();
+            w.WriteEndObject();
             w.WriteEndArray();
         }
         w.WriteEndObject();
