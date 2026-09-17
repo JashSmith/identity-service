@@ -79,7 +79,7 @@ builder.Services.AddSingleton<Identity.Application.Scope.ScopeAssignmentValidato
 // Primary (Keycloak) scope registry — backed by the dedicated Group iam-scope-registry + authz.* attributes.
 // EF fallbacks kept as secondary registrations (tests / migration window) but not the default resolution.
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>();
-builder.Services.AddScoped<Identity.Application.Scope.IScopeDefinitionLookup>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddSingleton<Identity.Application.Scope.IScopeDefinitionLookup>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
 builder.Services.AddScoped<Identity.Application.Scope.IResourceScopeResolver>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
 builder.Services.AddScoped<Identity.Application.Scope.IScopeCacheInvalidator>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
 builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>();
