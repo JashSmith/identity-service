@@ -1,713 +1,1274 @@
 {
-	"info": {
-		"_postman_id": "2daaee9f-2c58-46a9-989c-3748c76838c2",
-		"name": "Identity service",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "36863525"
-	},
-	"item": [
-		{
-			"name": "Admin",
-			"item": []
-		},
-		{
-			"name": "Services",
-			"item": []
-		},
-		{
-			"name": "Auth",
-			"item": [
-				{
-					"name": "well-known",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{BaseUrl}}.well-known/openid-configuration",
-							"host": [
-								"{{BaseUrl}}",
-								"well-known"
-							],
-							"path": [
-								"openid-configuration"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "jwks",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/oidc/jwks",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"oidc",
-								"jwks"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Login",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Helper function to check if a value is valid",
-									"function isValid(value) {",
-									"    return value !== null && value !== undefined && value !== \"\";",
-									"}",
-									"",
-									"// 1. Parse the JSON response body",
-									"let responseData = pm.response.json();",
-									"",
-									"",
-									"// 2. (Optional) Write tests to verify the tokens were actually returned",
-									"pm.test(\"Access token is present in response\", function () {",
-									"    pm.expect(responseData.access_token).to.not.be.empty;",
-									"});",
-									"",
-									"pm.test(\"Refresh token is present in response\", function () {",
-									"    pm.expect(responseData.refresh_token).to.not.be.empty;",
-									"});",
-									"",
-									"// 3. Set the variables to the current Postman environment",
-									"// 1. Check and set Access Token",
-									"if (isValid(responseData.access_token)) {",
-									"    pm.environment.set(\"access_token\", responseData.access_token);",
-									"    console.log(\"Success: access_token set in environment.\");",
-									"} else {",
-									"    console.error(\"Error: access_token is missing or null in the response!\");",
-									"}",
-									"",
-									"// 2. Check and set Refresh Token",
-									"if (isValid(responseData.refresh_token)) {",
-									"    pm.environment.set(\"refresh_token\", responseData.refresh_token);",
-									"    console.log(\"Success: refresh_token set in environment.\");",
-									"} else {",
-									"    console.error(\"Error: refresh_token is missing or null in the response!\");",
-									"}",
-									"",
-									"// 3. Check and set Token Type",
-									"if (isValid(responseData.token_type)) {",
-									"    pm.environment.set(\"token_type\", responseData.token_type);",
-									"    console.log(\"Success: token_type set in environment.\");",
-									"} else {",
-									"    console.error(\"Error: token_type is missing or null in the response!\");",
-									"}",
-									"",
-									"// 4. (Optional but recommended) Calculate and save the expiration time",
-									"// This is useful if you want to write pre-request scripts to automatically refresh the token when it expires",
-									"if (isValid(responseData.expires_in)) {",
-									"    let expiresIn = responseData.expires_in; // 300 seconds",
-									"    let expiryTimestamp = Math.floor(Date.now() / 1000) + expiresIn;",
-									"    pm.environment.set(\"access_token_expiry\", expiryTimestamp);",
-									"}"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "urlencoded",
-							"urlencoded": [
-								{
-									"key": "username",
-									"value": "{{admin-username}}",
-									"type": "text"
-								},
-								{
-									"key": "password",
-									"value": "{{admin-password}}",
-									"type": "text"
-								},
-								{
-									"key": "grant_type",
-									"value": "{{login-grant-type}}",
-									"type": "text"
-								},
-								{
-									"key": "client_id",
-									"value": "{{client_id}}",
-									"type": "text"
-								},
-								{
-									"key": "client_secret",
-									"value": "{{client_secret}}",
-									"type": "text"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/auth/login",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"auth",
-								"login"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Refresh-Token",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Helper function to check if a value is valid",
-									"function isValid(value) {",
-									"    return value !== null && value !== undefined && value !== \"\";",
-									"}",
-									"",
-									"// 1. Parse the JSON response body",
-									"let responseData = pm.response.json();",
-									"",
-									"",
-									"// 2. (Optional) Write tests to verify the tokens were actually returned",
-									"pm.test(\"Access token is present in response\", function () {",
-									"    pm.expect(responseData.access_token).to.not.be.empty;",
-									"});",
-									"",
-									"pm.test(\"Refresh token is present in response\", function () {",
-									"    pm.expect(responseData.refresh_token).to.not.be.empty;",
-									"});",
-									"",
-									"// 3. Set the variables to the current Postman environment",
-									"// 1. Check and set Access Token",
-									"if (isValid(responseData.access_token)) {",
-									"    pm.environment.set(\"access_token\", responseData.access_token);",
-									"    console.log(\"Success: access_token set in environment.\");",
-									"} else {",
-									"    console.error(\"Error: access_token is missing or null in the response!\");",
-									"}",
-									"",
-									"// 2. Check and set Refresh Token",
-									"if (isValid(responseData.refresh_token)) {",
-									"    pm.environment.set(\"refresh_token\", responseData.refresh_token);",
-									"    console.log(\"Success: refresh_token set in environment.\");",
-									"} else {",
-									"    console.error(\"Error: refresh_token is missing or null in the response!\");",
-									"}",
-									"",
-									"// 3. Check and set Token Type",
-									"if (isValid(responseData.token_type)) {",
-									"    pm.environment.set(\"token_type\", responseData.token_type);",
-									"    console.log(\"Success: token_type set in environment.\");",
-									"} else {",
-									"    console.error(\"Error: token_type is missing or null in the response!\");",
-									"}",
-									"",
-									"// 4. (Optional but recommended) Calculate and save the expiration time",
-									"// This is useful if you want to write pre-request scripts to automatically refresh the token when it expires",
-									"if (isValid(responseData.expires_in)) {",
-									"    let expiresIn = responseData.expires_in; // 300 seconds",
-									"    let expiryTimestamp = Math.floor(Date.now() / 1000) + expiresIn;",
-									"    pm.environment.set(\"access_token_expiry\", expiryTimestamp);",
-									"}"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "{{token_type}} {{refresh_token}}",
-								"type": "text"
-							}
-						],
-						"body": {
-							"mode": "urlencoded",
-							"urlencoded": [
-								{
-									"key": "client_id",
-									"value": "{{client_id}}",
-									"type": "text"
-								},
-								{
-									"key": "client_secret",
-									"value": "{{client_secret}}",
-									"type": "text"
-								},
-								{
-									"key": "refresh_token",
-									"value": "{{refresh_token}}",
-									"type": "text"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/auth/refresh",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"auth",
-								"refresh"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Introspect",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Helper function to check if a value is valid",
-									"function isValid(value) {",
-									"    return value !== null && value !== undefined && value !== \"\";",
-									"}",
-									"",
-									"// 1. Parse the JSON response body",
-									"let responseData = pm.response.json();",
-									"",
-									"",
-									"// 2. (Optional) Write tests to verify the tokens were actually returned",
-									"pm.test(\"Access token is present in response\", function () {",
-									"    pm.expect(responseData.access_token).to.not.be.empty;",
-									"});",
-									"",
-									"pm.test(\"Refresh token is present in response\", function () {",
-									"    pm.expect(responseData.refresh_token).to.not.be.empty;",
-									"});",
-									"",
-									"// 3. Set the variables to the current Postman environment",
-									"// 1. Check and set Access Token",
-									"if (isValid(responseData.access_token)) {",
-									"    pm.environment.set(\"access_token\", responseData.access_token);",
-									"    console.log(\"Success: access_token set in environment.\");",
-									"} else {",
-									"    console.error(\"Error: access_token is missing or null in the response!\");",
-									"}",
-									"",
-									"// 2. Check and set Refresh Token",
-									"if (isValid(responseData.refresh_token)) {",
-									"    pm.environment.set(\"refresh_token\", responseData.refresh_token);",
-									"    console.log(\"Success: refresh_token set in environment.\");",
-									"} else {",
-									"    console.error(\"Error: refresh_token is missing or null in the response!\");",
-									"}",
-									"",
-									"// 3. Check and set Token Type",
-									"if (isValid(responseData.token_type)) {",
-									"    pm.environment.set(\"token_type\", responseData.token_type);",
-									"    console.log(\"Success: token_type set in environment.\");",
-									"} else {",
-									"    console.error(\"Error: token_type is missing or null in the response!\");",
-									"}",
-									"",
-									"// 4. (Optional but recommended) Calculate and save the expiration time",
-									"// This is useful if you want to write pre-request scripts to automatically refresh the token when it expires",
-									"if (isValid(responseData.expires_in)) {",
-									"    let expiresIn = responseData.expires_in; // 300 seconds",
-									"    let expiryTimestamp = Math.floor(Date.now() / 1000) + expiresIn;",
-									"    pm.environment.set(\"access_token_expiry\", expiryTimestamp);",
-									"}"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "{{token_type}} {{refresh_token}}",
-								"type": "text"
-							}
-						],
-						"body": {
-							"mode": "urlencoded",
-							"urlencoded": [
-								{
-									"key": "client_id",
-									"value": "{{client_id}}",
-									"type": "text"
-								},
-								{
-									"key": "client_secret",
-									"value": "{{client_secret}}",
-									"type": "text"
-								},
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "text"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/auth/introspect",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"auth",
-								"introspect"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Logout",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.environment.set(\"access_token\", null);",
-									"pm.environment.set(\"refresh_token\", null);",
-									"pm.environment.set(\"token_type\", null);",
-									"pm.environment.set(\"access_token_expiry\", null);",
-									""
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "{{token_type}} {{refresh_token}}",
-								"type": "text"
-							}
-						],
-						"body": {
-							"mode": "urlencoded",
-							"urlencoded": [
-								{
-									"key": "client_id",
-									"value": "{{client_id}}",
-									"type": "text"
-								},
-								{
-									"key": "client_secret",
-									"value": "{{client_secret}}",
-									"type": "text"
-								},
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "text"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/auth/logout",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"auth",
-								"logout"
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Users",
-			"item": [
-				{
-					"name": "Me",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/me",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"me"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "List",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/users?search=admin&page=1&pageSize=20",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"users"
-							],
-							"query": [
-								{
-									"key": "search",
-									"value": "admin"
-								},
-								{
-									"key": "page",
-									"value": "1"
-								},
-								{
-									"key": "pageSize",
-									"value": "20"
-								}
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Specific user",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"users",
-								"{{login_user_id}}"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Roles",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/roles?page=1&pageSize=200",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"roles"
-							],
-							"query": [
-								{
-									"key": "clientId",
-									"value": "{{client_id}}",
-									"disabled": true
-								},
-								{
-									"key": "page",
-									"value": "1"
-								},
-								{
-									"key": "pageSize",
-									"value": "200"
-								}
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "User Roles",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/roles",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"users",
-								"{{login_user_id}}",
-								"roles"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Permissions",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/permissions?includeDeprecated=false",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"permissions"
-							],
-							"query": [
-								{
-									"key": "serviceId",
-									"value": "order-service",
-									"disabled": true
-								},
-								{
-									"key": "includeDeprecated",
-									"value": "false"
-								}
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "User Permissions",
-					"request": {
-						"auth": {
-							"type": "bearer",
-							"bearer": [
-								{
-									"key": "token",
-									"value": "{{access_token}}",
-									"type": "string"
-								}
-							]
-						},
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/permissions",
-							"host": [
-								"{{BaseUrl}}api"
-							],
-							"path": [
-								"identity",
-								"users",
-								"{{login_user_id}}",
-								"permissions"
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		}
-	]
+  "info": {
+    "_postman_id": "2daaee9f-2c58-46a9-989c-3748c76838c2",
+    "name": "Identity service",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "36863525"
+  },
+  "item": [
+    {
+      "name": "Admin",
+      "item": []
+    },
+    {
+      "name": "Services",
+      "item": []
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "well-known",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}.well-known/openid-configuration",
+              "host": [
+                "{{BaseUrl}}",
+                "well-known"
+              ],
+              "path": [
+                "openid-configuration"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "jwks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/oidc/jwks",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "oidc",
+                "jwks"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Helper function to check if a value is valid",
+                  "function isValid(value) {",
+                  "    return value !== null && value !== undefined && value !== \"\";",
+                  "}",
+                  "",
+                  "// 1. Parse the JSON response body",
+                  "let responseData = pm.response.json();",
+                  "",
+                  "",
+                  "// 2. (Optional) Write tests to verify the tokens were actually returned",
+                  "pm.test(\"Access token is present in response\", function () {",
+                  "    pm.expect(responseData.access_token).to.not.be.empty;",
+                  "});",
+                  "",
+                  "pm.test(\"Refresh token is present in response\", function () {",
+                  "    pm.expect(responseData.refresh_token).to.not.be.empty;",
+                  "});",
+                  "",
+                  "// 3. Set the variables to the current Postman environment",
+                  "// 1. Check and set Access Token",
+                  "if (isValid(responseData.access_token)) {",
+                  "    pm.environment.set(\"access_token\", responseData.access_token);",
+                  "    console.log(\"Success: access_token set in environment.\");",
+                  "} else {",
+                  "    console.error(\"Error: access_token is missing or null in the response!\");",
+                  "}",
+                  "",
+                  "// 2. Check and set Refresh Token",
+                  "if (isValid(responseData.refresh_token)) {",
+                  "    pm.environment.set(\"refresh_token\", responseData.refresh_token);",
+                  "    console.log(\"Success: refresh_token set in environment.\");",
+                  "} else {",
+                  "    console.error(\"Error: refresh_token is missing or null in the response!\");",
+                  "}",
+                  "",
+                  "// 3. Check and set Token Type",
+                  "if (isValid(responseData.token_type)) {",
+                  "    pm.environment.set(\"token_type\", responseData.token_type);",
+                  "    console.log(\"Success: token_type set in environment.\");",
+                  "} else {",
+                  "    console.error(\"Error: token_type is missing or null in the response!\");",
+                  "}",
+                  "",
+                  "// 4. (Optional but recommended) Calculate and save the expiration time",
+                  "// This is useful if you want to write pre-request scripts to automatically refresh the token when it expires",
+                  "if (isValid(responseData.expires_in)) {",
+                  "    let expiresIn = responseData.expires_in; // 300 seconds",
+                  "    let expiryTimestamp = Math.floor(Date.now() / 1000) + expiresIn;",
+                  "    pm.environment.set(\"access_token_expiry\", expiryTimestamp);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{admin-username}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{admin-password}}",
+                  "type": "text"
+                },
+                {
+                  "key": "grant_type",
+                  "value": "{{login-grant-type}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{client_secret}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/auth/login",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh-Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Helper function to check if a value is valid",
+                  "function isValid(value) {",
+                  "    return value !== null && value !== undefined && value !== \"\";",
+                  "}",
+                  "",
+                  "// 1. Parse the JSON response body",
+                  "let responseData = pm.response.json();",
+                  "",
+                  "",
+                  "// 2. (Optional) Write tests to verify the tokens were actually returned",
+                  "pm.test(\"Access token is present in response\", function () {",
+                  "    pm.expect(responseData.access_token).to.not.be.empty;",
+                  "});",
+                  "",
+                  "pm.test(\"Refresh token is present in response\", function () {",
+                  "    pm.expect(responseData.refresh_token).to.not.be.empty;",
+                  "});",
+                  "",
+                  "// 3. Set the variables to the current Postman environment",
+                  "// 1. Check and set Access Token",
+                  "if (isValid(responseData.access_token)) {",
+                  "    pm.environment.set(\"access_token\", responseData.access_token);",
+                  "    console.log(\"Success: access_token set in environment.\");",
+                  "} else {",
+                  "    console.error(\"Error: access_token is missing or null in the response!\");",
+                  "}",
+                  "",
+                  "// 2. Check and set Refresh Token",
+                  "if (isValid(responseData.refresh_token)) {",
+                  "    pm.environment.set(\"refresh_token\", responseData.refresh_token);",
+                  "    console.log(\"Success: refresh_token set in environment.\");",
+                  "} else {",
+                  "    console.error(\"Error: refresh_token is missing or null in the response!\");",
+                  "}",
+                  "",
+                  "// 3. Check and set Token Type",
+                  "if (isValid(responseData.token_type)) {",
+                  "    pm.environment.set(\"token_type\", responseData.token_type);",
+                  "    console.log(\"Success: token_type set in environment.\");",
+                  "} else {",
+                  "    console.error(\"Error: token_type is missing or null in the response!\");",
+                  "}",
+                  "",
+                  "// 4. (Optional but recommended) Calculate and save the expiration time",
+                  "// This is useful if you want to write pre-request scripts to automatically refresh the token when it expires",
+                  "if (isValid(responseData.expires_in)) {",
+                  "    let expiresIn = responseData.expires_in; // 300 seconds",
+                  "    let expiryTimestamp = Math.floor(Date.now() / 1000) + expiresIn;",
+                  "    pm.environment.set(\"access_token_expiry\", expiryTimestamp);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{token_type}} {{refresh_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{client_secret}}",
+                  "type": "text"
+                },
+                {
+                  "key": "refresh_token",
+                  "value": "{{refresh_token}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/auth/refresh",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Introspect",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Helper function to check if a value is valid",
+                  "function isValid(value) {",
+                  "    return value !== null && value !== undefined && value !== \"\";",
+                  "}",
+                  "",
+                  "// 1. Parse the JSON response body",
+                  "let responseData = pm.response.json();",
+                  "",
+                  "",
+                  "// 2. (Optional) Write tests to verify the tokens were actually returned",
+                  "pm.test(\"Access token is present in response\", function () {",
+                  "    pm.expect(responseData.access_token).to.not.be.empty;",
+                  "});",
+                  "",
+                  "pm.test(\"Refresh token is present in response\", function () {",
+                  "    pm.expect(responseData.refresh_token).to.not.be.empty;",
+                  "});",
+                  "",
+                  "// 3. Set the variables to the current Postman environment",
+                  "// 1. Check and set Access Token",
+                  "if (isValid(responseData.access_token)) {",
+                  "    pm.environment.set(\"access_token\", responseData.access_token);",
+                  "    console.log(\"Success: access_token set in environment.\");",
+                  "} else {",
+                  "    console.error(\"Error: access_token is missing or null in the response!\");",
+                  "}",
+                  "",
+                  "// 2. Check and set Refresh Token",
+                  "if (isValid(responseData.refresh_token)) {",
+                  "    pm.environment.set(\"refresh_token\", responseData.refresh_token);",
+                  "    console.log(\"Success: refresh_token set in environment.\");",
+                  "} else {",
+                  "    console.error(\"Error: refresh_token is missing or null in the response!\");",
+                  "}",
+                  "",
+                  "// 3. Check and set Token Type",
+                  "if (isValid(responseData.token_type)) {",
+                  "    pm.environment.set(\"token_type\", responseData.token_type);",
+                  "    console.log(\"Success: token_type set in environment.\");",
+                  "} else {",
+                  "    console.error(\"Error: token_type is missing or null in the response!\");",
+                  "}",
+                  "",
+                  "// 4. (Optional but recommended) Calculate and save the expiration time",
+                  "// This is useful if you want to write pre-request scripts to automatically refresh the token when it expires",
+                  "if (isValid(responseData.expires_in)) {",
+                  "    let expiresIn = responseData.expires_in; // 300 seconds",
+                  "    let expiryTimestamp = Math.floor(Date.now() / 1000) + expiresIn;",
+                  "    pm.environment.set(\"access_token_expiry\", expiryTimestamp);",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{token_type}} {{refresh_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{client_secret}}",
+                  "type": "text"
+                },
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/auth/introspect",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "auth",
+                "introspect"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.environment.set(\"access_token\", null);",
+                  "pm.environment.set(\"refresh_token\", null);",
+                  "pm.environment.set(\"token_type\", null);",
+                  "pm.environment.set(\"access_token_expiry\", null);",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{token_type}} {{refresh_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{client_secret}}",
+                  "type": "text"
+                },
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/auth/logout",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Me",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/me",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users?search=admin&page=1&pageSize=20",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "admin"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Specific user",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users",
+                "{{login_user_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Roles",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/roles?page=1&pageSize=200",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "roles"
+              ],
+              "query": [
+                {
+                  "key": "clientId",
+                  "value": "{{client_id}}",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "200"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User Roles",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/roles",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users",
+                "{{login_user_id}}",
+                "roles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Permissions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/permissions?includeDeprecated=false",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "permissions"
+              ],
+              "query": [
+                {
+                  "key": "serviceId",
+                  "value": "order-service",
+                  "disabled": true
+                },
+                {
+                  "key": "includeDeprecated",
+                  "value": "false"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User Permissions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/permissions",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users",
+                "{{login_user_id}}",
+                "permissions"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Business Roles",
+      "item": [
+        {
+          "name": "List business roles",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/business-roles",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "business-roles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create business role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"RegionalManager\",\n  \"description\": \"Manages a region\",\n  \"permissions\": [\n    \"Orders.View\",\n    \"Orders.Create\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/business-roles",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "business-roles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get business role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/business-roles/RegionalManager",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "business-roles",
+                "RegionalManager"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update business role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/business-roles/RegionalManager",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "business-roles",
+                "RegionalManager"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add permissions to role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    \"Orders.Cancel\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/business-roles/RegionalManager/permissions",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "business-roles",
+                "RegionalManager",
+                "permissions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove permission from role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/business-roles/RegionalManager/permissions/Orders.Cancel",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "business-roles",
+                "RegionalManager",
+                "permissions",
+                "Orders.Cancel"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get effective permissions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/business-roles/RegionalManager/effective-permissions",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "business-roles",
+                "RegionalManager",
+                "effective-permissions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete business role",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/business-roles/RegionalManager",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "business-roles",
+                "RegionalManager"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Scoped Access",
+      "item": [
+        {
+          "name": "Create user with scoped assignments",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"alice\",\n  \"email\": \"alice@example.com\",\n  \"firstName\": \"Alice\",\n  \"lastName\": \"Smith\",\n  \"enabled\": true,\n  \"credentials\": {\n    \"password\": \"Secret123!\",\n    \"temporary\": false\n  },\n  \"assignments\": [\n    {\n      \"role\": \"RegionalManager\",\n      \"scopes\": {\n        \"region\": [\n          \"tehran-1\",\n          \"tehran-2\"\n        ],\n        \"branch\": [\n          \"b-1\"\n        ]\n      }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update user",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alice2@example.com\",\n  \"firstName\": \"Alice\",\n  \"lastName\": \"Smith\",\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users",
+                "{{login_user_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get scoped access",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/scoped-access",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users",
+                "{{login_user_id}}",
+                "scoped-access"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Replace scoped access",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignments\": [\n    {\n      \"role\": \"RegionalManager\",\n      \"scopes\": {\n        \"region\": [\n          \"tehran-1\"\n        ]\n      }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/scoped-access",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users",
+                "{{login_user_id}}",
+                "scoped-access"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add scoped assignment",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"Auditor\",\n  \"scopes\": {\n    \"region\": [\n      \"global\"\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/scoped-assignments",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users",
+                "{{login_user_id}}",
+                "scoped-assignments"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update scoped assignment",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"region\": [\n    \"tehran-3\"\n  ],\n  \"branch\": [\n    \"b-2\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/scoped-assignments/RegionalManager",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users",
+                "{{login_user_id}}",
+                "scoped-assignments",
+                "RegionalManager"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove scoped assignment",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/scoped-assignments/RegionalManager",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "users",
+                "{{login_user_id}}",
+                "scoped-assignments",
+                "RegionalManager"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get access context",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/access-context",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "identity",
+                "access-context"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
 }

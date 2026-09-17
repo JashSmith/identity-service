@@ -62,6 +62,7 @@ Wait for the healthchecks (Oracle XE takes ~60s), then:
 | Endpoint | URL |
 | --- | --- |
 | Identity Facade REST | http://localhost:5080 |
+| Business roles / scoped access | `POST /api/identity/business-roles`, `POST /api/identity/users`, `GET /api/identity/access-context` (claim `iam_access`) |
 | Scalar API reference (interactive, full Bearer "Try it" support) | http://localhost:5080/scalar |
 | OpenAPI document | http://localhost:5080/openapi/v1.json |
 | OIDC discovery + JWKS proxy (consumers point here) | http://localhost:5080/.well-known/openid-configuration |
@@ -105,6 +106,10 @@ A signed OIDC/JWT provider should use native Keycloak Identity Brokering where p
 ## Key management
 
 Keycloak signs JWTs with RSA keys. Vault is the source of truth through release-pinned Keycloak Vault/key-provider extensions. Key IDs are immutable and rotate by overlap, for example `iam-rsa-2026-09` to `iam-rsa-2026-12`; old public keys remain in JWKS until all relevant old tokens expire. The .NET service has no private signing-key store or JWKS endpoint.
+
+## Business roles & scoped access
+
+Business roles are Keycloak composite realm roles. Scoped assignments (`{role, scopes: {region:[...], branch:[...]}}`) live in the single user attribute `iam.scoped_access` and are exposed as the `iam_access` claim (mapper `iam-access`). Consumers use `Company.Identity.Authorization.ICurrentAccessContext` (`GetScopeValues`/`HasPermission(scopeKey,scopeValue)` + `EnsureLoadedAsync()` facade fallback) — see `samples/OrderService.Sample` (`/api/orders/scoped`).
 
 ## Build and test
 

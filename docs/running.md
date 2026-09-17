@@ -72,8 +72,7 @@ curl -s -X POST http://localhost:5080/api/identity/auth/login \
 
 ## 5. Call the Identity Facade (Scalar at /scalar)
 
-Open **http://localhost:5080/scalar** — 30 endpoints across Auth / Users / Roles / Permissions /
-Keys (Admin). Click **Authenticate → Bearer**, paste `$TOKEN`, and "Try it":
+Open **http://localhost:5080/scalar** — 39 endpoints across Auth / Users / Roles / Permissions / Business Roles / Scoped Access / Access / Keys (Admin). Click **Authenticate → Bearer**, paste `$TOKEN`, and "Try it":
 
 ```bash
 curl -s http://localhost:5080/api/identity/me -H "Authorization: Bearer $TOKEN"
@@ -119,6 +118,25 @@ curl -s http://localhost:5180/api/orders -H "Authorization: Bearer $TOKEN"
 
 Without the permission the call returns 403; without a token, 401.
 Browse **http://localhost:5180/scalar** for all ten guarded endpoints.
+
+### Business roles & scoped access
+
+```bash
+# Create a composite business role
+curl -s -X POST http://localhost:5080/api/identity/business-roles \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"RegionalManager","permissions":["Orders.View","Orders.Create"]}' | python3 -m json.tool
+
+# Create a user with scoped assignment (region/branch are arbitrary keys)
+curl -s -X POST http://localhost:5080/api/identity/users \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"username":"alice","email":"alice@example.com","enabled":true,"credentials":{"password":"Secret123!","temporary":false},"assignments":[{"role":"RegionalManager","scopes":{"region":["tehran-1"]}}]}' | python3 -m json.tool
+
+# Read back scoped access or use the token claim iam_access / fallback
+curl -s http://localhost:5080/api/identity/access-context -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+```
+
+Consumer services read scopes via `ICurrentAccessContext.GetScopeValues("region")` / `HasPermission(..., "region", value)` — see `samples/OrderService.Sample/Program.cs` (`/api/orders/scoped`, `/api/orders/{id}/scoped-check`). `EnsureLoadedAsync()` resolves via the facade when `iam_access` was omitted for size.
 
 ## 8. What lives where (config ownership)
 
