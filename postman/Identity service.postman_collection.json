@@ -12,7 +12,115 @@
     },
     {
       "name": "Services",
-      "item": []
+      "item": [
+        {
+          "name": "Register permissions (service manifest)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/permissions/register",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "permissions",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"order-service\",\n  \"serviceVersion\": \"1.0.0\",\n  \"manifestVersion\": \"1\",\n  \"permissions\": [{ \"name\": \"Orders.View\", \"description\": \"Allows reading orders\" }],\n  \"manifestHash\": \"sha256:...\"\n}"
+            },
+            "description": "Service authenticates as itself (client_credentials). Facade validates namespace (Orders.* for order-service, Identity.* for identity-facade) -> 400 on cross-namespace. Each permission becomes a Keycloak client role + oidc-usermodel-client-role-mapper (claim permissions) + auto-mapped to /key-admins. Never deletes a client role when removed from manifest."
+          },
+          "response": []
+        },
+        {
+          "name": "Reconcile admin group (new permissions -> /key-admins)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/permissions/reconcile-admin",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "permissions",
+                "reconcile-admin"
+              ]
+            },
+            "description": "Idempotently maps any client role not yet on /key-admins. After this, POST /api/identity/auth/refresh returns a new AT that already carries the permission (no re-login, no Admin Console). Requires admin."
+          },
+          "response": []
+        },
+        {
+          "name": "Register - namespace violation (expect 400)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/permissions/register",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "permissions",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"order-service\",\n  \"serviceVersion\": \"1.0.0\",\n  \"manifestVersion\": \"2\",\n  \"permissions\": [{ \"name\": \"Identity.UsersRead\", \"description\": \"cross-namespace - must be rejected\" }],\n  \"manifestHash\": \"sha256:bad\"\n}"
+            },
+            "description": "Expect 400 ProblemDetails - namespace enforcement (order-service may only register Orders.*)."
+          },
+          "response": []
+        }
+      ]
     },
     {
       "name": "Auth",
@@ -1305,11 +1413,119 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Decode JWT - inspect authz.scope.* + permissions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/me",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "After Create/Replace scoped access + re-login/refresh, decode the JWT (jwt.io or: echo $TOKEN | cut -d. -f2 | base64 -d | jq). Expect flat claims authz.scope.region / authz.scope.test-key (arrays) plus aggregated permissions. Already-issued tokens do NOT mutate."
+          },
+          "response": []
+        },
+        {
+          "name": "Assign scalar test-key (normalization) - PUT scoped-access",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/scoped-access",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "users",
+                "{{login_user_id}}",
+                "scoped-access"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignments\": [{ \"role\": \"RegionalManager\", \"scopes\": { \"test-key\": \"items-1\" } }]\n}"
+            },
+            "description": "ScopeDictionaryConverter normalizes scalar \"items-1\" to [\"items-1\"] - no DTO change needed. Unknown/inactive/disallowed -> 400 with assignments[0].scopes.<key>. Resource isolation: test-key only on ResourceA."
+          },
+          "response": []
+        },
+        {
+          "name": "Assign test-key array + region (equivalence)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BaseUrl}}api/identity/users/{{login_user_id}}/scoped-access",
+              "host": [
+                "{{BaseUrl}}api"
+              ],
+              "path": [
+                "users",
+                "{{login_user_id}}",
+                "scoped-access"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignments\": [{ \"role\": \"RegionalManager\", \"scopes\": { \"test-key\": [\"items-1\", \"items-2\"], \"region\": \"tehran-1\" } }]\n}"
+            },
+            "description": "Both keys scalar-or-array normalized; union Group+User gated at write; effective scopes via GET /api/identity/access-context."
+          },
+          "response": []
         }
       ]
     },
     {
-      "name": "Scopes (registry, DB-driven)",
+      "name": "Scopes (registry, Keycloak group /iam-scope-registry)",
       "item": [
         {
           "name": "List scopes",
@@ -1505,7 +1721,8 @@
           },
           "response": []
         }
-      ]
+      ],
+      "description": "Registry lives in Keycloak group /iam-scope-registry: scope.<key>={displayName,description,isActive}, resource.<name>=[scopes]. Multivalued authz.scope.<key> on user/group -> flat JWT claims authz.scope.<key> via authz-scopes clientScope (User Profile admin-only)."
     }
   ]
 }
