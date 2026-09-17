@@ -1,3 +1,4 @@
+#pragma warning disable CS0618
 using Identity.Application.Scope;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;

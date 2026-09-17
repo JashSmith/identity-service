@@ -113,6 +113,8 @@ builder.Services.AddScoped<Identity.Application.ProvisioningOrchestrator>(sp =>
         sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>(),
         sp.GetRequiredService<Identity.Application.Scope.IUserScopeWriter>()));
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.FacadePermissionRegistrar>();
 
 
@@ -219,12 +221,30 @@ catch { /* best-effort */ }
 
 try
 {
+    using var scope4 = app.Services.CreateScope();
+    var scopeMapper = scope4.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
+    using var cts4 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    await scopeMapper.EnsureAsync(cts4.Token);
+}
+catch { /* best-effort */ }
+
+try
+{
+    using var scope5 = app.Services.CreateScope();
+    var hardening = scope5.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>();
+    using var cts5 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    await hardening.EnsureAsync(cts5.Token);
+}
+catch { /* best-effort */ }
+
+try
+{
     using var scope3 = app.Services.CreateScope();
     var db = scope3.ServiceProvider.GetRequiredService<Identity.Persistence.KeyManagement.KeyMetadataDbContext>();
     using var cts3 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
     await Identity.Persistence.KeyManagement.ScopeSeed.EnsureSeededAsync(db, cts3.Token);
 }
-catch { /* best-effort */ }
+catch { /* best-effort — Oracle auth tables are legacy; Keycloak iam-scope-registry is the source of truth */ }
 
 app.MapPost("/api/identity/external/organization-token",
         (OrganizationTokenRequest request) => Results.StatusCode(StatusCodes.Status501NotImplemented))

@@ -135,13 +135,69 @@
         "Identity.Keys.Rollback",
         "Identity.Keys.History"
       ]
+    },
+    {
+      "name": "iam-scope-registry",
+      "attributes": {
+        "scope.region": [
+          "{\"displayName\":\"Region\",\"description\":\"Geographic region\",\"isActive\":true,\"valueType\":\"String\"}"
+        ],
+        "scope.branch": [
+          "{\"displayName\":\"Branch\",\"description\":\"Branch identifier\",\"isActive\":true,\"valueType\":\"String\"}"
+        ],
+        "scope.department": [
+          "{\"displayName\":\"Department\",\"isActive\":true,\"valueType\":\"String\"}"
+        ],
+        "scope.organization": [
+          "{\"displayName\":\"Organization\",\"isActive\":true,\"valueType\":\"String\"}"
+        ],
+        "scope.warehouse": [
+          "{\"displayName\":\"Warehouse\",\"isActive\":true,\"valueType\":\"String\"}"
+        ],
+        "scope.customer": [
+          "{\"displayName\":\"Customer\",\"isActive\":true,\"valueType\":\"String\"}"
+        ],
+        "scope.project": [
+          "{\"displayName\":\"Project\",\"isActive\":true,\"valueType\":\"String\"}"
+        ],
+        "scope.test-key": [
+          "{\"displayName\":\"Test Key\",\"description\":\"Test scope for integration tests\",\"isActive\":true,\"valueType\":\"String\"}"
+        ],
+        "resource.Orders": [
+          "region",
+          "branch",
+          "warehouse",
+          "customer"
+        ],
+        "resource.Branches": [
+          "region"
+        ],
+        "resource.Employees": [
+          "region",
+          "branch",
+          "department",
+          "organization"
+        ],
+        "resource.ProjectTasks": [
+          "project"
+        ],
+        "resource.ProjectDocuments": [
+          "project"
+        ],
+        "resource.CustomerOrders": [
+          "customer"
+        ],
+        "resource.ResourceA": [
+          "test-key"
+        ]
+      }
     }
   ],
   "clients": [
     {
       "clientId": "identity-facade",
       "name": "Identity Facade",
-      "description": "Public facade \u2014 proxy for login/refresh/introspect/logout",
+      "description": "Public facade — proxy for login/refresh/introspect/logout",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "facade-development-only",
@@ -240,7 +296,7 @@
     {
       "clientId": "order-service",
       "name": "Order Service (sample permission registrant)",
-      "description": "Sample consumer \u2014 registers its [RequirePermission] actions at startup",
+      "description": "Sample consumer — registers its [RequirePermission] actions at startup",
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
@@ -385,6 +441,16 @@
           }
         }
       ]
+    },
+    {
+      "name": "authz-scopes",
+      "description": "Maps authz.scope.* user/group attributes to flat scopes claims",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
     }
   ],
   "users": [

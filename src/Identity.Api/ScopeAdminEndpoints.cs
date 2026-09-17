@@ -1,3 +1,4 @@
+#pragma warning disable CS0618
 using Identity.Application.Scope;
 using Identity.Contracts;
 using Identity.Persistence.KeyManagement;
