@@ -79,8 +79,9 @@ builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter, Identity
 builder.Services.AddScoped<Identity.Application.Scope.IScopeCacheInvalidator>(sp => sp.GetRequiredService<Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakCompositeRoleStore>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>();
 builder.Services.AddSingleton<Identity.Application.IBusinessRoleStore>(sp =>
-    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakCompositeRoleStore>());
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopedAccessStore>();
 builder.Services.AddSingleton<Identity.Application.IScopedAccessStore>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakScopedAccessStore>());
@@ -88,8 +89,9 @@ builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProv
 builder.Services.AddSingleton<Identity.Application.IUserProvisioningService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserRoleMapping>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>();
 builder.Services.AddSingleton<Identity.Application.IUserRoleMapping>(sp =>
-    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserRoleMapping>());
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>());
 builder.Services.AddScoped<Identity.Application.ProvisioningOrchestrator>(sp =>
     new Identity.Application.ProvisioningOrchestrator(
         sp.GetRequiredService<Identity.Application.IUserProvisioningService>(),
