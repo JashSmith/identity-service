@@ -2,6 +2,7 @@ using Identity.Application;
 using Identity.Contracts;
 using Identity.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Identity.Persistence.KeyManagement;
 
@@ -51,7 +52,8 @@ public sealed class RotationOperationEntity
     public string? LockOwnerToken { get; set; }
 }
 
-[Obsolete("Legacy/test-only. Authorization lives in Keycloak iam-scope-registry, not Oracle. Kept for InMemoryDatabase tests during migration; do not use in production.")]
+[Obsolete(
+    "Legacy/test-only. Authorization lives in Keycloak iam-scope-registry, not Oracle. Kept for InMemoryDatabase tests during migration; do not use in production.")]
 public sealed class ScopeDefinitionEntity
 {
     public Guid Id { get; set; }
@@ -63,13 +65,54 @@ public sealed class ScopeDefinitionEntity
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
+
 [Obsolete("Legacy/test-only.")]
-public sealed class ApplicationResourceEntity { public Guid Id { get; set; } public string Key { get; set; } = ""; public string DisplayName { get; set; } = ""; public string? Description { get; set; } }
-[Obsolete("Legacy/test-only.")] public sealed class ScopeResourceMappingEntity { public Guid ScopeDefinitionId { get; set; } public Guid ApplicationResourceId { get; set; } }
-[Obsolete("Legacy/test-only.")] public sealed class RoleAllowedScopeEntity { public string RoleName { get; set; } = ""; public Guid ScopeDefinitionId { get; set; } }
-[Obsolete("Legacy/test-only.")] public sealed class UserRoleAssignmentEntity { public Guid Id { get; set; } public string UserId { get; set; } = ""; public string RoleName { get; set; } = ""; public DateTimeOffset AssignedAt { get; set; } }
-[Obsolete("Legacy/test-only.")] public sealed class AssignmentScopeEntity { public Guid Id { get; set; } public Guid UserRoleAssignmentId { get; set; } public Guid ScopeDefinitionId { get; set; } }
-[Obsolete("Legacy/test-only.")] public sealed class AssignmentScopeValueEntity { public Guid Id { get; set; } public Guid AssignmentScopeId { get; set; } public string Value { get; set; } = ""; }
+public sealed class ApplicationResourceEntity
+{
+    public Guid Id { get; set; }
+    public string Key { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string? Description { get; set; }
+}
+
+[Obsolete("Legacy/test-only.")]
+public sealed class ScopeResourceMappingEntity
+{
+    public Guid ScopeDefinitionId { get; set; }
+    public Guid ApplicationResourceId { get; set; }
+}
+
+[Obsolete("Legacy/test-only.")]
+public sealed class RoleAllowedScopeEntity
+{
+    public string RoleName { get; set; } = "";
+    public Guid ScopeDefinitionId { get; set; }
+}
+
+[Obsolete("Legacy/test-only.")]
+public sealed class UserRoleAssignmentEntity
+{
+    public Guid Id { get; set; }
+    public string UserId { get; set; } = "";
+    public string RoleName { get; set; } = "";
+    public DateTimeOffset AssignedAt { get; set; }
+}
+
+[Obsolete("Legacy/test-only.")]
+public sealed class AssignmentScopeEntity
+{
+    public Guid Id { get; set; }
+    public Guid UserRoleAssignmentId { get; set; }
+    public Guid ScopeDefinitionId { get; set; }
+}
+
+[Obsolete("Legacy/test-only.")]
+public sealed class AssignmentScopeValueEntity
+{
+    public Guid Id { get; set; }
+    public Guid AssignmentScopeId { get; set; }
+    public string Value { get; set; } = "";
+}
 
 /// <summary>
 /// Oracle identity-meta-db retains only key/Vault sync metadata.
@@ -114,13 +157,64 @@ public sealed class KeyMetadataDbContext(DbContextOptions<KeyMetadataDbContext> 
             e.HasIndex(x => new { x.Realm, x.IdempotencyKey }).IsUnique();
         });
 #pragma warning disable CS0618
-        b.Entity<ScopeDefinitionEntity>(e => { e.HasKey(x => x.Id); e.HasIndex(x => x.Key).IsUnique(); e.Property(x => x.Key).HasMaxLength(64).IsRequired(); e.Property(x => x.DisplayName).HasMaxLength(128).IsRequired(); e.Property(x => x.ValueType).HasMaxLength(32).IsRequired(); });
-        b.Entity<ApplicationResourceEntity>(e => { e.HasKey(x => x.Id); e.HasIndex(x => x.Key).IsUnique(); e.Property(x => x.Key).HasMaxLength(64).IsRequired(); e.Property(x => x.DisplayName).HasMaxLength(128).IsRequired(); });
-        b.Entity<ScopeResourceMappingEntity>(e => { e.HasKey(x => new { x.ScopeDefinitionId, x.ApplicationResourceId }); e.HasOne<ScopeDefinitionEntity>().WithMany().HasForeignKey(x => x.ScopeDefinitionId).OnDelete(DeleteBehavior.Cascade); e.HasOne<ApplicationResourceEntity>().WithMany().HasForeignKey(x => x.ApplicationResourceId).OnDelete(DeleteBehavior.Cascade); });
-        b.Entity<RoleAllowedScopeEntity>(e => { e.HasKey(x => new { x.RoleName, x.ScopeDefinitionId }); e.Property(x => x.RoleName).HasMaxLength(128).IsRequired(); e.HasOne<ScopeDefinitionEntity>().WithMany().HasForeignKey(x => x.ScopeDefinitionId).OnDelete(DeleteBehavior.Cascade); });
-        b.Entity<UserRoleAssignmentEntity>(e => { e.HasKey(x => x.Id); e.HasIndex(x => new { x.UserId, x.RoleName }).IsUnique(); e.HasIndex(x => x.UserId); e.Property(x => x.UserId).HasMaxLength(64).IsRequired(); e.Property(x => x.RoleName).HasMaxLength(128).IsRequired(); });
-        b.Entity<AssignmentScopeEntity>(e => { e.HasKey(x => x.Id); e.HasIndex(x => new { x.UserRoleAssignmentId, x.ScopeDefinitionId }).IsUnique(); e.HasOne<UserRoleAssignmentEntity>().WithMany().HasForeignKey(x => x.UserRoleAssignmentId).OnDelete(DeleteBehavior.Cascade); e.HasOne<ScopeDefinitionEntity>().WithMany().HasForeignKey(x => x.ScopeDefinitionId).OnDelete(DeleteBehavior.Restrict); });
-        b.Entity<AssignmentScopeValueEntity>(e => { e.HasKey(x => x.Id); e.HasIndex(x => new { x.AssignmentScopeId, x.Value }).IsUnique(); e.HasIndex(x => x.AssignmentScopeId); e.Property(x => x.Value).HasMaxLength(256).IsRequired(); e.HasOne<AssignmentScopeEntity>().WithMany().HasForeignKey(x => x.AssignmentScopeId).OnDelete(DeleteBehavior.Cascade); });
+        b.Entity<ScopeDefinitionEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Key).IsUnique();
+            e.Property(x => x.Key).HasMaxLength(64).IsRequired();
+            e.Property(x => x.DisplayName).HasMaxLength(128).IsRequired();
+            e.Property(x => x.ValueType).HasMaxLength(32).IsRequired();
+            e.Property(x => x.IsActive)
+                .HasConversion(new BoolToZeroOneConverter<int>());
+        });
+        b.Entity<ApplicationResourceEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Key).IsUnique();
+            e.Property(x => x.Key).HasMaxLength(64).IsRequired();
+            e.Property(x => x.DisplayName).HasMaxLength(128).IsRequired();
+        });
+        b.Entity<ScopeResourceMappingEntity>(e =>
+        {
+            e.HasKey(x => new { x.ScopeDefinitionId, x.ApplicationResourceId });
+            e.HasOne<ScopeDefinitionEntity>().WithMany().HasForeignKey(x => x.ScopeDefinitionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<ApplicationResourceEntity>().WithMany().HasForeignKey(x => x.ApplicationResourceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<RoleAllowedScopeEntity>(e =>
+        {
+            e.HasKey(x => new { x.RoleName, x.ScopeDefinitionId });
+            e.Property(x => x.RoleName).HasMaxLength(128).IsRequired();
+            e.HasOne<ScopeDefinitionEntity>().WithMany().HasForeignKey(x => x.ScopeDefinitionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<UserRoleAssignmentEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.UserId, x.RoleName }).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.UserId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.RoleName).HasMaxLength(128).IsRequired();
+        });
+        b.Entity<AssignmentScopeEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.UserRoleAssignmentId, x.ScopeDefinitionId }).IsUnique();
+            e.HasOne<UserRoleAssignmentEntity>().WithMany().HasForeignKey(x => x.UserRoleAssignmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<ScopeDefinitionEntity>().WithMany().HasForeignKey(x => x.ScopeDefinitionId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AssignmentScopeValueEntity>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.AssignmentScopeId, x.Value }).IsUnique();
+            e.HasIndex(x => x.AssignmentScopeId);
+            e.Property(x => x.Value).HasMaxLength(256).IsRequired();
+            e.HasOne<AssignmentScopeEntity>().WithMany().HasForeignKey(x => x.AssignmentScopeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 #pragma warning restore CS0618
     }
 
@@ -128,7 +222,10 @@ public sealed class KeyMetadataDbContext(DbContextOptions<KeyMetadataDbContext> 
     {
         switch (provider.ToLowerInvariant())
         {
-            case "oracle": b.UseOracle(cs); break;
+            case "oracle": b.UseOracle(cs, builder =>
+            {
+                builder.UseOracleSQLCompatibility(OracleSQLCompatibility.DatabaseVersion21);
+            }); break;
             case "npgsql":
             case "postgres":
             case "postgresql": b.UseNpgsql(cs); break;

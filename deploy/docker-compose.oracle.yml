@@ -1,5 +1,0 @@
-# Oracle is now the DEFAULT in deploy/docker-compose.yml.
-# This file is kept as an explicit alias for backwards compatibility.
-# Usage: docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.oracle.yml up
-# No overrides needed — base compose already runs Oracle.
-# For postgres/CI fallback use: docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.postgres.yml up
