@@ -8,7 +8,6 @@ public sealed class ProvisioningOrchestrator(
     IScopedAccessStore scopedStore,
     IBusinessRoleStore roles,
     IUserRoleMapping roleMapping,
-    IPermissionRegistry permissionRegistry,
     ScopeAssignmentValidator? scopeValidator = null)
 {
     public async Task<(UserDto User, ScopedAccessDocument Scoped)> CreateUserWithAssignmentsAsync(
@@ -113,15 +112,10 @@ public sealed class ProvisioningOrchestrator(
 
     public async Task<BusinessRoleDto> CreateBusinessRoleAsync(string name, string? description, IReadOnlyCollection<string> permissions, CancellationToken ct)
     {
-        permissions ??= Array.Empty<string>();
-        if (permissions.Count > 0)
-        {
-            var known = await permissionRegistry.GetPermissionsAsync(null, true, ct);
-            foreach (var p in permissions)
-                if (!known.Any(x => string.Equals(x.Name, p, StringComparison.Ordinal)))
-                    throw new InvalidOperationException($"Permission '{p}' does not exist.");
-        }
-        return await roles.CreateAsync(name.Trim(), description, permissions, ct);
+        // Permission existence is validated by the role store against Keycloak (source of truth).
+        // The in-memory registry is deliberately not consulted: it is empty after a restart
+        // until services re-register, which would reject valid permissions.
+        return await roles.CreateAsync(name.Trim(), description, permissions ?? Array.Empty<string>(), ct);
     }
 
     private static ScopedAccessDocument ToDocument(IReadOnlyCollection<ScopedRoleAssignmentDto> dtos)

@@ -92,15 +92,14 @@ public static class BusinessRolesEndpoints
             .WithName("DeleteBusinessRole")
             .Produces(204).Produces<ProblemResponse>(400);
 
-        g.MapPost("/{name}/permissions", async (string name, AssignPermissionsRequest req, IBusinessRoleStore store, IPermissionRegistry perms,
+        g.MapPost("/{name}/permissions", async (string name, AssignPermissionsRequest req, IBusinessRoleStore store,
                 Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 if (req.Permissions is null || req.Permissions.Count == 0)
                     return Results.BadRequest(new ProblemResponse("validation_error", "permissions are required", Guid.NewGuid().ToString("N")));
-                var all = await perms.GetPermissionsAsync(null, true, ct);
-                foreach (var p in req.Permissions)
-                    if (!all.Any(x => string.Equals(x.Name, p, StringComparison.Ordinal)))
-                        return Results.BadRequest(new ProblemResponse("validation_error", $"Permission '{p}' does not exist.", Guid.NewGuid().ToString("N")));
+                // Existence is validated against Keycloak itself (the source of truth) inside
+                // AddPermissionsAsync — the in-memory registry is empty after a facade restart
+                // until services re-register, so it must not reject valid permissions.
                 try
                 {
                     await store.AddPermissionsAsync(name, req.Permissions, ct);

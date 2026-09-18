@@ -123,7 +123,6 @@ builder.Services.AddScoped<ProvisioningOrchestrator>(sp =>
         sp.GetRequiredService<IScopedAccessStore>(),
         sp.GetRequiredService<IBusinessRoleStore>(),
         sp.GetRequiredService<IUserRoleMapping>(),
-        sp.GetRequiredService<IPermissionRegistry>(),
         sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>()));
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();

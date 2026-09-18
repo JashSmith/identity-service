@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Identity.Application.Scope;
 using Microsoft.Extensions.Caching.Distributed;
@@ -33,6 +35,41 @@ public sealed class KeycloakScopeRegistryStore(
     private const string ResourceMapKey = "scopes:resourceMap:kc:v1";
     private const string RedisPrefix = "identity:registry:";
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Non-ASCII characters are written raw instead of <c>\uXXXX</c> escapes, which would
+    /// inflate Persian/Arabic text sixfold — Keycloak caps GROUP_ATTRIBUTE.VALUE at 255 bytes.
+    /// </summary>
+    private static readonly JsonSerializerOptions CompactJson = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    /// <summary>
+    /// Keycloak stores each attribute value in a VARCHAR2(255) column. Long definitions are
+    /// split across the multivalued attribute and rejoined on read.
+    /// </summary>
+    private const int AttributeChunkBytes = 200;
+
+    internal static string[] ChunkAttributeValue(string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        if (bytes.Length <= AttributeChunkBytes) return [value];
+        var chunks = new List<string>();
+        var start = 0;
+        while (start < bytes.Length)
+        {
+            var len = Math.Min(AttributeChunkBytes, bytes.Length - start);
+            // Never split a multi-byte UTF-8 sequence: back off until not on a continuation byte.
+            while (len > 1 && (bytes[start + len] & 0xC0) == 0x80) len--;
+            chunks.Add(Encoding.UTF8.GetString(bytes, start, len));
+            start += len;
+        }
+        return chunks.ToArray();
+    }
+
+    private static string JoinAttributeValues(string[] values) =>
+        values.Length == 0 ? "{}" : string.Concat(values);
 
     public void Invalidate()
     {
@@ -151,7 +188,7 @@ public sealed class KeycloakScopeRegistryStore(
         {
             if (!kv.Key.StartsWith("scope.", StringComparison.Ordinal)) continue;
             var key = kv.Key.Substring("scope.".Length);
-            var json = kv.Value.FirstOrDefault() ?? "{}";
+            var json = JoinAttributeValues(kv.Value);
             var def = ParseScope(key, json);
             if (def.IsActive) list.Add(def);
         }
@@ -289,7 +326,7 @@ public sealed class KeycloakScopeRegistryStore(
         {
             if (!kv.Key.StartsWith("scope.", StringComparison.Ordinal)) continue;
             var key = kv.Key.Substring("scope.".Length);
-            var def = ParseScope(key, kv.Value.FirstOrDefault() ?? "{}");
+            var def = ParseScope(key, JoinAttributeValues(kv.Value));
             list.Add(new ScopeDefinitionDto(def.Key, def.DisplayName, def.Description, def.IsActive, def.ValueType));
         }
         return list.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
@@ -334,7 +371,7 @@ public sealed class KeycloakScopeRegistryStore(
             description,
             isActive = true,
             valueType = "String",
-        });
+        }, CompactJson);
         var ok = await UpsertRegistryAttributeAsync($"scope.{key}", json, ct);
         if (!ok) throw new InvalidOperationException($"Failed to create scope '{key}' in {RegistryGroupName}.");
         Invalidate();
@@ -346,21 +383,25 @@ public sealed class KeycloakScopeRegistryStore(
         var attrs = await GetRegistryAttributesAsync(ct);
         var attrName = $"scope.{key}";
         if (!attrs.TryGetValue(attrName, out var vals)) return null;
-        var def = ParseScope(key, vals.FirstOrDefault() ?? "{}");
+        var def = ParseScope(key, JoinAttributeValues(vals));
         var json = JsonSerializer.Serialize(new
         {
             displayName = displayName ?? def.DisplayName,
             description = description ?? def.Description,
             isActive = isActive ?? def.IsActive,
             valueType = def.ValueType,
-        });
+        }, CompactJson);
         var ok = await UpsertRegistryAttributeAsync(attrName, json, ct);
         if (!ok) throw new InvalidOperationException($"Failed to update scope '{key}' in {RegistryGroupName}.");
         Invalidate();
         return await GetScopeAsync(key, ct);
     }
 
-    /// <summary>Read-modify-write of a single registry group attribute via GET group + PUT group.</summary>
+    /// <summary>
+    /// Read-modify-write of a single registry group attribute via GET group + PUT group.
+    /// Long values are split across the multivalued attribute so no single value exceeds
+    /// Keycloak's 255-byte GROUP_ATTRIBUTE.VALUE column.
+    /// </summary>
     private async Task<bool> UpsertRegistryAttributeAsync(string attrName, string value, CancellationToken ct)
     {
         var token = await tokenProvider.GetTokenAsync(ct);
@@ -411,7 +452,7 @@ public sealed class KeycloakScopeRegistryStore(
                     attributes[prop.Name] = prop.Value.ValueKind == JsonValueKind.Array
                         ? prop.Value.EnumerateArray().Select(v => v.GetString() ?? "").ToArray()
                         : [prop.Value.GetString() ?? ""];
-            attributes[attrName] = [value];
+            attributes[attrName] = ChunkAttributeValue(value);
 
             var name = groupJson.TryGetProperty("name", out var nm) ? nm.GetString() ?? RegistryGroupName : RegistryGroupName;
             var body = new Dictionary<string, object>
@@ -428,14 +469,15 @@ public sealed class KeycloakScopeRegistryStore(
             var putRes = await http.SendAsync(putReq, ct);
             if (!putRes.IsSuccessStatusCode)
             {
-                logger.LogDebug("Registry group PUT failed: {Status}", putRes.StatusCode);
+                var errBody = await putRes.Content.ReadAsStringAsync(ct);
+                logger.LogWarning("Registry group PUT failed: {Status} {Body}", (int)putRes.StatusCode, errBody);
                 return false;
             }
             return true;
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to upsert registry attribute {Attr}", attrName);
+            logger.LogWarning(ex, "Failed to upsert registry attribute {Attr}", attrName);
             return false;
         }
     }

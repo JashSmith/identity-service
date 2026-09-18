@@ -54,7 +54,9 @@ public sealed class KeycloakGroupBusinessRoleStore(
     private async Task<GroupRef?> GetGroupByNameAsync(string name, string token, CancellationToken ct)
     {
         // Keycloak groups search: GET /groups?search=name is substring; we filter exact.
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(name)}&exact=true");
+        // briefRepresentation=false is required — the default brief form omits attributes,
+        // which made description/authz.* lookups always empty.
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(name)}&exact=true&briefRepresentation=false");
         req.Headers.Add("Authorization", $"Bearer {token}");
         try
         {
@@ -114,7 +116,7 @@ public sealed class KeycloakGroupBusinessRoleStore(
     {
         var names = new List<string>();
         foreach (var clientUuid in await ListClientUuidsAsync(token, ct))
-            names.AddRange(await GetGroupClientRolesAsync(groupId, clientUuid, token, ct));
+            names.AddRange(await GetGroupClientRoleNamesByUuidAsync(groupId, clientUuid, token, ct));
         return names;
     }
 
@@ -135,11 +137,13 @@ public sealed class KeycloakGroupBusinessRoleStore(
         catch { return Array.Empty<string>(); }
     }
 
-    private async Task<IReadOnlyCollection<string>> GetGroupClientRolesAsync(string groupId, string clientId, string token, CancellationToken ct)
+    /// <summary>
+    /// Client-role names mapped to the group for a client given by internal UUID.
+    /// Callers pass the UUID from <see cref="ListClientUuidsAsync"/>; resolving a UUID through a
+    /// clientId search silently matches nothing and drops every permission.
+    /// </summary>
+    private async Task<IReadOnlyCollection<string>> GetGroupClientRoleNamesByUuidAsync(string groupId, string clientUuid, string token, CancellationToken ct)
     {
-        // Need internal client UUID, not clientId string
-        var clientUuid = await ResolveClientUuidAsync(clientId, token, ct);
-        if (string.IsNullOrEmpty(clientUuid)) return Array.Empty<string>();
         var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/clients/{Uri.EscapeDataString(clientUuid)}");
         req.Headers.Add("Authorization", $"Bearer {token}");
         try
@@ -153,22 +157,6 @@ public sealed class KeycloakGroupBusinessRoleStore(
                 .Where(x => !string.IsNullOrEmpty(x)).ToArray();
         }
         catch { return Array.Empty<string>(); }
-    }
-
-    private async Task<string> ResolveClientUuidAsync(string clientId, string token, CancellationToken ct)
-    {
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/clients?clientId={Uri.EscapeDataString(clientId)}");
-        req.Headers.Add("Authorization", $"Bearer {token}");
-        try
-        {
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return "";
-            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            if (doc.RootElement.ValueKind == JsonValueKind.Array && doc.RootElement.GetArrayLength() > 0)
-                return doc.RootElement[0].TryGetProperty("id", out var id) ? id.GetString() ?? "" : "";
-            return "";
-        }
-        catch { return ""; }
     }
 
     public async Task<BusinessRoleDto?> GetAsync(string name, CancellationToken ct)
@@ -432,7 +420,7 @@ public sealed class KeycloakGroupBusinessRoleStore(
         {
             var clientRole = await LookupClientRoleAsync(clientUuid, permission, token, ct);
             if (clientRole is null) continue;
-            var mapped = await GetGroupClientRolesAsync(group.Id, clientUuid, token, ct);
+            var mapped = await GetGroupClientRoleNamesByUuidAsync(group.Id, clientUuid, token, ct);
             if (!mapped.Contains(permission, StringComparer.Ordinal)) continue;
             var delReq = new HttpRequestMessage(HttpMethod.Delete,
                 $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(group.Id)}/role-mappings/clients/{Uri.EscapeDataString(clientUuid)}")
