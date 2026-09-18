@@ -11,7 +11,6 @@ namespace Identity.Infrastructure.Keycloak.Scope;
 /// Effective merge: Group scopes ∪ User scopes (union, unique, ordered), gated by
 /// authz.allowed-scopes on the business-role Groups at write time.
 /// Implements IUserScopeReader / IUserScopeWriter over Keycloak Admin REST.
-/// Also provides group-level helpers for EfUserScopeStore migration.
 /// </summary>
 public sealed class KeycloakScopeAttributeStore(
     HttpClient http,

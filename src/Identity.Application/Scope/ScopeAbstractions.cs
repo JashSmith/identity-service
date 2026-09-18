@@ -37,4 +37,21 @@ public interface IScopeDefinitionLookup
     Task<bool> IsScopeAllowedForRoleAsync(string role, string scopeKey, CancellationToken ct);
 }
 
+public sealed record ScopeDefinitionDto(string Key, string DisplayName, string? Description, bool IsActive, string ValueType);
+
+public sealed record ResourceScopeMappingDto(string Key, IReadOnlyCollection<string> Scopes);
+
+/// <summary>
+/// Admin-side CRUD for the scope registry (scope definitions + resource mappings).
+/// Backed by the Keycloak <c>iam-scope-registry</c> group attributes.
+/// </summary>
+public interface IScopeRegistryAdmin
+{
+    Task<IReadOnlyCollection<ScopeDefinitionDto>> ListScopesAsync(CancellationToken ct);
+    Task<ScopeDefinitionDto?> GetScopeAsync(string key, CancellationToken ct);
+    Task<IReadOnlyCollection<ResourceScopeMappingDto>> ListResourcesAsync(CancellationToken ct);
+    Task<ScopeDefinitionDto?> CreateScopeAsync(string key, string? displayName, string? description, CancellationToken ct);
+    Task<ScopeDefinitionDto?> UpdateScopeAsync(string key, string? displayName, string? description, bool? isActive, CancellationToken ct);
+}
+
 public interface IScopeCacheInvalidator { void Invalidate(); }

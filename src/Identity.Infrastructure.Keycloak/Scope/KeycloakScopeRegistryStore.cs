@@ -21,7 +21,7 @@ public sealed class KeycloakScopeRegistryStore(
     IOptions<KeycloakOptions> opts,
     KeycloakAdminTokenProvider tokenProvider,
     IMemoryCache cache,
-    ILogger<KeycloakScopeRegistryStore> logger) : IScopeDefinitionLookup, IResourceScopeResolver, IScopeCacheInvalidator
+    ILogger<KeycloakScopeRegistryStore> logger) : IScopeDefinitionLookup, IResourceScopeResolver, IScopeCacheInvalidator, IScopeRegistryAdmin
 {
     private readonly KeycloakOptions _o = opts.Value;
     private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
@@ -208,7 +208,7 @@ public sealed class KeycloakScopeRegistryStore(
         }
         if (map.Count == 0 && attrs.Count == 0)
         {
-            // Defaults mirror ScopeSeed
+            // Well-known defaults for offline/migration-window operation
             map["Orders"] = new HashSet<string>(new[] { "region", "branch", "warehouse", "customer" }, StringComparer.OrdinalIgnoreCase);
             map["Branches"] = new HashSet<string>(new[] { "region" }, StringComparer.OrdinalIgnoreCase);
             map["Employees"] = new HashSet<string>(new[] { "region", "branch", "department", "organization" }, StringComparer.OrdinalIgnoreCase);
@@ -219,5 +219,156 @@ public sealed class KeycloakScopeRegistryStore(
         }
         cache.Set(ResourceMapKey, map, Ttl);
         return map;
+    }
+
+    // ---------- IScopeRegistryAdmin — CRUD on the iam-scope-registry group attributes ----------
+
+    public async Task<IReadOnlyCollection<ScopeDefinitionDto>> ListScopesAsync(CancellationToken ct)
+    {
+        var attrs = await GetRegistryAttributesAsync(ct);
+        var list = new List<ScopeDefinitionDto>();
+        foreach (var kv in attrs)
+        {
+            if (!kv.Key.StartsWith("scope.", StringComparison.Ordinal)) continue;
+            var key = kv.Key.Substring("scope.".Length);
+            var def = ParseScope(key, kv.Value.FirstOrDefault() ?? "{}");
+            list.Add(new ScopeDefinitionDto(def.Key, def.DisplayName, def.Description, def.IsActive, def.ValueType));
+        }
+        return list.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
+    }
+
+    public async Task<ScopeDefinitionDto?> GetScopeAsync(string key, CancellationToken ct)
+    {
+        var all = await ListScopesAsync(ct);
+        return all.FirstOrDefault(s => string.Equals(s.Key, key, StringComparison.Ordinal));
+    }
+
+    public async Task<IReadOnlyCollection<ResourceScopeMappingDto>> ListResourcesAsync(CancellationToken ct)
+    {
+        var attrs = await GetRegistryAttributesAsync(ct);
+        var list = new List<ResourceScopeMappingDto>();
+        foreach (var kv in attrs)
+        {
+            if (!kv.Key.StartsWith("resource.", StringComparison.Ordinal)) continue;
+            list.Add(new ResourceScopeMappingDto(kv.Key.Substring("resource.".Length), kv.Value));
+        }
+        return list.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
+    }
+
+    public async Task<ScopeDefinitionDto?> CreateScopeAsync(string key, string? displayName, string? description, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        var existing = await GetScopeAsync(key, ct);
+        if (existing is not null) return null; // conflict — caller maps to 409
+        var json = JsonSerializer.Serialize(new
+        {
+            displayName = string.IsNullOrWhiteSpace(displayName) ? key : displayName,
+            description,
+            isActive = true,
+            valueType = "String",
+        });
+        var ok = await UpsertRegistryAttributeAsync($"scope.{key}", json, ct);
+        if (!ok) throw new InvalidOperationException($"Failed to create scope '{key}' in {RegistryGroupName}.");
+        Invalidate();
+        return await GetScopeAsync(key, ct);
+    }
+
+    public async Task<ScopeDefinitionDto?> UpdateScopeAsync(string key, string? displayName, string? description, bool? isActive, CancellationToken ct)
+    {
+        var attrs = await GetRegistryAttributesAsync(ct);
+        var attrName = $"scope.{key}";
+        if (!attrs.TryGetValue(attrName, out var vals)) return null;
+        var def = ParseScope(key, vals.FirstOrDefault() ?? "{}");
+        var json = JsonSerializer.Serialize(new
+        {
+            displayName = displayName ?? def.DisplayName,
+            description = description ?? def.Description,
+            isActive = isActive ?? def.IsActive,
+            valueType = def.ValueType,
+        });
+        var ok = await UpsertRegistryAttributeAsync(attrName, json, ct);
+        if (!ok) throw new InvalidOperationException($"Failed to update scope '{key}' in {RegistryGroupName}.");
+        Invalidate();
+        return await GetScopeAsync(key, ct);
+    }
+
+    /// <summary>Read-modify-write of a single registry group attribute via GET group + PUT group.</summary>
+    private async Task<bool> UpsertRegistryAttributeAsync(string attrName, string value, CancellationToken ct)
+    {
+        var token = await tokenProvider.GetTokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
+        try
+        {
+            // Resolve registry group id
+            string? groupId = null;
+            var searchReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(RegistryGroupName)}");
+            searchReq.Headers.Add("Authorization", $"Bearer {token}");
+            var searchRes = await http.SendAsync(searchReq, ct);
+            if (!searchRes.IsSuccessStatusCode) return false;
+            var searchDoc = JsonDocument.Parse(await searchRes.Content.ReadAsStringAsync(ct));
+            if (searchDoc.RootElement.ValueKind == JsonValueKind.Array)
+                foreach (var el in searchDoc.RootElement.EnumerateArray())
+                    if (el.TryGetProperty("name", out var n) && n.GetString() == RegistryGroupName &&
+                        el.TryGetProperty("id", out var gid)) { groupId = gid.GetString(); break; }
+            if (string.IsNullOrEmpty(groupId))
+            {
+                // Registry group missing — create it so admins can bootstrap scopes without a realm re-import.
+                var createReq = new HttpRequestMessage(HttpMethod.Post, $"{AdminBase}/{_o.Realm}/groups")
+                { Content = JsonContent.Create(new { name = RegistryGroupName }) };
+                createReq.Headers.Add("Authorization", $"Bearer {token}");
+                var createRes = await http.SendAsync(createReq, ct);
+                if (!createRes.IsSuccessStatusCode && createRes.StatusCode != System.Net.HttpStatusCode.Conflict) return false;
+                var reSearch = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(RegistryGroupName)}");
+                reSearch.Headers.Add("Authorization", $"Bearer {token}");
+                var reRes = await http.SendAsync(reSearch, ct);
+                if (!reRes.IsSuccessStatusCode) return false;
+                var reDoc = JsonDocument.Parse(await reRes.Content.ReadAsStringAsync(ct));
+                if (reDoc.RootElement.ValueKind == JsonValueKind.Array)
+                    foreach (var el in reDoc.RootElement.EnumerateArray())
+                        if (el.TryGetProperty("name", out var n2) && n2.GetString() == RegistryGroupName &&
+                            el.TryGetProperty("id", out var gid2)) { groupId = gid2.GetString(); break; }
+                if (string.IsNullOrEmpty(groupId)) return false;
+            }
+
+            // GET full group, merge attribute, PUT back
+            var getReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}");
+            getReq.Headers.Add("Authorization", $"Bearer {token}");
+            var getRes = await http.SendAsync(getReq, ct);
+            if (!getRes.IsSuccessStatusCode) return false;
+            var groupJson = JsonDocument.Parse(await getRes.Content.ReadAsStringAsync(ct)).RootElement;
+
+            var attributes = new Dictionary<string, string[]>(StringComparer.Ordinal);
+            if (groupJson.TryGetProperty("attributes", out var a) && a.ValueKind == JsonValueKind.Object)
+                foreach (var prop in a.EnumerateObject())
+                    attributes[prop.Name] = prop.Value.ValueKind == JsonValueKind.Array
+                        ? prop.Value.EnumerateArray().Select(v => v.GetString() ?? "").ToArray()
+                        : [prop.Value.GetString() ?? ""];
+            attributes[attrName] = [value];
+
+            var name = groupJson.TryGetProperty("name", out var nm) ? nm.GetString() ?? RegistryGroupName : RegistryGroupName;
+            var body = new Dictionary<string, object>
+            {
+                ["name"] = name,
+                ["attributes"] = attributes,
+            };
+            if (groupJson.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String)
+                body["path"] = path.GetString()!;
+
+            var putReq = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}")
+            { Content = JsonContent.Create(body) };
+            putReq.Headers.Add("Authorization", $"Bearer {token}");
+            var putRes = await http.SendAsync(putReq, ct);
+            if (!putRes.IsSuccessStatusCode)
+            {
+                logger.LogDebug("Registry group PUT failed: {Status}", putRes.StatusCode);
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to upsert registry attribute {Attr}", attrName);
+            return false;
+        }
     }
 }

@@ -93,14 +93,13 @@ builder.Services.AddScoped<Identity.Application.Scope.IResourceScopeResolver>(sp
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
 builder.Services.AddScoped<Identity.Application.Scope.IScopeCacheInvalidator>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
-builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>();
-builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfResourceScopeResolver>();
+builder.Services.AddScoped<Identity.Application.Scope.IScopeRegistryAdmin>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>();
 builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
 builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
-builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfUserScopeStore>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakCompositeRoleStore>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>();
@@ -264,18 +263,6 @@ try
 catch
 {
     /* best-effort */
-}
-
-try
-{
-    using var scope3 = app.Services.CreateScope();
-    var db = scope3.ServiceProvider.GetRequiredService<Identity.Persistence.KeyManagement.KeyMetadataDbContext>();
-    using var cts3 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-    await Identity.Persistence.KeyManagement.ScopeSeed.EnsureSeededAsync(db, cts3.Token);
-}
-catch
-{
-    /* best-effort — Oracle auth tables are legacy; Keycloak iam-scope-registry is the source of truth */
 }
 
 app.MapPost("/api/identity/external/organization-token",

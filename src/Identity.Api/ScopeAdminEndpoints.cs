@@ -1,70 +1,78 @@
-#pragma warning disable CS0618
 using Identity.Application.Scope;
 using Identity.Contracts;
-using Identity.Persistence.KeyManagement;
-using Microsoft.EntityFrameworkCore;
 
 namespace Identity.Api;
 
+/// <summary>
+/// Scope-registry admin endpoints. The Keycloak <c>iam-scope-registry</c> group is the
+/// source of truth (no Oracle scope tables); all reads/writes go through IScopeRegistryAdmin.
+/// </summary>
 public static class ScopeAdminEndpoints
 {
     public static RouteGroupBuilder MapScopeAdmin(this IEndpointRouteBuilder app)
     {
         var g = app.MapGroup("/api/identity/scopes").WithTags("Scopes");
 
-        g.MapGet("", async (KeyMetadataDbContext db, CancellationToken ct) =>
-        {
-            var list = await db.ScopeDefinitions.OrderBy(s => s.Key).ToListAsync(ct);
-            return Results.Ok(list.Select(s => new { s.Key, s.DisplayName, s.Description, s.IsActive, s.ValueType }));
-        }).RequireAuthorization(IamPermissions.ScopesRead).WithName("ListScopes");
+        g.MapGet("", async (IScopeRegistryAdmin registry, CancellationToken ct) =>
+                Results.Ok(await registry.ListScopesAsync(ct)))
+            .RequireAuthorization(IamPermissions.ScopesRead)
+            .WithName("ListScopes")
+            .Produces<IReadOnlyCollection<ScopeDefinitionDto>>(200);
 
-        g.MapGet("/{key}", async (string key, KeyMetadataDbContext db, CancellationToken ct) =>
-        {
-            var s = await db.ScopeDefinitions.FirstOrDefaultAsync(x => x.Key == key, ct);
-            return s is null ? Results.NotFound() : Results.Ok(new { s.Key, s.DisplayName, s.Description, s.IsActive, s.ValueType });
-        }).RequireAuthorization(IamPermissions.ScopesRead).WithName("GetScope");
+        g.MapGet("/resources/list", async (IScopeRegistryAdmin registry, CancellationToken ct) =>
+                Results.Ok(await registry.ListResourcesAsync(ct)))
+            .RequireAuthorization(IamPermissions.ScopesRead)
+            .WithName("ListResources")
+            .Produces<IReadOnlyCollection<ResourceScopeMappingDto>>(200);
 
-        g.MapGet("/{key}/resources", async (string key, KeyMetadataDbContext db, CancellationToken ct) =>
-        {
-            var def = await db.ScopeDefinitions.FirstOrDefaultAsync(x => x.Key == key, ct);
-            if (def is null) return Results.NotFound();
-            var resources = await (from m in db.ScopeResourceMappings
-                                   join r in db.ApplicationResources on m.ApplicationResourceId equals r.Id
-                                   where m.ScopeDefinitionId == def.Id
-                                   select r.Key).ToListAsync(ct);
-            return Results.Ok(new { scope = key, resources });
-        }).RequireAuthorization(IamPermissions.ScopesRead).WithName("GetScopeResources");
+        g.MapGet("/{key}", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
+            {
+                var s = await registry.GetScopeAsync(key, ct);
+                return s is null
+                    ? Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")))
+                    : Results.Ok(s);
+            })
+            .RequireAuthorization(IamPermissions.ScopesRead)
+            .WithName("GetScope")
+            .Produces<ScopeDefinitionDto>(200);
 
-        g.MapPost("", async (CreateScopeRequest req, KeyMetadataDbContext db, IScopeCacheInvalidator cache, CancellationToken ct) =>
-        {
-            if (string.IsNullOrWhiteSpace(req.Key)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["key"] = ["Key is required."] });
-            if (await db.ScopeDefinitions.AnyAsync(x => x.Key == req.Key, ct))
-                return Results.Conflict(new ProblemResponse("conflict", $"Scope '{req.Key}' already exists.", Guid.NewGuid().ToString("N")));
-            var e = new ScopeDefinitionEntity { Id = Guid.NewGuid(), Key = req.Key.Trim(), DisplayName = req.DisplayName ?? req.Key, Description = req.Description, IsActive = true, ValueType = "String", CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow };
-            db.ScopeDefinitions.Add(e);
-            await db.SaveChangesAsync(ct);
-            cache.Invalidate();
-            return Results.Created($"/api/identity/scopes/{e.Key}", e);
-        }).RequireAuthorization(IamPermissions.ScopesManage).WithName("CreateScope");
+        g.MapPost("", async (CreateScopeRequest req, IScopeRegistryAdmin registry, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(req.Key))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["key"] = ["Key is required."] });
+                try
+                {
+                    var created = await registry.CreateScopeAsync(req.Key.Trim(), req.DisplayName, req.Description, ct);
+                    if (created is null)
+                        return Results.Conflict(new ProblemResponse("conflict", $"Scope '{req.Key}' already exists.", Guid.NewGuid().ToString("N")));
+                    return Results.Created($"/api/identity/scopes/{Uri.EscapeDataString(created.Key)}", created);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                }
+            })
+            .RequireAuthorization(IamPermissions.ScopesManage)
+            .WithName("CreateScope")
+            .Produces<ScopeDefinitionDto>(201);
 
-        g.MapPut("/{key}", async (string key, UpdateScopeRequest req, KeyMetadataDbContext db, IScopeCacheInvalidator cache, CancellationToken ct) =>
-        {
-            var e = await db.ScopeDefinitions.FirstOrDefaultAsync(x => x.Key == key, ct);
-            if (e is null) return Results.NotFound();
-            if (req.DisplayName is not null) e.DisplayName = req.DisplayName;
-            if (req.Description is not null) e.Description = req.Description;
-            if (req.IsActive is not null) e.IsActive = req.IsActive.Value;
-            e.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
-            cache.Invalidate();
-            return Results.Ok(e);
-        }).RequireAuthorization(IamPermissions.ScopesManage).WithName("UpdateScope");
-
-        g.MapGet("/resources/list", async (KeyMetadataDbContext db, CancellationToken ct) =>
-        {
-            var list = await db.ApplicationResources.OrderBy(r => r.Key).ToListAsync(ct);
-            return Results.Ok(list.Select(r => new { r.Key, r.DisplayName }));
-        }).RequireAuthorization(IamPermissions.ScopesRead).WithName("ListResources");
+        g.MapPut("/{key}", async (string key, UpdateScopeRequest req, IScopeRegistryAdmin registry, CancellationToken ct) =>
+            {
+                try
+                {
+                    var updated = await registry.UpdateScopeAsync(key, req.DisplayName, req.Description, req.IsActive, ct);
+                    return updated is null
+                        ? Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")))
+                        : Results.Ok(updated);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                }
+            })
+            .RequireAuthorization(IamPermissions.ScopesManage)
+            .WithName("UpdateScope")
+            .Produces<ScopeDefinitionDto>(200);
 
         return g;
     }
