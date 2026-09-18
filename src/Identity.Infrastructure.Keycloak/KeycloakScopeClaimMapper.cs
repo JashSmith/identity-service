@@ -40,8 +40,51 @@ public sealed class KeycloakScopeClaimMapper(
             // Ensure mappers for registry-defined scopes plus well-known defaults (so startup works before registry exists)
             var keys = await ResolveScopeKeysAsync(token, ct);
             foreach (var k in keys) await EnsureAttributeMapperAsync(scopeId, k, token, ct);
+            // Realm-level defaults are not applied retroactively, and a realm imported with
+            // IGNORE_EXISTING keeps its old clients — so attach the scope to every client here.
+            // Without it the authz.scope.* mappers never run and tokens carry no scope claims.
+            await EnsureScopeAssignedToClientsAsync(scopeId, token, ct);
         }
         catch (Exception ex) { logger.LogDebug(ex, "Failed to provision authz-scopes mappers"); }
+    }
+
+    /// <summary>Idempotently assigns the scope as a default client scope on every realm client.</summary>
+    private async Task EnsureScopeAssignedToClientsAsync(string scopeId, string token, CancellationToken ct)
+    {
+        var listReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/clients?first=0&max=200");
+        listReq.Headers.Add("Authorization", $"Bearer {token}");
+        var listRes = await http.SendAsync(listReq, ct);
+        if (!listRes.IsSuccessStatusCode) return;
+        var doc = JsonDocument.Parse(await listRes.Content.ReadAsStringAsync(ct));
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return;
+        int assigned = 0;
+        foreach (var c in doc.RootElement.EnumerateArray())
+        {
+            var clientUuid = c.TryGetProperty("id", out var id) ? id.GetString() : null;
+            if (string.IsNullOrEmpty(clientUuid)) continue;
+
+            var assignedReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/clients/{Uri.EscapeDataString(clientUuid)}/default-client-scopes");
+            assignedReq.Headers.Add("Authorization", $"Bearer {token}");
+            var assignedRes = await http.SendAsync(assignedReq, ct);
+            if (assignedRes.IsSuccessStatusCode)
+            {
+                var adoc = JsonDocument.Parse(await assignedRes.Content.ReadAsStringAsync(ct));
+                if (adoc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    var already = adoc.RootElement.EnumerateArray()
+                        .Any(s => s.TryGetProperty("id", out var sid) && sid.GetString() == scopeId);
+                    if (already) continue;
+                }
+            }
+
+            var addReq = new HttpRequestMessage(HttpMethod.Put,
+                $"{AdminBase}/{_o.Realm}/clients/{Uri.EscapeDataString(clientUuid)}/default-client-scopes/{Uri.EscapeDataString(scopeId)}");
+            addReq.Headers.Add("Authorization", $"Bearer {token}");
+            var addRes = await http.SendAsync(addReq, ct);
+            if (addRes.IsSuccessStatusCode) assigned++;
+            else logger.LogDebug("Could not assign {Scope} to client {Client}: {Status}", ScopeName, clientUuid, addRes.StatusCode);
+        }
+        if (assigned > 0) logger.LogInformation("Assigned client scope {Scope} to {Count} client(s)", ScopeName, assigned);
     }
 
     private async Task<string> EnsureClientScopeAsync(string token, CancellationToken ct)

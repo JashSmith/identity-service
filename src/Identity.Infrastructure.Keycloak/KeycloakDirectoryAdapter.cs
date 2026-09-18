@@ -133,10 +133,90 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
     public async Task<IReadOnlyCollection<PermissionDto>> GetUserPermissionsAsync(string id, CancellationToken ct)
     {
         // Permissions are modelled as roles in Keycloak for this facade; map them to PermissionDto by convention.
-        var roles = await GetUserRolesAsync(id, ct);
-        return roles
-            .Select(r => new PermissionDto(r.Name, r.Description ?? r.Name, _o.Realm, string.Empty, false, r.Id))
+        // A user normally gets them through business-role GROUP membership rather than direct
+        // mappings, so group-inherited realm and client roles must be unioned in — Keycloak's
+        // /users/{id}/role-mappings only reports direct assignments and returns [] otherwise.
+        var token = await GetAdminTokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) return [];
+        var names = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var r in await GetUserRolesAsync(id, ct)) names[r.Name] = r.Description;
+
+        foreach (var groupId in await GetUserGroupIdsAsync(id, token, ct))
+        {
+            foreach (var r in await GetGroupRealmRolesAsync(groupId, token, ct)) names[r.Name] = r.Description;
+            foreach (var clientUuid in await ListClientUuidsAsync(token, ct))
+                foreach (var r in await GetGroupClientRolesAsync(groupId, clientUuid, token, ct))
+                    names[r.Name] = r.Description;
+        }
+
+        return names
+            .Select(kv => new PermissionDto(kv.Key, kv.Value ?? kv.Key, _o.Realm, string.Empty, false, null))
             .ToList();
+    }
+
+    private async Task<IReadOnlyCollection<string>> GetUserGroupIdsAsync(string userId, string token, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/users/{Uri.EscapeDataString(userId)}/groups");
+        AttachAuth(req, token);
+        try
+        {
+            var res = await http.SendAsync(req, ct);
+            if (!res.IsSuccessStatusCode) return [];
+            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+            return doc.RootElement.ValueKind == JsonValueKind.Array
+                ? doc.RootElement.EnumerateArray()
+                    .Select(e => e.TryGetProperty("id", out var i) ? i.GetString() ?? "" : "")
+                    .Where(x => !string.IsNullOrEmpty(x)).ToArray()
+                : [];
+        }
+        catch { return []; }
+    }
+
+    private async Task<IReadOnlyCollection<RoleDto>> GetGroupRealmRolesAsync(string groupId, string token, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/realm");
+        AttachAuth(req, token);
+        return await ReadRoleArrayAsync(req, ct);
+    }
+
+    private async Task<IReadOnlyCollection<RoleDto>> GetGroupClientRolesAsync(string groupId, string clientUuid, string token, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/clients/{Uri.EscapeDataString(clientUuid)}");
+        AttachAuth(req, token);
+        return await ReadRoleArrayAsync(req, ct);
+    }
+
+    private async Task<IReadOnlyCollection<RoleDto>> ReadRoleArrayAsync(HttpRequestMessage req, CancellationToken ct)
+    {
+        try
+        {
+            var res = await http.SendAsync(req, ct);
+            if (!res.IsSuccessStatusCode) return [];
+            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+            return doc.RootElement.ValueKind == JsonValueKind.Array
+                ? doc.RootElement.EnumerateArray().Select(MapRole).ToArray()
+                : [];
+        }
+        catch { return []; }
+    }
+
+    private async Task<IReadOnlyCollection<string>> ListClientUuidsAsync(string token, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/clients?first=0&max=200");
+        AttachAuth(req, token);
+        try
+        {
+            var res = await http.SendAsync(req, ct);
+            if (!res.IsSuccessStatusCode) return [];
+            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+            return doc.RootElement.ValueKind == JsonValueKind.Array
+                ? doc.RootElement.EnumerateArray()
+                    .Select(e => e.TryGetProperty("id", out var i) ? i.GetString() ?? "" : "")
+                    .Where(x => !string.IsNullOrEmpty(x)).ToArray()
+                : [];
+        }
+        catch { return []; }
     }
 
     public async Task<PagedResponse<RoleDto>> GetRolesAsync(string? clientId, int page, int pageSize,

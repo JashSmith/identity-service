@@ -201,38 +201,60 @@ public sealed class KeycloakAuthorizationTests
     // ---------- 6. User profile hardening — PatchProfile injects admin-only attrs ----------
 
     [Fact]
-    public void UserProfileHardening_PatchProfile_Injects_AdminOnly_AuthzScope()
+    public void UserProfileHardening_PatchProfile_Declares_Each_Scope_Attribute_AdminOnly()
     {
-        // Use reflection to reach private static PatchProfile(JsonElement)
-        var t = typeof(KeycloakUserProfileHardening);
-        var m = t.GetMethod("PatchProfile", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        Assert.NotNull(m);
-        var empty = JsonDocument.Parse("{}").RootElement;
-        var patched = (string?)m!.Invoke(null, [empty]);
+        // Keycloak discards undeclared user attributes, so the profile must declare a concrete
+        // authz.scope.<key> per registry key (wildcards do not match) — each admin-only.
+        var patched = KeycloakUserProfileHardening.PatchProfile(
+            JsonDocument.Parse("""{"attributes":[{"name":"username"}]}""").RootElement,
+            ["region", "branch"]);
         Assert.NotNull(patched);
-        var doc = JsonDocument.Parse(patched!);
-        Assert.True(doc.RootElement.TryGetProperty("attributes", out var attrs));
-        var arr = attrs.EnumerateArray().ToArray();
-        Assert.Contains(arr, e => e.TryGetProperty("name", out var n) && n.GetString() == "authz.scope.*");
-        var authz = arr.First(e => e.TryGetProperty("name", out var n) && n.GetString() == "authz.scope.*");
-        Assert.True(authz.TryGetProperty("permissions", out var perms));
-        Assert.Equal("admin", perms.GetProperty("edit").EnumerateArray().First().GetString());
-        Assert.Equal("admin", perms.GetProperty("view").EnumerateArray().First().GetString());
+        var arr = JsonDocument.Parse(patched!).RootElement.GetProperty("attributes").EnumerateArray().ToArray();
+        var names = arr.Select(e => e.GetProperty("name").GetString()).ToArray();
+        Assert.Contains("username", names);
+        Assert.Contains("authz.scope.region", names);
+        Assert.Contains("authz.scope.branch", names);
+        Assert.Contains("iam.scoped_access", names);
+        Assert.DoesNotContain("authz.scope.*", names);
+
+        var region = arr.First(e => e.GetProperty("name").GetString() == "authz.scope.region");
+        Assert.True(region.GetProperty("multivalued").GetBoolean());
+        Assert.Equal("admin", region.GetProperty("permissions").GetProperty("edit").EnumerateArray().First().GetString());
+        Assert.Equal("admin", region.GetProperty("permissions").GetProperty("view").EnumerateArray().First().GetString());
     }
 
     [Fact]
-    public void UserProfileHardening_PatchProfile_Idempotent_WhenAlreadyHardened()
+    public void UserProfileHardening_PatchProfile_Idempotent_WhenAlreadyDeclared()
     {
-        var t = typeof(KeycloakUserProfileHardening);
-        var m = t.GetMethod("PatchProfile", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         var hardened = JsonDocument.Parse("""
             {"attributes":[
-              {"name":"authz.scope.*","permissions":{"view":["admin"],"edit":["admin"]},"validations":{},"annotations":{}},
-              {"name":"iam.scoped_access","permissions":{"view":["admin"],"edit":["admin"]},"validations":{},"annotations":{}}
+              {"name":"username"},
+              {"name":"authz.scope.region","multivalued":true,"permissions":{"view":["admin"],"edit":["admin"]}},
+              {"name":"iam.scoped_access","permissions":{"view":["admin"],"edit":["admin"]}}
             ]}
             """).RootElement;
-        var result = (string?)m.Invoke(null, [hardened]);
-        Assert.Null(result); // already hardened -> null signals no churn
+        // Nothing missing → no churn.
+        Assert.Null(KeycloakUserProfileHardening.PatchProfile(hardened, ["region"]));
+        // A newly registered scope key must be added on the next run.
+        Assert.NotNull(KeycloakUserProfileHardening.PatchProfile(hardened, ["region", "cost-center"]));
+    }
+
+    [Fact]
+    public void UserProfileHardening_PatchProfile_Drops_Legacy_Wildcard_Attribute()
+    {
+        // Earlier versions wrote a literal "authz.scope.*" that matches nothing in Keycloak.
+        var withWildcard = JsonDocument.Parse("""
+            {"attributes":[
+              {"name":"username"},
+              {"name":"authz.scope.*","permissions":{"view":["admin"],"edit":["admin"]}}
+            ]}
+            """).RootElement;
+        var patched = KeycloakUserProfileHardening.PatchProfile(withWildcard, ["region"]);
+        Assert.NotNull(patched);
+        var names = JsonDocument.Parse(patched!).RootElement.GetProperty("attributes")
+            .EnumerateArray().Select(e => e.GetProperty("name").GetString()).ToArray();
+        Assert.DoesNotContain("authz.scope.*", names);
+        Assert.Contains("authz.scope.region", names);
     }
 
     // ---------- 7. Scope filter deny-by-default ----------

@@ -30,6 +30,16 @@ public interface IUserProvisioningService
     Task<bool> DeleteUserAsync(string userId, CancellationToken ct);
 }
 
+/// <summary>
+/// Attributes the identity provider requires on every user profile. A user created without them
+/// is locked out of login ("Account is not fully set up"), so the facade validates against this
+/// up front and returns field-level errors instead of silently creating an unusable account.
+/// </summary>
+public interface IUserProfileRequirements
+{
+    Task<IReadOnlyCollection<string>> GetRequiredAttributesAsync(CancellationToken ct);
+}
+
 public sealed class ScopedAccessOptions
 {
     public string AttributeName { get; set; } = ScopedAccessConstants.AttributeName;

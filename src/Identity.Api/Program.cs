@@ -123,10 +123,22 @@ builder.Services.AddScoped<ProvisioningOrchestrator>(sp =>
         sp.GetRequiredService<IScopedAccessStore>(),
         sp.GetRequiredService<IBusinessRoleStore>(),
         sp.GetRequiredService<IUserRoleMapping>(),
-        sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>()));
+        sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>(),
+        sp.GetRequiredService<IUserProfileRequirements>()));
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
-builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>();
+// Singleton so the cached required-profile attributes are shared by every endpoint and the
+// orchestrator; AddHttpClient alone would register it transient and defeat the cache.
+builder.Services.AddSingleton<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>(sp =>
+    new Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening(
+        sp.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(nameof(Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening)),
+        Microsoft.Extensions.Options.Options.Create(
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<Identity.Infrastructure.Keycloak.KeycloakOptions>>().Value),
+        sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>(),
+        sp.GetRequiredService<ILogger<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>>()));
+builder.Services.AddSingleton<IUserProfileRequirements>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.FacadePermissionRegistrar>();
 
 

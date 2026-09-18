@@ -226,11 +226,32 @@
       "authorizationServicesEnabled": false,
       "fullScopeAllowed": true,
       "protocol": "openid-connect",
+      "defaultClientScopes": [
+        "iam-access",
+        "authz-scopes",
+        "permissions-mapper"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
       "attributes": {
         "access.token.lifespan": "300",
         "client.secret.creation.time": "0"
       },
       "protocolMappers": [
+        {
+          "name": "permission-client-role-aggregate",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "claim.name": "permissions",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
         {
           "name": "permission-claim",
           "protocol": "openid-connect",

@@ -48,7 +48,8 @@ public static class ScopeAdminEndpoints
             .Produces<object>(200);
 
         g.MapPost("", async (CreateScopeRequest req, IScopeRegistryAdmin registry,
-                Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper claimMapper, CancellationToken ct) =>
+                Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper claimMapper,
+                Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening profileHardening, CancellationToken ct) =>
             {
                 if (string.IsNullOrWhiteSpace(req.Key))
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["key"] = ["Key is required."] });
@@ -62,6 +63,9 @@ public static class ScopeAdminEndpoints
                     using var mapperCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     mapperCts.CancelAfter(TimeSpan.FromSeconds(10));
                     try { await claimMapper.EnsureAsync(mapperCts.Token); } catch { /* best-effort */ }
+                    // Declare authz.scope.<key> in the User Profile — Keycloak silently discards
+                    // undeclared attributes, so without this the new scope could never be written.
+                    try { await profileHardening.EnsureAsync(mapperCts.Token); } catch { /* best-effort */ }
                     return Results.Created($"/api/identity/scopes/{Uri.EscapeDataString(created.Key)}", created);
                 }
                 catch (InvalidOperationException ex)

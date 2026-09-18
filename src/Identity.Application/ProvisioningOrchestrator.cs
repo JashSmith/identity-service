@@ -8,12 +8,48 @@ public sealed class ProvisioningOrchestrator(
     IScopedAccessStore scopedStore,
     IBusinessRoleStore roles,
     IUserRoleMapping roleMapping,
-    ScopeAssignmentValidator? scopeValidator = null)
+    ScopeAssignmentValidator? scopeValidator = null,
+    IUserProfileRequirements? profileRequirements = null)
 {
+    /// <summary>
+    /// Maps a Keycloak profile attribute name to the value carried by <see cref="CreateUserRequest"/>.
+    /// </summary>
+    private static string? RequestValue(CreateUserRequest r, string attribute) => attribute switch
+    {
+        "username" => r.Username,
+        "email" => r.Email,
+        "firstName" => r.FirstName,
+        "lastName" => r.LastName,
+        _ => null, // unknown attribute — not something the facade can supply or judge
+    };
+
+    private async Task ValidateProfileAsync(CreateUserRequest request, CancellationToken ct)
+    {
+        if (profileRequirements is null) return;
+        var required = await profileRequirements.GetRequiredAttributesAsync(ct);
+        if (required.Count == 0) return; // provider unreachable or nothing required
+        var errors = new Dictionary<string, string[]>();
+        foreach (var attr in required)
+        {
+            if (!string.IsNullOrWhiteSpace(RequestValue(request, attr))) continue;
+            var field = attr switch
+            {
+                "username" => "username",
+                "email" => "email",
+                "firstName" => "firstName",
+                "lastName" => "lastName",
+                _ => attr,
+            };
+            errors[field] = [$"'{attr}' is required by the identity provider's user profile; without it the user cannot sign in."];
+        }
+        if (errors.Count > 0) throw new Scope.ScopedValidationException(errors);
+    }
+
     public async Task<(UserDto User, ScopedAccessDocument Scoped)> CreateUserWithAssignmentsAsync(
         CreateUserRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+        await ValidateProfileAsync(request, ct);
         if (request.Assignments is not null)
         {
             foreach (var a in request.Assignments) ScopedAccessSerializer.Validate(a);
