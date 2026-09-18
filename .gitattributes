@@ -1,1 +1,2 @@
 .claude-sync/sessions/*.jsonl -text
+*.sh text eol=lf
