@@ -21,4 +21,10 @@ public interface IKeycloakClientRoleProvisioner
 
     /// <summary>Reconciles Admin group: all registered client roles minus already-mapped → add missing. Returns added count.</summary>
     Task<int> ReconcileAdminAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Ensures the always-present super-admin group exists with all facade management
+    /// permissions and every registered client role. Idempotent; best-effort.
+    /// </summary>
+    Task EnsureSuperAdminGroupAsync(CancellationToken ct) => Task.CompletedTask;
 }

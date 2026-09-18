@@ -8,7 +8,8 @@ namespace Identity.Infrastructure.Keycloak;
 /// <summary>
 /// <see cref="IUserRoleMapping"/> backed by Keycloak Group membership.
 /// Business roles are Groups: MapRealmRole = join group, UnmapRealmRole = leave group.
-/// This replaces <see cref="KeycloakUserRoleMapping"/> which used realm role mappings.
+/// The interface keeps its realm-role vocabulary, but the mapping is group membership —
+/// a business role's effective permissions reach the token through its group role-mappings.
 /// </summary>
 public sealed class KeycloakUserGroupMembership(
     HttpClient http,

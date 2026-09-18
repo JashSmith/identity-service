@@ -23,10 +23,11 @@ public sealed class ScopeAssignmentValidator(IScopeDefinitionLookup lookup, ISco
                 if (!await lookup.IsScopeAllowedForRoleAsync(a.Role, scopeKey, ct))
                     Add(errors, $"assignments[{idx}].scopes.{scopeKey}", $"Scope '{scopeKey}' is not allowed for role '{a.Role}'.");
                 var validator = validators.GetValidator(scopeKey);
-                foreach (var v in kv.Value)
+                var values = kv.Value ?? Array.Empty<string>();
+                foreach (var v in values)
                     if (!validator.IsValid(v, out var err))
                         Add(errors, $"assignments[{idx}].scopes.{scopeKey}", err ?? "Invalid scope value.");
-                if (kv.Value.Count == 0)
+                if (values.Count == 0)
                     Add(errors, $"assignments[{idx}].scopes.{scopeKey}", "Scope must have at least one value.");
             }
             idx++;

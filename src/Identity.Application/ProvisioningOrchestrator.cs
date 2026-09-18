@@ -9,8 +9,7 @@ public sealed class ProvisioningOrchestrator(
     IBusinessRoleStore roles,
     IUserRoleMapping roleMapping,
     IPermissionRegistry permissionRegistry,
-    ScopeAssignmentValidator? scopeValidator = null,
-    IUserScopeWriter? userScopeWriter = null)
+    ScopeAssignmentValidator? scopeValidator = null)
 {
     public async Task<(UserDto User, ScopedAccessDocument Scoped)> CreateUserWithAssignmentsAsync(
         CreateUserRequest request, CancellationToken ct)
@@ -40,8 +39,8 @@ public sealed class ProvisioningOrchestrator(
         try
         {
             var doc = ToDocument(request.Assignments);
+            // scopedStore persists both authz.scope.* attributes and the legacy blob in one PUT.
             await scopedStore.SetAsync(created.Id, doc, ct);
-            if (userScopeWriter is not null) await userScopeWriter.SetAsync(created.Id, request.Assignments, ct);
             foreach (var a in request.Assignments) await SafeMapRoleAsync(created.Id, a.Role, ct);
             return (created, doc);
         }
@@ -67,12 +66,6 @@ public sealed class ProvisioningOrchestrator(
             if (role is null) throw new InvalidOperationException($"Role '{assignment.Role}' does not exist.");
         }
         await scopedStore.AddAssignmentAsync(userId, assignment, ct);
-        if (userScopeWriter is not null)
-        {
-            var current = await scopedStore.GetAsync(userId, ct);
-            var dtos = current.Assignments.Select(a => new ScopedRoleAssignmentDto(a.Role, a.Scopes)).ToArray();
-            await userScopeWriter.SetAsync(userId, dtos, ct);
-        }
         await SafeMapRoleAsync(userId, assignment.Role, ct);
         return await scopedStore.GetAsync(userId, ct);
     }
@@ -98,7 +91,6 @@ public sealed class ProvisioningOrchestrator(
         var nextRoles = assignments.Select(a => a.Role.Trim()).ToHashSet(StringComparer.Ordinal);
         var doc = ToDocument(assignments);
         await scopedStore.SetAsync(userId, doc, ct);
-        if (userScopeWriter is not null) await userScopeWriter.SetAsync(userId, assignments, ct);
         foreach (var r in nextRoles.Except(previousRoles, StringComparer.Ordinal)) await SafeMapRoleAsync(userId, r, ct);
         foreach (var r in previousRoles.Except(nextRoles, StringComparer.Ordinal)) await SafeUnmapRoleAsync(userId, r, ct);
         return doc;
@@ -107,12 +99,6 @@ public sealed class ProvisioningOrchestrator(
     public async Task RemoveScopedAssignmentAsync(string userId, string role, CancellationToken ct)
     {
         await scopedStore.RemoveAssignmentAsync(userId, role, ct);
-        if (userScopeWriter is not null)
-        {
-            var remaining = await scopedStore.GetAsync(userId, ct);
-            var dtos = remaining.Assignments.Select(a => new ScopedRoleAssignmentDto(a.Role, a.Scopes)).ToArray();
-            await userScopeWriter.SetAsync(userId, dtos, ct);
-        }
         var still = await scopedStore.GetAsync(userId, ct);
         if (!still.Assignments.Any(a => string.Equals(a.Role, role, StringComparison.Ordinal)))
             await SafeUnmapRoleAsync(userId, role, ct);
@@ -128,10 +114,12 @@ public sealed class ProvisioningOrchestrator(
     public async Task<BusinessRoleDto> CreateBusinessRoleAsync(string name, string? description, IReadOnlyCollection<string> permissions, CancellationToken ct)
     {
         permissions ??= Array.Empty<string>();
-        foreach (var p in permissions)
+        if (permissions.Count > 0)
         {
-            var exists = await permissionRegistry.GetPermissionsAsync(null, true, ct);
-            if (!exists.Any(x => string.Equals(x.Name, p, StringComparison.Ordinal))) throw new InvalidOperationException($"Permission '{p}' does not exist.");
+            var known = await permissionRegistry.GetPermissionsAsync(null, true, ct);
+            foreach (var p in permissions)
+                if (!known.Any(x => string.Equals(x.Name, p, StringComparison.Ordinal)))
+                    throw new InvalidOperationException($"Permission '{p}' does not exist.");
         }
         return await roles.CreateAsync(name.Trim(), description, permissions, ct);
     }

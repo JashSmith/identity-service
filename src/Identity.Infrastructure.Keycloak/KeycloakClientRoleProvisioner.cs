@@ -23,6 +23,7 @@ public sealed class KeycloakClientRoleProvisioner(
     private readonly KeycloakOptions _o = opts.Value;
     private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
     private const string AdminGroupName = "key-admins";
+    private const string SuperAdminGroupName = "super-admins";
     private const string MapperName = "permission-client-role-mapper";
 
     private async Task<string> TokenAsync(CancellationToken ct) => await tokenProvider.GetTokenAsync(ct) ?? string.Empty;
@@ -155,19 +156,104 @@ public sealed class KeycloakClientRoleProvisioner(
         catch (Exception ex) { logger.LogDebug(ex, "Ensure mapper for {Client}", serviceClientId); }
     }
 
+    /// <summary>
+    /// Ensures the always-present super-admin group exists (idempotent; created at runtime
+    /// so it survives on realms imported before this version) and backfills every client role.
+    /// </summary>
+    public async Task EnsureSuperAdminGroupAsync(CancellationToken ct)
+    {
+        var token = await TokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) return;
+        var groupId = await ResolveGroupIdAsync(SuperAdminGroupName, token, ct);
+        if (string.IsNullOrEmpty(groupId))
+        {
+            try
+            {
+                var body = new
+                {
+                    name = SuperAdminGroupName,
+                    attributes = new Dictionary<string, string[]>
+                    {
+                        ["description"] = ["Always-present unrestricted administrators; every registered client role is auto-mapped to this group"],
+                    },
+                };
+                var req = new HttpRequestMessage(HttpMethod.Post, $"{AdminBase}/{_o.Realm}/groups")
+                { Content = JsonContent.Create(body) };
+                req.Headers.Add("Authorization", $"Bearer {token}");
+                var res = await http.SendAsync(req, ct);
+                if (!res.IsSuccessStatusCode && res.StatusCode != HttpStatusCode.Conflict)
+                {
+                    logger.LogWarning("EnsureSuperAdminGroup create failed: {Status}", res.StatusCode);
+                    return;
+                }
+                groupId = await ResolveGroupIdAsync(SuperAdminGroupName, token, ct);
+            }
+            catch (Exception ex) { logger.LogDebug(ex, "EnsureSuperAdminGroup error"); return; }
+        }
+        if (string.IsNullOrEmpty(groupId)) return;
+
+        // Grant the facade management permissions (identity.*) so super-admins pass RequireAuthorization.
+        var granted = new List<object>();
+        foreach (var perm in new[] { "identity.users.read", "identity.users.manage", "identity.roles.read",
+                     "identity.roles.manage", "identity.scopes.read", "identity.scopes.manage" })
+        {
+            var role = await LookupRealmRoleByNameAsync(perm, token, ct);
+            if (role is not null) granted.Add(new { id = role.Value.Id, name = role.Value.Name });
+        }
+        if (granted.Count > 0)
+        {
+            try
+            {
+                var req = new HttpRequestMessage(HttpMethod.Post,
+                    $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/realm")
+                { Content = JsonContent.Create(granted) };
+                req.Headers.Add("Authorization", $"Bearer {token}");
+                await http.SendAsync(req, ct);
+            }
+            catch (Exception ex) { logger.LogDebug(ex, "Map identity.* roles to super-admins"); }
+        }
+        // Backfill client roles from every service client (idempotent diff).
+        await ReconcileAdminAsync(ct);
+    }
+
+    private async Task<(string Id, string Name)?> LookupRealmRoleByNameAsync(string roleName, string token, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/roles/{Uri.EscapeDataString(roleName)}");
+        req.Headers.Add("Authorization", $"Bearer {token}");
+        try
+        {
+            var res = await http.SendAsync(req, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+            var id = doc.RootElement.TryGetProperty("id", out var pid) ? pid.GetString() ?? "" : "";
+            var n = doc.RootElement.TryGetProperty("name", out var nn) ? nn.GetString() ?? roleName : roleName;
+            return (id, n);
+        }
+        catch { return null; }
+    }
+
     public async Task<bool> EnsureAdminGroupMappingAsync(string serviceClientId, string roleName, CancellationToken ct)
     {
         var token = await TokenAsync(ct);
         if (string.IsNullOrEmpty(token)) return false;
         var clientUuid = await EnsureClientAsync(serviceClientId, ct);
         if (string.IsNullOrEmpty(clientUuid)) return false;
-        var groupId = await ResolveGroupIdAsync(AdminGroupName, token, ct);
-        if (string.IsNullOrEmpty(groupId)) { logger.LogDebug("Admin group {Name} not found", AdminGroupName); return false; }
         var role = await GetClientRoleAsync(clientUuid, roleName, token, ct);
         if (role is null) return false;
+        // Map to both admin groups: key-admins (legacy) and super-admins (unrestricted).
+        var ok = await MapClientRoleToGroupAsync(AdminGroupName, clientUuid, role.Value, token, ct);
+        ok &= await MapClientRoleToGroupAsync(SuperAdminGroupName, clientUuid, role.Value, token, ct);
+        return ok;
+    }
+
+    private async Task<bool> MapClientRoleToGroupAsync(string groupName, string clientUuid,
+        (string Id, string Name) role, string token, CancellationToken ct)
+    {
+        var groupId = await ResolveGroupIdAsync(groupName, token, ct);
+        if (string.IsNullOrEmpty(groupId)) { logger.LogDebug("Admin group {Name} not found", groupName); return false; }
         try
         {
-            var body = new[] { new { id = role.Value.Id, name = role.Value.Name } };
+            var body = new[] { new { id = role.Id, name = role.Name } };
             var req = new HttpRequestMessage(HttpMethod.Post,
                 $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/clients/{Uri.EscapeDataString(clientUuid)}")
             { Content = JsonContent.Create(body) };
@@ -175,15 +261,20 @@ public sealed class KeycloakClientRoleProvisioner(
             var res = await http.SendAsync(req, ct);
             return res.IsSuccessStatusCode;
         }
-        catch (Exception ex) { logger.LogDebug(ex, "Map role {Role} to admin group", roleName); return false; }
+        catch (Exception ex) { logger.LogDebug(ex, "Map role {Role} to group {Group}", role.Name, groupName); return false; }
     }
 
     public async Task<int> ReconcileAdminAsync(CancellationToken ct)
     {
         var token = await TokenAsync(ct);
         if (string.IsNullOrEmpty(token)) return 0;
-        var groupId = await ResolveGroupIdAsync(AdminGroupName, token, ct);
-        if (string.IsNullOrEmpty(groupId)) return 0;
+        var groupIds = new List<(string Name, string Id)>();
+        foreach (var gn in new[] { AdminGroupName, SuperAdminGroupName })
+        {
+            var gid = await ResolveGroupIdAsync(gn, token, ct);
+            if (!string.IsNullOrEmpty(gid)) groupIds.Add((gn, gid));
+        }
+        if (groupIds.Count == 0) return 0;
         int added = 0;
         try
         {
@@ -207,21 +298,23 @@ public sealed class KeycloakClientRoleProvisioner(
                 if (!rolesRes.IsSuccessStatusCode) continue;
                 var rdoc = JsonDocument.Parse(await rolesRes.Content.ReadAsStringAsync(ct));
                 if (rdoc.RootElement.ValueKind != JsonValueKind.Array) continue;
-                // Fetch current admin client mappings to diff
-                var mapped = await GetGroupClientRolesAsync(groupId, clientUuid, token, ct);
-                var mappedSet = new HashSet<string>(mapped, StringComparer.Ordinal);
                 foreach (var r in rdoc.RootElement.EnumerateArray())
                 {
                     var rid = r.TryGetProperty("id", out var pid) ? pid.GetString() ?? "" : "";
                     var rname = r.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                    if (string.IsNullOrEmpty(rname) || mappedSet.Contains(rname)) continue;
-                    var body = new[] { new { id = rid, name = rname } };
-                    var mapReq = new HttpRequestMessage(HttpMethod.Post,
-                        $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/clients/{Uri.EscapeDataString(clientUuid)}")
-                    { Content = JsonContent.Create(body) };
-                    mapReq.Headers.Add("Authorization", $"Bearer {token}");
-                    var mapRes = await http.SendAsync(mapReq, ct);
-                    if (mapRes.IsSuccessStatusCode) added++;
+                    if (string.IsNullOrEmpty(rname)) continue;
+                    foreach (var (groupName, groupId) in groupIds)
+                    {
+                        var mapped = await GetGroupClientRolesAsync(groupId, clientUuid, token, ct);
+                        if (mapped.Contains(rname, StringComparer.Ordinal)) continue;
+                        var body = new[] { new { id = rid, name = rname } };
+                        var mapReq = new HttpRequestMessage(HttpMethod.Post,
+                            $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/clients/{Uri.EscapeDataString(clientUuid)}")
+                        { Content = JsonContent.Create(body) };
+                        mapReq.Headers.Add("Authorization", $"Bearer {token}");
+                        var mapRes = await http.SendAsync(mapReq, ct);
+                        if (mapRes.IsSuccessStatusCode) added++;
+                    }
                 }
             }
         }

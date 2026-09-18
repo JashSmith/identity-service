@@ -10,15 +10,18 @@ namespace Identity.Infrastructure.Keycloak.Scope;
 ///   user/group attribute authz.scope.&lt;key&gt; — each value is one collection entry.
 /// Effective merge: Group scopes ∪ User scopes (union, unique, ordered), gated by
 /// authz.allowed-scopes on the business-role Groups at write time.
-/// Implements IUserScopeReader / IUserScopeWriter over Keycloak Admin REST.
+/// Single source of truth for user scope state: writes both the flat
+/// <c>authz.scope.*</c> attributes and the legacy <c>iam.scoped_access</c> blob in
+/// ONE PUT, and implements IScopedAccessStore so callers never dual-write.
 /// </summary>
 public sealed class KeycloakScopeAttributeStore(
     HttpClient http,
-    Identity.Infrastructure.Keycloak.KeycloakOptions opts,
+    Microsoft.Extensions.Options.IOptions<Identity.Infrastructure.Keycloak.KeycloakOptions> options,
     KeycloakAdminTokenProvider tokenProvider,
-    Identity.Application.ScopedAccessSerializer serializer)
-    : IUserScopeReader, IUserScopeWriter
+    IScopedAccessSerializer serializer)
+    : IUserScopeReader, IUserScopeWriter, IScopedAccessStore
 {
+    private readonly Identity.Infrastructure.Keycloak.KeycloakOptions opts = options.Value;
     private string AdminBase => $"{opts.BaseUrl.TrimEnd('/')}/admin/realms";
     private const string ScopeAttrPrefix = "authz.scope.";
 
@@ -212,6 +215,102 @@ public sealed class KeycloakScopeAttributeStore(
         var withBoth = SetSingleAttr(withNew, ScopedAccessConstants.AttributeName, doc.Assignments.Count==0?null:serializer.Serialize(doc));
         var ok = await PutUserAsync(withBoth, token, ct);
         if (!ok) throw new InvalidOperationException($"Failed to update scopes for user '{userId}'.");
+    }
+
+    // ---------- IScopedAccessStore — document-level API over the same single-PUT write ----------
+
+    /// <summary>
+    /// The user-owned document: read-modify-write must NOT go through <see cref="GetAsync"/>
+    /// because that merges group attributes — persisting them here would copy group scopes
+    /// onto the user (escalation after leaving the group).
+    /// </summary>
+    private async Task<ScopedAccessDocument> GetUserDocumentAsync(string userId, string token, CancellationToken ct)
+    {
+        var uj = await GetUserJsonAsync(userId, token, ct);
+        if (uj is null) throw new InvalidOperationException($"User '{userId}' not found.");
+        var raw = ExtractSingleAttr(uj.Value, ScopedAccessConstants.AttributeName);
+        return string.IsNullOrWhiteSpace(raw) ? ScopedAccessDocument.Empty : serializer.Deserialize(raw);
+    }
+
+    async Task IScopedAccessStore.SetAsync(string userId, ScopedAccessDocument document, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var dtos = document.Assignments
+            .Select(a => new ScopedRoleAssignmentDto(a.Role, a.Scopes))
+            .ToArray();
+        await SetAsync(userId, dtos, ct);
+    }
+
+    public async Task AddAssignmentAsync(string userId, ScopedRoleAssignmentDto assignment, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(assignment);
+        var token = await tokenProvider.GetTokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
+        var doc = await GetUserDocumentAsync(userId, token, ct);
+        var existing = doc.Assignments.FirstOrDefault(a => string.Equals(a.Role, assignment.Role.Trim(), StringComparison.Ordinal));
+        var next = existing is null
+            ? doc.Assignments.Append(new ScopedRoleAssignment(assignment.Role.Trim(), NormalizeDict(assignment.Scopes))).ToArray()
+            : doc.Assignments.Select(a => string.Equals(a.Role, assignment.Role.Trim(), StringComparison.Ordinal)
+                ? new ScopedRoleAssignment(a.Role, MergeDicts(a.Scopes, NormalizeDict(assignment.Scopes)))
+                : a).ToArray();
+        await ((IScopedAccessStore)this).SetAsync(userId, new ScopedAccessDocument(next), ct);
+    }
+
+    public async Task UpdateAssignmentAsync(string userId, string role, IReadOnlyDictionary<string, IReadOnlyCollection<string>> scopes, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+        var token = await tokenProvider.GetTokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
+        var doc = await GetUserDocumentAsync(userId, token, ct);
+        if (!doc.Assignments.Any(a => string.Equals(a.Role, role.Trim(), StringComparison.Ordinal)))
+            throw new InvalidOperationException($"Assignment for role '{role}' not found.");
+        var next = doc.Assignments.Select(a => string.Equals(a.Role, role.Trim(), StringComparison.Ordinal)
+            ? new ScopedRoleAssignment(a.Role, NormalizeDict(scopes))
+            : a).ToArray();
+        await ((IScopedAccessStore)this).SetAsync(userId, new ScopedAccessDocument(next), ct);
+    }
+
+    public async Task RemoveAssignmentAsync(string userId, string role, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+        var token = await tokenProvider.GetTokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
+        var doc = await GetUserDocumentAsync(userId, token, ct);
+        var next = doc.Assignments.Where(a => !string.Equals(a.Role, role.Trim(), StringComparison.Ordinal)).ToArray();
+        await ((IScopedAccessStore)this).SetAsync(userId, new ScopedAccessDocument(next), ct);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyCollection<string>> NormalizeDict(
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>>? scopes)
+    {
+        var result = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
+        if (scopes is null) return result;
+        foreach (var kv in scopes)
+        {
+            var key = kv.Key?.Trim() ?? "";
+            if (key.Length == 0) continue;
+            var values = kv.Value?.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v.Trim())
+                .Distinct(StringComparer.Ordinal).OrderBy(v => v, StringComparer.Ordinal).ToArray()
+                ?? Array.Empty<string>();
+            result[key] = values;
+        }
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyCollection<string>> MergeDicts(
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>> a,
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>> b)
+    {
+        var merged = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var src in new[] { a, b })
+        foreach (var kv in src)
+        {
+            if (!merged.TryGetValue(kv.Key, out var set)) merged[kv.Key] = set = new(StringComparer.Ordinal);
+            foreach (var v in kv.Value) set.Add(v);
+        }
+        return merged.ToDictionary(kv => kv.Key,
+            kv => (IReadOnlyCollection<string>)kv.Value.OrderBy(x => x, StringComparer.Ordinal).ToArray(),
+            StringComparer.Ordinal);
     }
 
     private static string? ExtractSingleAttr(JsonElement el, string name)

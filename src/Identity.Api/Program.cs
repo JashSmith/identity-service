@@ -101,17 +101,15 @@ builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader>(sp =>
 builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
-builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakCompositeRoleStore>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>();
 builder.Services.AddSingleton<IBusinessRoleStore>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>());
-builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopedAccessStore>();
+// Single scope store — implements IScopedAccessStore + IUserScopeReader/Writer over one PUT.
 builder.Services.AddSingleton<IScopedAccessStore>(sp =>
-    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakScopedAccessStore>());
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();
 builder.Services.AddSingleton<IUserProvisioningService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
-builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserRoleMapping>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>();
 builder.Services.AddSingleton<IUserRoleMapping>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>());
@@ -122,8 +120,7 @@ builder.Services.AddScoped<ProvisioningOrchestrator>(sp =>
         sp.GetRequiredService<IBusinessRoleStore>(),
         sp.GetRequiredService<IUserRoleMapping>(),
         sp.GetRequiredService<IPermissionRegistry>(),
-        sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>(),
-        sp.GetRequiredService<Identity.Application.Scope.IUserScopeWriter>()));
+        sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>()));
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>();
@@ -220,6 +217,20 @@ try
     // Use a short timeout for seeding; don't block startup on Keycloak availability.
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
     await registrar.RegisterAsync(asm, cts.Token);
+}
+catch
+{
+    /* best-effort */
+}
+
+try
+{
+    using var scopeAdmin = app.Services.CreateScope();
+    var clientProvisioner = scopeAdmin.ServiceProvider
+        .GetRequiredService<IKeycloakClientRoleProvisioner>();
+    using var ctsAdmin = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+    // Super-admin role must ALWAYS exist (CLAUDE.md requirement): ensure group + all permissions.
+    await clientProvisioner.EnsureSuperAdminGroupAsync(ctsAdmin.Token);
 }
 catch
 {

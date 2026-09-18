@@ -137,6 +137,22 @@
       ]
     },
     {
+      "name": "super-admins",
+      "attributes": {
+        "description": [
+          "Always-present unrestricted administrators; every registered client role is auto-mapped to this group"
+        ]
+      },
+      "realmRoles": [
+        "identity.users.read",
+        "identity.users.manage",
+        "identity.roles.read",
+        "identity.roles.manage",
+        "identity.scopes.read",
+        "identity.scopes.manage"
+      ]
+    },
+    {
       "name": "iam-scope-registry",
       "attributes": {
         "scope.region": [
@@ -492,7 +508,8 @@
         "Identity.Keys.Destroy"
       ],
       "groups": [
-        "key-admins"
+        "key-admins",
+        "super-admins"
       ],
       "email": "admin@company.local",
       "requiredActions": []

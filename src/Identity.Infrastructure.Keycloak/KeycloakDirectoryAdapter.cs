@@ -11,65 +11,15 @@ namespace Identity.Infrastructure.Keycloak;
 /// <see cref="IRoleDirectory"/> against a single realm. The facade never invents
 /// users locally — Keycloak is the only user store.
 /// </summary>
-public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakOptions> opts)
+public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakOptions> opts,
+    KeycloakAdminTokenProvider tokenProvider)
     : IUserDirectory, IRoleDirectory
 {
     private readonly KeycloakOptions _o = opts.Value;
     private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
 
-    private async Task<string> GetAdminTokenAsync(CancellationToken ct)
-    {
-        if (!string.IsNullOrEmpty(_o.AdminClientSecret))
-        {
-            var form = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["grant_type"] = "client_credentials",
-                ["client_id"] = _o.AdminClientId,
-                ["client_secret"] = _o.AdminClientSecret,
-            });
-            try
-            {
-                var res = await http.PostAsync(
-                    $"{_o.BaseUrl.TrimEnd('/')}/realms/master/protocol/openid-connect/token", form, ct);
-                if (!res.IsSuccessStatusCode) return string.Empty;
-                var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-                return doc.RootElement.TryGetProperty("access_token", out var t)
-                    ? t.GetString() ?? string.Empty
-                    : string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        if (!string.IsNullOrEmpty(_o.AdminUsername) && !string.IsNullOrEmpty(_o.AdminPassword))
-        {
-            var form = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["grant_type"] = "password",
-                ["client_id"] = _o.AdminClientId,
-                ["username"] = _o.AdminUsername,
-                ["password"] = _o.AdminPassword,
-            });
-            try
-            {
-                var res = await http.PostAsync(
-                    $"{_o.BaseUrl.TrimEnd('/')}/realms/master/protocol/openid-connect/token", form, ct);
-                if (!res.IsSuccessStatusCode) return string.Empty;
-                var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-                return doc.RootElement.TryGetProperty("access_token", out var t)
-                    ? t.GetString() ?? string.Empty
-                    : string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
-        return string.Empty;
-    }
+    private async Task<string> GetAdminTokenAsync(CancellationToken ct) =>
+        await tokenProvider.GetTokenAsync(ct) ?? string.Empty;
 
     private void AttachAuth(HttpRequestMessage req, string token)
     {
