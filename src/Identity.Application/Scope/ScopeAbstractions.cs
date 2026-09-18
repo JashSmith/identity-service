@@ -50,6 +50,7 @@ public interface IScopeRegistryAdmin
     Task<IReadOnlyCollection<ScopeDefinitionDto>> ListScopesAsync(CancellationToken ct);
     Task<ScopeDefinitionDto?> GetScopeAsync(string key, CancellationToken ct);
     Task<IReadOnlyCollection<ResourceScopeMappingDto>> ListResourcesAsync(CancellationToken ct);
+    Task<IReadOnlyCollection<string>> GetResourcesForScopeAsync(string key, CancellationToken ct);
     Task<ScopeDefinitionDto?> CreateScopeAsync(string key, string? displayName, string? description, CancellationToken ct);
     Task<ScopeDefinitionDto?> UpdateScopeAsync(string key, string? displayName, string? description, bool? isActive, CancellationToken ct);
 }

@@ -36,6 +36,17 @@ public static class ScopeAdminEndpoints
             .WithName("GetScope")
             .Produces<ScopeDefinitionDto>(200);
 
+        g.MapGet("/{key}/resources", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
+            {
+                if (await registry.GetScopeAsync(key, ct) is null)
+                    return Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")));
+                var resources = await registry.GetResourcesForScopeAsync(key, ct);
+                return Results.Ok(new { scope = key, resources });
+            })
+            .RequireAuthorization(IamPermissions.ScopesRead)
+            .WithName("GetScopeResources")
+            .Produces<object>(200);
+
         g.MapPost("", async (CreateScopeRequest req, IScopeRegistryAdmin registry,
                 Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper claimMapper, CancellationToken ct) =>
             {

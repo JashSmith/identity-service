@@ -313,6 +313,16 @@ public sealed class KeycloakScopeRegistryStore(
         return list.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
     }
 
+    public async Task<IReadOnlyCollection<string>> GetResourcesForScopeAsync(string key, CancellationToken ct)
+    {
+        var resources = await ListResourcesAsync(ct);
+        return resources
+            .Where(r => r.Scopes.Contains(key, StringComparer.OrdinalIgnoreCase))
+            .Select(r => r.Key)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     public async Task<ScopeDefinitionDto?> CreateScopeAsync(string key, string? displayName, string? description, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
