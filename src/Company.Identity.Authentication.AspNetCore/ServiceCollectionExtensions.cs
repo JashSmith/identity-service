@@ -37,6 +37,12 @@ public static class ServiceCollectionExtensions
             };
             jwt.Events = new JwtBearerEvents
             {
+                OnAuthenticationFailed = ctx =>
+                {
+                    var token = ctx.Request.Headers.Authorization.ToString();
+                    Console.WriteLine($"Incoming token: {token}");
+                    return Task.CompletedTask;
+                },
                 OnTokenValidated = context =>
                 {
                     if (!options.ValidateTokenType ||

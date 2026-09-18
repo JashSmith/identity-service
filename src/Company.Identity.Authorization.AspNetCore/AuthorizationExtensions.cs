@@ -27,13 +27,14 @@ public sealed class PermissionPolicyProvider(Microsoft.Extensions.Options.IOptio
 
 public sealed class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
-    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context,
-        PermissionRequirement requirement)
+    protected override Task HandleRequirementAsync(AuthorizationHandlerContext ctx, PermissionRequirement req)
     {
-        var permissions = context.User.FindAll("permission").Concat(context.User.FindAll("permissions"))
-            .Select(x => x.Value);
-        if (permissions.Contains(requirement.Permission, StringComparer.Ordinal) ||
-            context.User.IsInRole(requirement.Permission)) context.Succeed(requirement);
+        var permissions = ctx.User.FindAll("permission")
+            .Concat(ctx.User.FindAll("permissions"))
+            .Select(x => x.Value).ToList();
+        
+        if (permissions.Contains(req.Permission, StringComparer.Ordinal) ||
+            ctx.User.IsInRole(req.Permission)) ctx.Succeed(req);
         return Task.CompletedTask;
     }
 }

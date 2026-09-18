@@ -11,6 +11,11 @@ var authority = builder.Configuration["Identity:Authority"] ??
 var audience = builder.Configuration["Identity:Audience"] ?? string.Empty;
 var requireHttpsMetadata = builder.Configuration["Identity:RequireHttpsMetadata"] ?? "false";
 
+if (builder.Environment.IsDevelopment())
+{
+    Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII = true;
+}
+
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
@@ -57,59 +62,67 @@ builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakRoleProv
 builder.Services.AddSingleton<IKeycloakRoleProvisioner>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakRoleProvisioner>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakClientRoleProvisioner>();
-builder.Services.AddSingleton<Identity.Application.IKeycloakClientRoleProvisioner>(sp =>
+builder.Services.AddSingleton<IKeycloakClientRoleProvisioner>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakClientRoleProvisioner>());
 builder.Services.AddSingleton<InMemoryPermissionRegistry>();
 builder.Services.AddSingleton<IPermissionRegistry>(sp => new KeycloakSyncingPermissionRegistry(
     sp.GetRequiredService<InMemoryPermissionRegistry>(),
     sp.GetRequiredService<IKeycloakRoleProvisioner>(),
-    sp.GetRequiredService<Identity.Application.IKeycloakClientRoleProvisioner>(),
+    sp.GetRequiredService<IKeycloakClientRoleProvisioner>(),
     sp.GetRequiredService<ILogger<KeycloakSyncingPermissionRegistry>>()));
 builder.Services.AddSingleton<PermissionRegistrationService>();
 
 // Dynamic roles/scope infrastructure
 builder.Services.AddMemoryCache();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ScopeDictionaryConverter()));
-builder.Services.Configure<Identity.Application.ScopedAccessOptions>(
+builder.Services.Configure<ScopedAccessOptions>(
     builder.Configuration.GetSection("Identity:ScopedAccess"));
-builder.Services.AddSingleton<Identity.Application.IScopedAccessSerializer, Identity.Application.ScopedAccessSerializer>();
-builder.Services.AddSingleton<Identity.Application.Scope.IScopeValueValidator, Identity.Application.Scope.DefaultScopeValueValidator>();
-builder.Services.AddSingleton<Identity.Application.Scope.IScopeValueValidatorRegistry, Identity.Application.Scope.ScopeValueValidatorRegistry>();
+builder.Services.AddSingleton<IScopedAccessSerializer, ScopedAccessSerializer>();
+builder.Services
+    .AddSingleton<Identity.Application.Scope.IScopeValueValidator,
+        Identity.Application.Scope.DefaultScopeValueValidator>();
+builder.Services.AddSingleton<Identity.Application.Scope.IScopeValueValidatorRegistry,
+    Identity.Application.Scope.ScopeValueValidatorRegistry>();
 builder.Services.AddSingleton<Identity.Application.Scope.ScopeAssignmentValidator>();
 // Primary (Keycloak) scope registry — backed by the dedicated Group iam-scope-registry + authz.* attributes.
 // EF fallbacks kept as secondary registrations (tests / migration window) but not the default resolution.
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>();
-builder.Services.AddSingleton<Identity.Application.Scope.IScopeDefinitionLookup>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
-builder.Services.AddScoped<Identity.Application.Scope.IResourceScopeResolver>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
-builder.Services.AddScoped<Identity.Application.Scope.IScopeCacheInvalidator>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddSingleton<Identity.Application.Scope.IScopeDefinitionLookup>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IResourceScopeResolver>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IScopeCacheInvalidator>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
 builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfScopeDefinitionLookup>();
 builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfResourceScopeResolver>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>();
-builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
-builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter>(sp => sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
 builder.Services.AddScoped<Identity.Persistence.KeyManagement.EfUserScopeStore>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakCompositeRoleStore>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>();
-builder.Services.AddSingleton<Identity.Application.IBusinessRoleStore>(sp =>
+builder.Services.AddSingleton<IBusinessRoleStore>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopedAccessStore>();
-builder.Services.AddSingleton<Identity.Application.IScopedAccessStore>(sp =>
+builder.Services.AddSingleton<IScopedAccessStore>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakScopedAccessStore>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();
-builder.Services.AddSingleton<Identity.Application.IUserProvisioningService>(sp =>
+builder.Services.AddSingleton<IUserProvisioningService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserRoleMapping>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>();
-builder.Services.AddSingleton<Identity.Application.IUserRoleMapping>(sp =>
+builder.Services.AddSingleton<IUserRoleMapping>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>());
-builder.Services.AddScoped<Identity.Application.ProvisioningOrchestrator>(sp =>
-    new Identity.Application.ProvisioningOrchestrator(
-        sp.GetRequiredService<Identity.Application.IUserProvisioningService>(),
-        sp.GetRequiredService<Identity.Application.IScopedAccessStore>(),
-        sp.GetRequiredService<Identity.Application.IBusinessRoleStore>(),
-        sp.GetRequiredService<Identity.Application.IUserRoleMapping>(),
-        sp.GetRequiredService<Identity.Application.IPermissionRegistry>(),
+builder.Services.AddScoped<ProvisioningOrchestrator>(sp =>
+    new ProvisioningOrchestrator(
+        sp.GetRequiredService<IUserProvisioningService>(),
+        sp.GetRequiredService<IScopedAccessStore>(),
+        sp.GetRequiredService<IBusinessRoleStore>(),
+        sp.GetRequiredService<IUserRoleMapping>(),
+        sp.GetRequiredService<IPermissionRegistry>(),
         sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>(),
         sp.GetRequiredService<Identity.Application.Scope.IUserScopeWriter>()));
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
@@ -202,40 +215,56 @@ app.MapGrpcService<Company.Identity.Grpc.KeyAdminGrpcService>();
 try
 {
     using var scope = app.Services.CreateScope();
-    var registrar = scope.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.FacadePermissionRegistrar>();
+    var registrar =
+        scope.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.FacadePermissionRegistrar>();
     var asm = typeof(Program).Assembly;
     // Use a short timeout for seeding; don't block startup on Keycloak availability.
     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
     await registrar.RegisterAsync(asm, cts.Token);
 }
-catch { /* best-effort */ }
+catch
+{
+    /* best-effort */
+}
 
 try
 {
     using var scope2 = app.Services.CreateScope();
-    var mapper = scope2.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
+    var mapper = scope2.ServiceProvider
+        .GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
     using var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
     await mapper.EnsureAsync(cts2.Token);
 }
-catch { /* best-effort */ }
+catch
+{
+    /* best-effort */
+}
 
 try
 {
     using var scope4 = app.Services.CreateScope();
-    var scopeMapper = scope4.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
+    var scopeMapper = scope4.ServiceProvider
+        .GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
     using var cts4 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
     await scopeMapper.EnsureAsync(cts4.Token);
 }
-catch { /* best-effort */ }
+catch
+{
+    /* best-effort */
+}
 
 try
 {
     using var scope5 = app.Services.CreateScope();
-    var hardening = scope5.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>();
+    var hardening = scope5.ServiceProvider
+        .GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>();
     using var cts5 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
     await hardening.EnsureAsync(cts5.Token);
 }
-catch { /* best-effort */ }
+catch
+{
+    /* best-effort */
+}
 
 try
 {
@@ -244,7 +273,10 @@ try
     using var cts3 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
     await Identity.Persistence.KeyManagement.ScopeSeed.EnsureSeededAsync(db, cts3.Token);
 }
-catch { /* best-effort — Oracle auth tables are legacy; Keycloak iam-scope-registry is the source of truth */ }
+catch
+{
+    /* best-effort — Oracle auth tables are legacy; Keycloak iam-scope-registry is the source of truth */
+}
 
 app.MapPost("/api/identity/external/organization-token",
         (OrganizationTokenRequest request) => Results.StatusCode(StatusCodes.Status501NotImplemented))
