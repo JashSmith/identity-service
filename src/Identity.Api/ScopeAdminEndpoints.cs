@@ -36,7 +36,8 @@ public static class ScopeAdminEndpoints
             .WithName("GetScope")
             .Produces<ScopeDefinitionDto>(200);
 
-        g.MapPost("", async (CreateScopeRequest req, IScopeRegistryAdmin registry, CancellationToken ct) =>
+        g.MapPost("", async (CreateScopeRequest req, IScopeRegistryAdmin registry,
+                Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper claimMapper, CancellationToken ct) =>
             {
                 if (string.IsNullOrWhiteSpace(req.Key))
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["key"] = ["Key is required."] });
@@ -45,6 +46,11 @@ public static class ScopeAdminEndpoints
                     var created = await registry.CreateScopeAsync(req.Key.Trim(), req.DisplayName, req.Description, ct);
                     if (created is null)
                         return Results.Conflict(new ProblemResponse("conflict", $"Scope '{req.Key}' already exists.", Guid.NewGuid().ToString("N")));
+                    // Provision the authz.scope.<key> claim mapper now so new tokens carry the
+                    // claim without a restart. Best-effort: startup EnsureAsync also reconciles.
+                    using var mapperCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    mapperCts.CancelAfter(TimeSpan.FromSeconds(10));
+                    try { await claimMapper.EnsureAsync(mapperCts.Token); } catch { /* best-effort */ }
                     return Results.Created($"/api/identity/scopes/{Uri.EscapeDataString(created.Key)}", created);
                 }
                 catch (InvalidOperationException ex)

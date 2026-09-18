@@ -39,13 +39,15 @@ public static class BusinessRolesEndpoints
             .WithName("GetEffectivePermissions")
             .Produces<EffectivePermissionsResponse>(200);
 
-        g.MapPost("", async (CreateBusinessRoleRequest req, ProvisioningOrchestrator orch, CancellationToken ct) =>
+        g.MapPost("", async (CreateBusinessRoleRequest req, ProvisioningOrchestrator orch,
+                Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 if (string.IsNullOrWhiteSpace(req.Name))
                     return Results.BadRequest(new ProblemResponse("validation_error", "name is required", Guid.NewGuid().ToString("N")));
                 try
                 {
                     var dto = await orch.CreateBusinessRoleAsync(req.Name, req.Description, req.Permissions ?? Array.Empty<string>(), ct);
+                    scopeCache.Invalidate();
                     return Results.Created($"/api/identity/business-roles/{Uri.EscapeDataString(dto.Name)}", dto);
                 }
                 catch (InvalidOperationException ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
@@ -60,9 +62,11 @@ public static class BusinessRolesEndpoints
             .WithName("CreateBusinessRole")
             .Produces<BusinessRoleDto>(201).Produces<ProblemResponse>(400).Produces<ProblemResponse>(409);
 
-        g.MapPut("/{name}", async (string name, UpdateBusinessRoleRequest req, IBusinessRoleStore store, CancellationToken ct) =>
+        g.MapPut("/{name}", async (string name, UpdateBusinessRoleRequest req, IBusinessRoleStore store,
+                Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 var dto = await store.UpdateAsync(name, req.Description, ct);
+                if (dto is not null) scopeCache.Invalidate();
                 return dto is null
                     ? Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")))
                     : Results.Ok(dto);
@@ -70,11 +74,13 @@ public static class BusinessRolesEndpoints
             .WithName("UpdateBusinessRole")
             .Produces<BusinessRoleDto>(200);
 
-        g.MapDelete("/{name}", async (string name, ProvisioningOrchestrator orch, CancellationToken ct) =>
+        g.MapDelete("/{name}", async (string name, ProvisioningOrchestrator orch,
+                Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 try
                 {
                     var ok = await orch.DeleteBusinessRoleSafeAsync(name, ct);
+                    if (ok) scopeCache.Invalidate();
                     return ok ? Results.NoContent()
                         : Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")));
                 }
@@ -86,7 +92,8 @@ public static class BusinessRolesEndpoints
             .WithName("DeleteBusinessRole")
             .Produces(204).Produces<ProblemResponse>(400);
 
-        g.MapPost("/{name}/permissions", async (string name, AssignPermissionsRequest req, IBusinessRoleStore store, IPermissionRegistry perms, CancellationToken ct) =>
+        g.MapPost("/{name}/permissions", async (string name, AssignPermissionsRequest req, IBusinessRoleStore store, IPermissionRegistry perms,
+                Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 if (req.Permissions is null || req.Permissions.Count == 0)
                     return Results.BadRequest(new ProblemResponse("validation_error", "permissions are required", Guid.NewGuid().ToString("N")));
@@ -97,6 +104,7 @@ public static class BusinessRolesEndpoints
                 try
                 {
                     await store.AddPermissionsAsync(name, req.Permissions, ct);
+                    scopeCache.Invalidate();
                     var dto = await store.GetAsync(name, ct);
                     return dto is null
                         ? Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")))
@@ -110,11 +118,13 @@ public static class BusinessRolesEndpoints
             .WithName("AddPermissionsToBusinessRole")
             .Produces<BusinessRoleDto>(200);
 
-        g.MapDelete("/{name}/permissions/{permission}", async (string name, string permission, IBusinessRoleStore store, CancellationToken ct) =>
+        g.MapDelete("/{name}/permissions/{permission}", async (string name, string permission, IBusinessRoleStore store,
+                Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 try
                 {
                     await store.RemovePermissionAsync(name, permission, ct);
+                    scopeCache.Invalidate();
                     var dto = await store.GetAsync(name, ct);
                     return dto is null
                         ? Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")))

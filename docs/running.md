@@ -121,8 +121,12 @@ Browse **http://localhost:5180/scalar** for all ten guarded endpoints.
 
 ### Business roles & scoped access
 
+> The full target flow below (login → create role → assign permissions → create scoped
+> user → verify token claims) is scripted end-to-end in **`deploy/smoke-test.sh`** — run
+> it after `docker compose up` to verify everything at once.
+
 ```bash
-# Create a composite business role
+# Create a composite business role (permissions are client roles registered by order-service)
 curl -s -X POST http://localhost:5080/api/identity/business-roles \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"name":"RegionalManager","permissions":["Orders.View","Orders.Create"]}' | python3 -m json.tool
@@ -166,7 +170,10 @@ Consumer services read scopes via `ICurrentAccessContext.GetScopeValues("region"
   (secret `facade-development-only`) and `order-service`
   (secret `order-service-development-only`), the permission claim mappers
   (`permissions`/`permission` from realm roles, `aud: identity-facade`,
-  `sub`, `preferred_username`), realm roles `Identity.*`, and the `admin` user.
+  `sub`, `preferred_username`), realm roles `Identity.*`/`identity.*`, the groups
+  `super-admins` (always-present unrestricted admin — every registered client role is
+  auto-mapped to it, plus the `identity.*` facade-management permissions), `key-admins`,
+  `iam-scope-registry`, and the `admin` user (member of `super-admins` + `key-admins`).
 
 ## 9. Re-importing the realm after changes
 

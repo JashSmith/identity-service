@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Identity.Application.Scope;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,7 +22,8 @@ public sealed class KeycloakScopeRegistryStore(
     IOptions<KeycloakOptions> opts,
     KeycloakAdminTokenProvider tokenProvider,
     IMemoryCache cache,
-    ILogger<KeycloakScopeRegistryStore> logger) : IScopeDefinitionLookup, IResourceScopeResolver, IScopeCacheInvalidator, IScopeRegistryAdmin
+    ILogger<KeycloakScopeRegistryStore> logger,
+    IDistributedCache? distributed = null) : IScopeDefinitionLookup, IResourceScopeResolver, IScopeCacheInvalidator, IScopeRegistryAdmin
 {
     private readonly KeycloakOptions _o = opts.Value;
     private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
@@ -29,6 +31,7 @@ public sealed class KeycloakScopeRegistryStore(
     private const string ActiveKey = "scopes:active:kc:v1";
     private const string RoleAllowedKey = "scopes:roleAllowed:kc:v1";
     private const string ResourceMapKey = "scopes:resourceMap:kc:v1";
+    private const string RedisPrefix = "identity:registry:";
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
 
     public void Invalidate()
@@ -36,6 +39,40 @@ public sealed class KeycloakScopeRegistryStore(
         cache.Remove(ActiveKey);
         cache.Remove(RoleAllowedKey);
         cache.Remove(ResourceMapKey);
+        // Distributed invalidation so other facade replicas drop their copies too.
+        // Sync-over-async is acceptable here: invalidation is rare and admin-triggered.
+        if (distributed is not null)
+        {
+            try
+            {
+                distributed.Remove(RedisPrefix + ActiveKey);
+                distributed.Remove(RedisPrefix + RoleAllowedKey);
+                distributed.Remove(RedisPrefix + ResourceMapKey);
+            }
+            catch (Exception ex) { logger.LogDebug(ex, "Redis cache invalidation failed"); }
+        }
+    }
+
+    private T? DistributedGet<T>(string key) where T : class
+    {
+        if (distributed is null) return null;
+        try
+        {
+            var raw = distributed.GetString(RedisPrefix + key);
+            return string.IsNullOrEmpty(raw) ? null : JsonSerializer.Deserialize<T>(raw);
+        }
+        catch (Exception ex) { logger.LogDebug(ex, "Redis cache read failed for {Key}", key); return null; }
+    }
+
+    private void DistributedSet(string key, object value)
+    {
+        if (distributed is null) return;
+        try
+        {
+            distributed.SetString(RedisPrefix + key, JsonSerializer.Serialize(value),
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = Ttl });
+        }
+        catch (Exception ex) { logger.LogDebug(ex, "Redis cache write failed for {Key}", key); }
     }
 
     private sealed record ScopeDef(string Key, string DisplayName, string? Description, bool IsActive, string ValueType);
@@ -103,6 +140,11 @@ public sealed class KeycloakScopeRegistryStore(
     private async Task<IReadOnlyCollection<ScopeDef>> GetActiveScopesAsync(CancellationToken ct)
     {
         if (cache.TryGetValue(ActiveKey, out IReadOnlyCollection<ScopeDef>? c) && c is not null) return c;
+        if (DistributedGet<ScopeDef[]>(ActiveKey) is { Length: > 0 } shared)
+        {
+            cache.Set(ActiveKey, shared, Ttl);
+            return shared;
+        }
         var attrs = await GetRegistryAttributesAsync(ct);
         var list = new List<ScopeDef>();
         foreach (var kv in attrs)
@@ -122,6 +164,7 @@ public sealed class KeycloakScopeRegistryStore(
         }
         IReadOnlyCollection<ScopeDef> result = list;
         cache.Set(ActiveKey, result, Ttl);
+        if (attrs.Count > 0) DistributedSet(ActiveKey, list.ToArray());
         return result;
     }
 
@@ -142,6 +185,12 @@ public sealed class KeycloakScopeRegistryStore(
     private async Task<Dictionary<string, HashSet<string>>> GetRoleAllowedMapAsync(CancellationToken ct)
     {
         if (cache.TryGetValue(RoleAllowedKey, out Dictionary<string, HashSet<string>>? c) && c is not null) return c;
+        if (DistributedGet<Dictionary<string, string[]>>(RoleAllowedKey) is { } sharedMap)
+        {
+            var shared = sharedMap.ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value, StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            cache.Set(RoleAllowedKey, shared, Ttl);
+            return shared;
+        }
         var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var token = await tokenProvider.GetTokenAsync(ct);
         if (!string.IsNullOrEmpty(token))
@@ -185,6 +234,7 @@ public sealed class KeycloakScopeRegistryStore(
             catch (Exception ex) { logger.LogDebug(ex, "Failed to fetch role allowed scopes"); }
         }
         cache.Set(RoleAllowedKey, map, Ttl);
+        DistributedSet(RoleAllowedKey, map.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray(), StringComparer.OrdinalIgnoreCase));
         return map;
     }
 
@@ -197,6 +247,12 @@ public sealed class KeycloakScopeRegistryStore(
     private async Task<Dictionary<string, HashSet<string>>> GetResourceMapAsync(CancellationToken ct)
     {
         if (cache.TryGetValue(ResourceMapKey, out Dictionary<string, HashSet<string>>? c) && c is not null) return c;
+        if (DistributedGet<Dictionary<string, string[]>>(ResourceMapKey) is { } sharedRes)
+        {
+            var shared = sharedRes.ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value, StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            cache.Set(ResourceMapKey, shared, Ttl);
+            return shared;
+        }
         var attrs = await GetRegistryAttributesAsync(ct);
         var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         // resource.<name> = multivalued scope keys
@@ -218,6 +274,8 @@ public sealed class KeycloakScopeRegistryStore(
             map["ResourceA"] = new HashSet<string>(new[] { "test-key" }, StringComparer.OrdinalIgnoreCase);
         }
         cache.Set(ResourceMapKey, map, Ttl);
+        if (attrs.Count > 0)
+            DistributedSet(ResourceMapKey, map.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray(), StringComparer.OrdinalIgnoreCase));
         return map;
     }
 

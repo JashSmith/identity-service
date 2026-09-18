@@ -90,11 +90,13 @@ curl -s http://localhost:5080/api/identity/me -H "Authorization: Bearer <token>"
 curl -s http://localhost:5180/api/orders -H "Authorization: Bearer <token>"
 ```
 
-Dev credentials: user `admin` / password `admin` (all `Identity.*` permissions).
-CI/laptops that cannot run Oracle XE can fall back to PostgreSQL:
+Dev credentials: user `admin` / password `admin` — member of `super-admins` (all registered
+service permissions) and `key-admins`. An end-to-end smoke test for the full target flow
+(super-admin login → create role → assign permissions → create scoped user → verify token
+claims) lives at `deploy/smoke-test.sh`:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build -d
+cd deploy && ./smoke-test.sh
 ```
 
 ## External organization SSO
@@ -109,13 +111,13 @@ Keycloak signs JWTs with RSA keys. Vault is the source of truth through release-
 
 ## Business roles & scoped access
 
-Business roles are **Keycloak Groups** (e.g. `/Admin`, `/Manager`); the facade's `IBusinessRoleStore` is `KeycloakGroupBusinessRoleStore`. Permissions are **per-service client roles** (e.g. `orders-service: Orders.Cancel`) aggregated into the `permissions` claim by one `oidc-usermodel-client-role-mapper` per client; new permissions are auto-mapped to the Admin Group (`key-admins`) and reconciled via `POST /api/identity/permissions/reconcile-admin` without re-login (refresh picks up `resource_access` → `permissions`).
+Business roles are **Keycloak Groups** (e.g. `/Accountant`, `/Manager`); the facade's `IBusinessRoleStore` is `KeycloakGroupBusinessRoleStore`. Permissions are **per-service client roles** (e.g. `order-service: Orders.Cancel`) aggregated into the `permissions` claim by one `oidc-usermodel-client-role-mapper` per client; assigning permissions to a business role maps the client roles onto its group (legacy realm-role mappings are still readable/removable). New permissions are auto-mapped to the admin groups (`super-admins` — the always-present unrestricted role — and `key-admins`) and reconciled via `POST /api/identity/permissions/reconcile-admin` without re-login (refresh picks up `resource_access` → `permissions`).
 
-Scoped assignments (`{role, scopes: {region:[...], branch:[...]}}`) are **Keycloak-attribute-driven, normalized and validated** against the dedicated config Group `/iam-scope-registry` (`scope.<key>` JSON `{displayName,description,isActive,valueType}` + `resource.<name>` multivalued, business-role Groups hold `authz.allowed-scopes`). User values live as multivalued attributes `authz.scope.<key>` (each value one entry), merged as Group ∪ User gated at write; the scalar `"test-key": "items-1"` form is normalized to `["items-1"]` via `ScopeDictionaryConverter`; unknown/inactive/disallowed scopes return field-level `400 ValidationProblem` (`assignments[0].scopes.test-key`). Oracle `identity-meta-db` retains only key/Vault metadata; legacy scope tables are kept `[Obsolete]` for `InMemoryDatabase` tests during migration (see `deploy/migrate-oracle-to-keycloak.sh`). The `authz-scopes` client scope exposes `authz.scope.*` as flat claims, hardened so only admins can write them via the User Profile. Filter safely in consumers via `ScopeFilterService.ApplyAsync(query, effectiveScopes, ResourceKeys.Orders)` — deny-by-default, parameterized `Contains`/`IN`, no `EF.Property` on client-supplied names. See `samples/OrderService.Sample` (`ScopeFilters.cs`, `/api/orders/scoped`).
+Scoped assignments (`{role, scopes: {region:[...], branch:[...]}}`) are **Keycloak-attribute-driven, normalized and validated** against the dedicated config Group `/iam-scope-registry` (`scope.<key>` JSON `{displayName,description,isActive,valueType}` + `resource.<name>` multivalued, business-role Groups hold `authz.allowed-scopes`). User values live as multivalued attributes `authz.scope.<key>` (each value one entry), merged as Group ∪ User gated at write; the scalar `"test-key": "items-1"` form is normalized to `["items-1"]` via `ScopeDictionaryConverter`; unknown/inactive/disallowed scopes return field-level `400 ValidationProblem` (`assignments[0].scopes.test-key`). Oracle `identity-meta-db` retains only key/Vault metadata — the legacy Oracle scope tables were removed entirely (`deploy/migrate-oracle-to-keycloak.sh` migrates any old dumps into the registry group). The `authz-scopes` client scope exposes `authz.scope.*` as flat claims, hardened so only admins can write them via the User Profile. Registry data is cached in `IMemoryCache` (L1) + Redis (L2, `Identity:Redis:Configuration`) with invalidation on every role/scope mutation. Filter safely in consumers via `ScopeFilterService.ApplyAsync(query, effectiveScopes, ResourceKeys.Orders)` — deny-by-default, parameterized `Contains`/`IN`, no `EF.Property` on client-supplied names. See `samples/OrderService.Sample` (`ScopeFilters.cs`, `/api/orders/scoped`).
 
-### Adding a new scope (5 steps, no DTO change)
+### Adding a new scope (no DTO change)
 
-1. Seed `ScopeDefinition { Key = "cost-center" }` (or `POST /api/identity/scopes`). 2. Insert `ScopeResourceMapping(cost-center → Orders)`. 3. Optionally `RoleAllowedScope(role, cost-center)`. 4. Optionally register `IScopeValueValidator { ScopeKey = "cost-center" }`. 5. Register `IScopeFilterHandler<OrderDto> { ScopeKey = "cost-center", ResourceKey = ResourceKeys.Orders }` — unknown keys are rejected until step 1.
+1. `POST /api/identity/scopes` with `{"key":"cost-center"}` — writes `scope.cost-center` into `/iam-scope-registry` and provisions the `authz.scope.cost-center` claim mapper immediately (no restart). 2. Add `resource.<name>` → `cost-center` in the registry group attributes. 3. Optionally set `authz.allowed-scopes` on business-role groups to restrict it. 4. Optionally register `IScopeValueValidator { ScopeKey = "cost-center" }`. 5. Register `IScopeFilterHandler<OrderDto> { ScopeKey = "cost-center", ResourceKey = ResourceKeys.Orders }` in the consuming service — unknown keys are rejected until step 1.
 
 ## Build and test
 

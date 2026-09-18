@@ -74,6 +74,10 @@ builder.Services.AddSingleton<PermissionRegistrationService>();
 
 // Dynamic roles/scope infrastructure
 builder.Services.AddMemoryCache();
+// Shared L2 cache (Redis) so multiple facade replicas invalidate each other's registry copies.
+var redisConfig = builder.Configuration["Identity:Redis:Configuration"];
+if (!string.IsNullOrWhiteSpace(redisConfig))
+    builder.Services.AddStackExchangeRedisCache(o => o.Configuration = redisConfig);
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ScopeDictionaryConverter()));
 builder.Services.Configure<ScopedAccessOptions>(
     builder.Configuration.GetSection("Identity:ScopedAccess"));
