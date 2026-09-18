@@ -137,3 +137,12 @@ Integration tests use Testcontainers for the pinned Keycloak, PostgreSQL, Redis,
 - No remote authorization call on every normal application request.
 - No automatic privilege assignment from external roles.
 - No automatic deletion of permissions from a manifest.
+
+## Database(Oracle only provided) | Create user and schema for database queries
+
+These queries provide schema, user and access to work service with database
+
+```sql
+CREATE USER IDENTITY_META IDENTIFIED BY "identity-development-only" QUOTA UNLIMITED ON USERS;
+GRANT CONNECT, RESOURCE TO IDENTITY_META;
+```
