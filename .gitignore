@@ -491,3 +491,5 @@ identity-data-protection-keys/
 identity-signing-keys.json
 
 .claude-sync/conflicts/
+
+.tmp*
