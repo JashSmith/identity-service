@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>راهنمای کار با سرویس هویت (Identity Facade)</title>
+<style>
+:root{--fg:#202124;--bg:#fff;--head:#17365d;--rule:#2f75b5;--box:#eef5fc;--boxrule:#2f75b5;--warn:#fff4e5;--warnrule:#e69138;--ok:#edf7ed;--okrule:#43a047;--err:#fdecea;--errrule:#c0392b;--code:#111827;--codefg:#e5e7eb;--th:#d9eaf7;--cell:#d9e2f3;--muted:#5f6368;--inline:#f1f3f4}
+body{font-family:Tahoma,"Segoe UI",sans-serif;line-height:2;max-width:1100px;margin:auto;padding:24px;color:var(--fg);background:var(--bg)}
+h1,h2,h3{color:var(--head)}h1{border-bottom:3px solid var(--rule);padding-bottom:8px}
+h2{margin-top:38px;border-bottom:1px solid var(--cell);padding-bottom:4px}
+.box{padding:14px 18px;border-radius:8px;margin:16px 0;background:var(--box);border-right:5px solid var(--boxrule)}
+.warn{background:var(--warn);border-right-color:var(--warnrule)}
+.ok{background:var(--ok);border-right-color:var(--okrule)}
+.err{background:var(--err);border-right-color:var(--errrule)}
+.code{direction:ltr;text-align:left;background:var(--code);color:var(--codefg);padding:15px;border-radius:8px;overflow-x:auto;white-space:pre;font-family:Consolas,"Courier New",monospace;font-size:14px;line-height:1.55;margin:14px 0}
+.out{direction:ltr;text-align:left;background:#f6f8fa;color:#24292f;border:1px solid var(--cell);padding:12px 15px;border-radius:8px;overflow-x:auto;white-space:pre;font-family:Consolas,"Courier New",monospace;font-size:13px;line-height:1.5;margin:10px 0}
+code{direction:ltr;unicode-bidi:embed;font-family:Consolas,monospace;background:var(--inline);padding:1px 4px;border-radius:3px}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:.95em}
+th,td{border:1px solid var(--cell);padding:8px;text-align:right;vertical-align:top}
+th{background:var(--th)}
+.ltr{direction:ltr;text-align:left}
+.small{color:var(--muted);font-size:.9em}
+nav{background:var(--box);padding:12px 18px;border-radius:8px;margin:16px 0}
+nav ol{margin:0;padding-right:22px}
+.badge{display:inline-block;background:var(--ok);color:#1e4620;border:1px solid var(--okrule);border-radius:10px;padding:0 8px;font-size:.8em}
+</style>
+</head>
+<body>
+<h1>راهنمای کار با سرویس هویت (Identity Facade)</h1>
+<p>این راهنمای عملی شش مرحلهٔ کار با Identity Facade را توضیح می‌دهد: احراز هویت، سرویس‌های کاربران، نقش‌های کسب‌وکاری، Scopeها به‌عنوان attribute، ساخت کاربر Scopeدار و مدیریت رجیستری Scope. هر نمونه با اجرای واقعی روی استک docker تست شده و خروجی واقعی آن درج شده است.</p>
+
+<div class="box ok"><strong>اصل معماری:</strong> Keycloak مالک کاربران، گذرواژه‌ها، نشست‌ها، گروه‌ها، نقش‌ها و صدور JWT است. Facade فقط پروکسی، اعتبارسنجی، نرمال‌سازی و مدیریت مجوزها را انجام می‌دهد و <strong>هیچ توکنی تولید نمی‌کند</strong>. مصرف‌کننده‌ها آدرس Keycloak را نمی‌دانند؛ فقط به Facade وصل می‌شوند.</div>
+
+<div class="box"><strong>منبع حقیقت:</strong> همهٔ دادهٔ احراز هویت در Keycloak است. نقش تجاری = <strong>Group</strong>، مجوز = <strong>Client Role</strong> روی کلاینت همان سرویس، Scope = <strong>attribute</strong> روی کاربر/گروه، و تعریف Scopeها در گروه پیکربندی <code>iam-scope-registry</code>. دیتابیس Oracle فقط متادیتای کلیدهای امضا را نگه می‌دارد.</div>
+
+<nav><strong>فهرست</strong>
+<ol>
+<li><a href="#s1">ورود، احراز هویت، Refresh، Introspect و خروج</a></li>
+<li><a href="#s2">سرویس‌های کاربران و نقش‌ها</a></li>
+<li><a href="#s3">ساخت نقش کسب‌وکاری و اعطای دسترسی</a></li>
+<li><a href="#s4">Scope به‌عنوان دادهٔ attributeشده</a></li>
+<li><a href="#s5">ساخت کاربر همراه با نقش و Scope</a></li>
+<li><a href="#s6">مدیریت رجیستری Scope</a></li>
+</ol>
+</nav>
+
+<h2 id="s0">پیش‌نیازها</h2>
+<div class="code">cd deploy
+docker compose up --build -d          # Keycloak، دو Oracle، Vault، Redis، Facade، order-service
+docker compose ps                     # همه باید healthy باشند (Oracle حدود ۶۰ ثانیه)
+curl -fsS http://localhost:5080/health/live</div>
+
+<table>
+<tr><th>منبع</th><th>آدرس</th></tr>
+<tr><td>Facade (REST)</td><td class="ltr">http://localhost:5080</td></tr>
+<tr><td>Scalar (مستندات تعاملی)</td><td class="ltr">http://localhost:5080/scalar</td></tr>
+<tr><td>Postman</td><td class="ltr">postman/Identity service.postman_collection.json + environment</td></tr>
+<tr><td>تست کامل خودکار جریان</td><td class="ltr">deploy/smoke-test.sh</td></tr>
+<tr><td>نمونهٔ مصرف‌کننده</td><td class="ltr">http://localhost:5180 (order-service)</td></tr>
+</table>
+
+<div class="box warn"><strong>اعتبارنامهٔ توسعه:</strong> کاربر <code>admin</code> / گذرواژهٔ <code>admin</code>، کلاینت <code>identity-facade</code> با secret <code>facade-development-only</code>. این مقادیر فقط برای توسعه‌اند و در محیط واقعی باید تغییر کنند و همه‌چیز روی HTTPS باشد.</div>
+
+<div class="box"><strong>نکتهٔ مهم دربارهٔ طول عمر توکن:</strong> Access Token کلاینت <code>identity-facade</code> عمداً کوتاه است (<code>access.token.lifespan = 300</code> یعنی ۵ دقیقه). این کار پنجرهٔ انتشار تغییرات Scope و مجوزها را محدود می‌کند: توکنی که قبلاً صادر شده تغییر نمی‌کند؛ تغییرات در توکن <strong>بعدی</strong> (پس از Refresh یا ورود مجدد) دیده می‌شوند. در اسکریپت‌های تست، توکن را تازه بگیرید.</div>
+
+<h2 id="s1">۱. ورود، احراز هویت، Refresh، Introspect و خروج</h2>
+<p>همهٔ مسیرهای زیر پروکسی Keycloak هستند؛ Facade هیچ توکنی نمی‌سازد و گذرواژه را ذخیره نمی‌کند.</p>
+
+<table>
+<tr><th>عملیات</th><th>مسیر</th><th>دسترسی</th><th>کی استفاده می‌شود</th></tr>
+<tr><td>ورود کاربر</td><td><code>POST /api/identity/auth/login</code></td><td>عمومی</td><td>کاربر نام کاربری و گذرواژه دارد</td></tr>
+<tr><td>ورود سرویس</td><td><code>POST /api/identity/auth/login</code></td><td>عمومی</td><td>ارتباط سرویس‌به‌سرویس بدون کاربر</td></tr>
+<tr><td>تازه‌سازی توکن</td><td><code>POST /api/identity/auth/refresh</code></td><td>عمومی</td><td>انقضای Access Token؛ Refresh Token لازم است</td></tr>
+<tr><td>اعتبارسنجی توکن</td><td><code>POST /api/identity/auth/introspect</code></td><td>عمومی</td><td>بررسی فعال بودن توکن برای منابع حساس</td></tr>
+<tr><td>خروج</td><td><code>POST /api/identity/auth/logout</code></td><td>عمومی</td><td>ابطال نشست و Refresh Token</td></tr>
+<tr><td>اطلاعات کاربر جاری</td><td><code>GET /api/identity/me</code></td><td>Bearer</td><td>خواندن هویت از روی توکن</td></tr>
+</table>
+
+<h3>۱.۱ ورود کاربر (Password Grant)</h3>
+<div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/login \
+  -d "grant_type=password" \
+  -d "client_id=identity-facade" \
+  -d "client_secret=facade-development-only" \
+  -d "username=admin" \
+  -d "password=admin"</div>
+<p class="small">پاسخ واقعی (توکن‌ها کوتاه شده‌اند):</p>
+<div class="out">{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6...",
+  "refresh_token": "eyJhbGciOiJIUzUxMiJ9...",
+  "expires_in": 300,
+  "token_type": "Bearer"
+}</div>
+<div class="box ok"><strong>چطور توکن را نگه دارید:</strong> فقط <code>access_token</code> را در حافظهٔ کوتاه‌مدت نگه دارید و در هدر <code>Authorization: Bearer</code> بگذارید. <code>refresh_token</code> را امن ذخیره کنید. هیچ‌کدام را در لاگ یا URL ننویسید.</div>
+
+<div class="code"># ذخیرهٔ توکن در متغیر محیطی برای دستورات بعدی
+TOKEN=$(curl -s -X POST http://localhost:5080/api/identity/auth/login \
+  -d "grant_type=password&client_id=identity-facade&client_secret=facade-development-only&username=admin&password=admin" \
+  | python -c "import json,sys; print(json.load(sys.stdin)['access_token'])")</div>
+
+<h3>۱.۲ ورود سرویس (Client Credentials)</h3>
+<p>برای ارتباط ماشین‌به‌ماشین، بدون نام کاربری. همان مسیر ورود با <code>grant_type=client_credentials</code>:</p>
+<div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/login \
+  -d "grant_type=client_credentials" \
+  -d "client_id=order-service" \
+  -d "client_secret=order-service-development-only"</div>
+<div class="box warn"><strong>محدودیت مهم:</strong> Service Account نمونه فقط مجوز <code>Identity.Permissions.Register</code> دارد؛ یعنی ثبت Manifest مجاز است ولی خواندن دادهٔ کسب‌وکار نه. برای دسترسی بیشتر باید مجوزها صریحاً به نقش یا گروه آن سرویس داده شود.</div>
+
+<h3>۱.۳ اطلاعات کاربر جاری</h3>
+<div class="code">curl -s http://localhost:5080/api/identity/me -H "Authorization: Bearer $TOKEN"</div>
+<p class="small">پاسخ واقعی برای <code>admin</code>:</p>
+<div class="out">{
+  "userId": "d05b0be6-e42c-4a0e-b195-162f1ba651df",
+  "username": "admin",
+  "roles": [],
+  "permissions": [
+    "identity.users.manage", "identity.roles.manage", "identity.scopes.manage",
+    "identity.users.read",   "identity.roles.read",   "identity.scopes.read",
+    "Identity.Users.Read",   "Identity.Roles.Read",   "Identity.Permissions.Read",
+    "Identity.Permissions.Register", "Identity.Keys.View", "Identity.Keys.Generate"
+  ],
+  "sessionId": "42144108-9af6-ba0b-0445-d4e339b8d4cb"
+}</div>
+<div class="box"><strong>دو دستهٔ نام مجوز:</strong> مجوزهای <code>Identity.*</code> (با حرف بزرگ) مربوط به ماژول مدیریت کلید و Directory قدیمی‌اند؛ مجوزهای <code>identity.*</code> (با حرف کوچک) مجوزهای مدیریتی خود Facade برای کاربر/نقش/Scope هستند و همان‌هایی‌اند که Endpointها با <code>RequireAuthorization</code> چک می‌کنند. کاربر <code>admin</code> عضو گروه <code>super-admins</code> است و هر دو دسته را دارد.</div>
+
+<h3>۱.۴ تازه‌سازی توکن (Refresh)</h3>
+<div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/refresh \
+  -d "grant_type=refresh_token" \
+  -d "client_id=identity-facade" \
+  -d "client_secret=facade-development-only" \
+  -d "refresh_token=$REFRESH_TOKEN"</div>
+<p>پاسخ همان ساختار ورود است، با توکن‌های تازه. Keycloak در این realm چرخش Refresh Token را فعال دارد، پس <strong>همیشه</strong> مقدار برگشتی را جایگزین قبلی کنید.</p>
+<div class="box ok"><strong>کی Refresh لازم است:</strong> پس از تغییر مجوز یا Scope یک کاربر، توکن فعلی تغییر نمی‌کند. با Refresh یا ورود مجدد، توکن تازه شامل مقادیر جدید است (تأییدشده در تست).</div>
+
+<h3>۱.۵ اعتبارسنجی توکن (Introspect)</h3>
+<div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/introspect \
+  -d "client_id=identity-facade" \
+  -d "client_secret=facade-development-only" \
+  -d "token=$TOKEN"</div>
+<p class="small">پاسخ واقعی طبق RFC 7662:</p>
+<div class="out">{ "active": true, "sub": "d05b0be6-e42c-4a0e-b195-162f1ba651df", "client_id": "identity-facade", ... }</div>
+<div class="box"><strong>تفاوت با اعتبارسنجی محلی:</strong> سرویس‌ها در حالت عادی توکن را <em>محلی</em> با JWKS اعتبارسنجی می‌کنند و به این Endpoint نمی‌زنند. Introspect فقط برای عملیات حساس (پرداخت، حذف، تغییر مالکیت) لازم است که «همین لحظه باطل نشده باشد» اهمیت دارد.</div>
+
+<h3>۱.۶ خروج و ابطال نشست (Logout)</h3>
+<div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/logout \
+  -d "client_id=identity-facade" \
+  -d "client_secret=facade-development-only" \
+  -d "refresh_token=$REFRESH_TOKEN"</div>
+<p class="small">پاسخ واقعی:</p>
+<div class="out">{ "success": true }</div>
+<p>Facade ابتدا Logout Keycloak را صدا می‌زند و در صورت شکست، به Endpoint ابطال (Revoke) می‌رود. پس از خروج، توکن‌های ذخیره‌شده را از حافظه پاک کنید.</p>
+<div class="box warn"><strong>خروج Access Token را فوراً باطل نمی‌کند:</strong> Access Token تا انقضا (حداکثر ۵ دقیقه) با JWKS معتبر می‌ماند؛ آنچه باطل می‌شود نشست و Refresh Token است. برای ابطال فوری لازم است عمر توکن کوتاه بماند (همین ۳۰۰ ثانیه) یا Introspect استفاده شود.</div>
+
+<h3>۱.۷ Discovery و JWKS (برای مصرف‌کننده‌ها)</h3>
+<div class="code">curl -s http://localhost:5080/.well-known/openid-configuration
+curl -s http://localhost:5080/api/identity/oidc/jwks</div>
+<p>Facade سند Discovery را از Keycloak عبور می‌دهد و فقط <code>jwks_uri</code> را به خودش تغییر می‌دهد. <code>issuer</code> و بقیهٔ Endpointها دست‌نخورده می‌مانند تا توکن واقعی Keycloak بدون تغییر اعتبارسنجی شود. مصرف‌کننده باید <code>AcceptIssuerFromDiscovery = true</code> را فعال کند، چون Authority آدرس Facade است اما Issuer متعلق به Keycloak.</p>
+
+<h2 id="s2">۲. سرویس‌های کاربران و نقش‌ها</h2>
+<p>این مسیرها Directory خواندنی روی Keycloak هستند و با Bearer Token و مجوز خواندن کار می‌کنند.</p>
+
+<table>
+<tr><th>مسیر</th><th>مجوز لازم</th><th>کاربرد</th></tr>
+<tr><td><code>GET /api/identity/users?search=&amp;page=&amp;pageSize=</code></td><td><code>Identity.Users.Read</code></td><td>جستجو و صفحه‌بندی کاربران</td></tr>
+<tr><td><code>GET /api/identity/users/{id}</code></td><td><code>Identity.Users.Read</code></td><td>جزئیات یک کاربر</td></tr>
+<tr><td><code>GET /api/identity/users/{id}/roles</code></td><td><code>Identity.Users.Read</code></td><td>نقش‌های کاربر</td></tr>
+<tr><td><code>GET /api/identity/users/{id}/permissions</code></td><td><code>Identity.Users.Read</code></td><td>مجوزهای مؤثر کاربر</td></tr>
+<tr><td><code>GET /api/identity/roles</code></td><td><code>Identity.Roles.Read</code></td><td>نقش‌های Realm</td></tr>
+<tr><td><code>GET /api/identity/permissions?serviceId=&amp;includeDeprecated=</code></td><td><code>Identity.Permissions.Read</code></td><td>کاتالوگ مجوزهای ثبت‌شده</td></tr>
+</table>
+
+<h3>۲.۱ فهرست کاربران</h3>
+<div class="code">curl -s "http://localhost:5080/api/identity/users?page=1&amp;pageSize=20" \
+  -H "Authorization: Bearer $TOKEN"</div>
+<p class="small">پاسخ واقعی (صفحه‌بندی‌شده):</p>
+<div class="out">{
+  "items": [
+    { "id": "d05b0be6-...", "username": "admin", "displayName": "Admin User",
+      "enabled": true, "attributes": {} }
+  ],
+  "page": 1, "pageSize": 20, "total": null
+}</div>
+<div class="box"><strong>محدودیت صفحه:</strong> <code>pageSize</code> بین ۱ تا ۱۰۰ محدود (Clamp) می‌شود. <code>search</code> روی نام کاربری و ایمیل جستجو می‌کند. <code>total</code> عمداً <code>null</code> است چون Keycloak شمارش کل را ارزان ارائه نمی‌دهد.</div>
+
+<h3>۲.۲ مجوزهای مؤثر یک کاربر</h3>
+<div class="code">curl -s http://localhost:5080/api/identity/users/{userId}/permissions \
+  -H "Authorization: Bearer $TOKEN"</div>
+<div class="box warn"><strong>نکتهٔ مهمی که در تست کشف شد:</strong> Endpoint نقش‌های Keycloak (<code>/users/{id}/role-mappings</code>) فقط نقش‌های <strong>مستقیم</strong> را برمی‌گرداند. در مدل ما مجوزها از طریق <strong>عضویت در گروه</strong> (نقش کسب‌وکاری) به کاربر می‌رسند، پس این Endpoint قبلاً خالی برمی‌گشت. اکنون Facade نقش‌های مستقیم را با نقش‌های ارثی از گروه‌ها (هم Realm Role و هم Client Role همهٔ کلاینت‌ها) ترکیب می‌کند.</div>
+<p class="small">پاسخ واقعی برای کاربری که عضو گروه <code>SeniorAccountant</code> است:</p>
+<div class="out">[
+  { "name": "Orders.View",    "description": "Orders.View",    "deprecated": false },
+  { "name": "Orders.Create",  "description": "Orders.Create",  "deprecated": false },
+  { "name": "Orders.Approve", "description": "Orders.Approve", "deprecated": false },
+  { "name": "Orders.Export",  "description": "Orders.Export",  "deprecated": false }
+]</div>
+
+<h3>۲.۳ کاتالوگ مجوزهای ثبت‌شده</h3>
+<div class="code">curl -s "http://localhost:5080/api/identity/permissions?serviceId=order-service" \
+  -H "Authorization: Bearer $TOKEN"</div>
+<p class="small">پاسخ واقعی (بخشی از ۱۰ مجوز ثبت‌شده توسط order-service):</p>
+<div class="out">[
+  { "name": "Orders.View",           "serviceId": "order-service", "deprecated": false },
+  { "name": "Orders.Create",         "serviceId": "order-service", "deprecated": false },
+  { "name": "Orders.Cancel",         "serviceId": "order-service", "deprecated": false },
+  { "name": "Orders.Invoices.Issue", "serviceId": "order-service", "deprecated": false },
+  { "name": "Orders.Reports.Export", "serviceId": "order-service", "deprecated": false }
+]</div>
+<div class="box err"><strong>رفتار مهم پس از راه‌اندازی مجدد:</strong> کاتالوگ مجوزها در حافظهٔ Facade است. پس از Restart، تا وقتی سرویس‌ها دوباره Manifest خود را ثبت نکنند این فهرست <strong>خالی</strong> است. به همین دلیل اعتبارسنجی «آیا این مجوز وجود دارد؟» عمداً به <strong>Keycloak</strong> (منبع حقیقت) سپرده شده نه به این کاتالوگ حافظه‌ای؛ وگرنه پس از هر Restart، اختصاص مجوزهای کاملاً معتبر با خطای «وجود ندارد» رد می‌شد.</div>
+
+<h2 id="s3">۳. ساخت نقش کسب‌وکاری و اعطای دسترسی</h2>
+<p>نقش کسب‌وکاری در Keycloak یک <strong>Group</strong> است و مجوزها <strong>Client Role</strong> روی کلاینت سرویس مربوطه. اختصاص مجوز به نقش یعنی Map کردن Client Role روی آن Group.</p>
+
+<h3>۳.۱ ساخت نقش (مثلاً حسابدار اصلی)</h3>
+<div class="code">cat &gt; role.json &lt;&lt;'EOF'
+{
+  "name": "SeniorAccountant",
+  "description": "حسابدار اصلی",
+  "permissions": ["Orders.View", "Orders.Create", "Orders.Approve"]
+}
+EOF
+
+curl -s -X POST http://localhost:5080/api/identity/business-roles \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json; charset=utf-8" \
+  --data-binary @role.json</div>
+<p class="small">پاسخ واقعی (<code>HTTP 201 Created</code>):</p>
+<div class="out">{
+  "name": "SeniorAccountant",
+  "description": "حسابدار اصلی",
+  "composite": true,
+  "permissions": ["Orders.Approve", "Orders.Create", "Orders.View"]
+}</div>
+<div class="box err"><strong>تلهٔ رمزگذاری فارسی (مهم):</strong> اگر بدنهٔ JSON را با <code>-d '{"description":"حسابدار اصلی"}'</code> داخل خود خط فرمان بنویسید، کنسول ویندوز آن را با Code Page محلی (نه UTF-8) به curl می‌دهد و سرور خطای <code>Cannot transcode invalid UTF-8 JSON text</code> با <code>HTTP 400</code> برمی‌گرداند. همیشه بدنه را در <strong>فایل UTF-8</strong> بگذارید و با <code>--data-binary @file</code> بفرستید، یا از Postman/Scalar استفاده کنید. این محدودیت خط فرمان است، نه ایراد سرویس.</div>
+
+<h3>۳.۲ خواندن نقش و مجوزهای مؤثر</h3>
+<div class="code">curl -s http://localhost:5080/api/identity/business-roles/SeniorAccountant \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -s http://localhost:5080/api/identity/business-roles/SeniorAccountant/effective-permissions \
+  -H "Authorization: Bearer $TOKEN"</div>
+<p class="small">پاسخ واقعی:</p>
+<div class="out">{ "role": "SeniorAccountant",
+  "permissions": ["Orders.Approve","Orders.Create","Orders.Export","Orders.View"] }</div>
+<p>«مؤثر» یعنی اجتماع Client Roleهای همهٔ کلاینت‌ها + Realm Roleهای Map شده + گسترش نقش‌های ترکیبی (Composite).</p>
+
+<h3>۳.۳ افزودن و حذف مجوز</h3>
+<div class="code"># افزودن
+cat &gt; perms.json &lt;&lt;'EOF'
+{ "permissions": ["Orders.Export", "Orders.Cancel"] }
+EOF
+curl -s -X POST http://localhost:5080/api/identity/business-roles/SeniorAccountant/permissions \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  --data-binary @perms.json
+
+# حذف
+curl -s -X DELETE http://localhost:5080/api/identity/business-roles/SeniorAccountant/permissions/Orders.Cancel \
+  -H "Authorization: Bearer $TOKEN"</div>
+<p class="small">پاسخ واقعی حذف (<code>HTTP 200</code>) — توضیح فارسی و بقیهٔ مجوزها حفظ شده‌اند:</p>
+<div class="out">{
+  "name": "SeniorAccountant",
+  "description": "حسابدار ارشد — دسترسی سفارش‌ها",
+  "composite": true,
+  "permissions": ["Orders.Approve", "Orders.Create", "Orders.Export", "Orders.View"]
+}</div>
+
+<h3>۳.۴ ویرایش توضیح نقش</h3>
+<div class="code">cat &gt; role-update.json &lt;&lt;'EOF'
+{ "description": "حسابدار ارشد — دسترسی سفارش‌ها" }
+EOF
+curl -s -X PUT http://localhost:5080/api/identity/business-roles/SeniorAccountant \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  --data-binary @role-update.json</div>
+<div class="box warn"><strong>نکتهٔ مهم دربارهٔ Attributeها:</strong> در Keycloak، PUT روی یک Group کل مجموعهٔ Attributeها را <strong>جایگزین</strong> می‌کند. نسخهٔ قبلی فقط <code>description</code> و <code>authz.allowed-scopes</code> را نگه می‌داشت؛ یعنی ویرایش توضیح، Scopeهای سطح گروه (<code>authz.scope.*</code>) را <strong>پاک می‌کرد</strong>. اکنون همهٔ Attributeهای موجود خوانده و حفظ می‌شوند و فقط <code>description</code> تغییر می‌کند.</div>
+
+<h3>۳.۵ حذف نقش</h3>
+<div class="code">curl -s -X DELETE http://localhost:5080/api/identity/business-roles/SeniorAccountant \
+  -H "Authorization: Bearer $TOKEN"          # 204 No Content</div>
+<p>اگر کاربری هنوز عضو نقش باشد، حذف با <code>HTTP 400</code> و پیام روشن رد می‌شود:</p>
+<div class="out">{ "code": "validation_error",
+  "message": "Cannot delete business role 'SeniorAccountant': still assigned to 2 user(s). Remove scoped assignments first." }</div>
+
+<h3>۳.۶ سه ایرادی که در این مرحله پیدا و رفع شد</h3>
+<table>
+<tr><th>نشانهٔ ظاهری</th><th>علت ریشه‌ای</th><th>وضعیت</th></tr>
+<tr><td>ساخت نقش <code>201</code> می‌داد ولی <code>permissions: []</code> و <code>description: null</code> برمی‌گشت</td><td>۱) مجوزها به Client Role تبدیل می‌شدند ولی مسیر <em>خواندن</em> یک UUID را به‌جای clientId جستجو می‌کرد، پس هیچ‌وقت تطبیق نمی‌شد. ۲) جستجوی گروه در Keycloak به‌صورت پیش‌فرض «خلاصه» است و Attributeها را برنمی‌گرداند.</td><td><span class="badge">رفع شد</span></td></tr>
+<tr><td>اختصاص مجوز با «<code>Permission 'Orders.View' does not exist.</code>» رد می‌شد</td><td>اعتبارسنجی از کاتالوگ حافظه‌ای می‌خواند که پس از Restart خالی است؛ در حالی که مجوز واقعاً در Keycloak وجود داشت.</td><td><span class="badge">رفع شد</span></td></tr>
+<tr><td>حذف مجوز خطا می‌داد</td><td>همان باگ UUID/clientId در مسیر حذف.</td><td><span class="badge">رفع شد</span></td></tr>
+</table>
+
+<h2 id="s4">۴. Scope به‌عنوان دادهٔ Attributeشده</h2>
+<p>Scope یعنی محدودیت داده‌محور: «این کاربر فقط در تهران-۲ کار می‌کند». Scopeها نه در دیتابیس Facade، بلکه به‌صورت <strong>attribute</strong> روی کاربر و گروه در Keycloak نگه داشته می‌شوند و از آنجا به توکن و سپس به فیلتر سطح دیتابیس در سرویس مصرف‌کننده می‌رسند.</p>
+
+<h3>۴.۱ مدل داده</h3>
+<table>
+<tr><th>مفهوم</th><th>محل ذخیره در Keycloak</th><th>مثال</th></tr>
+<tr><td>تعریف Scope (چه کلیدهایی مجازند)</td><td>Attribute گروه <code>iam-scope-registry</code> با کلید <code>scope.&lt;key&gt;</code></td><td><code>scope.region</code> = JSON شامل displayName، isActive، valueType</td></tr>
+<tr><td>نگاشت منبع به Scope</td><td>همان گروه، کلید <code>resource.&lt;name&gt;</code></td><td><code>resource.Orders</code> = <code>["region","branch","warehouse","customer"]</code></td></tr>
+<tr><td>مقادیر مجاز برای یک نقش</td><td>Attribute گروه نقش: <code>authz.allowed-scopes</code></td><td><code>["region","branch"]</code></td></tr>
+<tr><td>مقدار واقعی کاربر</td><td>Attribute کاربر: <code>authz.scope.&lt;key&gt;</code> (چندمقداری)</td><td><code>authz.scope.region = ["tehran-2"]</code></td></tr>
+<tr><td>مقدار سطح گروه (مشترک همهٔ اعضا)</td><td>Attribute گروه: <code>authz.scope.&lt;key&gt;</code></td><td><code>authz.scope.region = ["tehran-1"]</code></td></tr>
+</table>
+<div class="box ok"><strong>قانون مؤثر:</strong> Scopeهای مؤثر کاربر = <strong>اجتماع (Union) مقادیر گروه و کاربر</strong> برای هر کلید. اگر گروه <code>SeniorAccountant</code> مقدار <code>region=tehran-1</code> داشته باشد و خود کاربر <code>region=tehran-2</code>، نتیجه <code>["tehran-1","tehran-2"]</code> است. این رفتار در تست تأیید شد.</div>
+
+<h3>۴.۲ خواندن و نوشتن Scope یک کاربر</h3>
+<div class="code"># خواندن
+curl -s http://localhost:5080/api/identity/users/{userId}/scoped-access \
+  -H "Authorization: Bearer $TOKEN"
+
+# جایگزینی کامل (Replace)
+cat &gt; scopes.json &lt;&lt;'EOF'
+{ "assignments": [ { "role": "SeniorAccountant",
+                     "scopes": { "region": ["tehran-2"], "branch": ["b-3"] } } ] }
+EOF
+curl -s -X PUT http://localhost:5080/api/identity/users/{userId}/scoped-access \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  --data-binary @scopes.json
+
+# افزودن یک تخصیص (بدون پاک کردن قبلی‌ها)
+curl -s -X POST http://localhost:5080/api/identity/users/{userId}/scoped-assignments \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  --data-binary @scopes.json
+
+# حذف تخصیص یک نقش
+curl -s -X DELETE http://localhost:5080/api/identity/users/{userId}/scoped-assignments/SeniorAccountant \
+  -H "Authorization: Bearer $TOKEN"</div>
+<p class="small">پاسخ واقعی PUT:</p>
+<div class="out">{ "userId": "bd501d92-...",
+  "assignments": [ { "role": "SeniorAccountant",
+                     "scopes": { "region": ["tehran-2"], "branch": ["b-3"] } } ] }</div>
+
+<div class="box"><strong>فرم کوتاه (Scalar) هم مجاز است:</strong> می‌توانید به‌جای آرایه یک رشته بدهید؛ خودکار به آرایه نرمال می‌شود:
+<div class="out">{ "role": "SeniorAccountant", "scopes": { "test-key": "items-1" } }
+   ≡  { "role": "SeniorAccountant", "scopes": { "test-key": ["items-1"] } }</div>
+مقادیر تکراری حذف، مرتب و Trim می‌شوند. پس برای افزودن Scope جدید نیازی به تغییر DTO نیست.</div>
+
+<h3>۴.۳ چطور در توکن ظاهر می‌شود</h3>
+<p>Client Scope <code>authz-scopes</code> برای هر کلید یک Mapper دارد که attribute <code>authz.scope.&lt;key&gt;</code> را به Claim تبدیل می‌کند.</p>
+<div class="box warn"><strong>مهم — نقطه در نام Claim باعث تودرتو شدن می‌شود:</strong> Keycloak نقطهٔ داخل <code>claim.name</code> را به ساختار تودرتوی JSON تبدیل می‌کند. پس Claim به‌صورت کلید مسطح <code>"authz.scope.region"</code> نمی‌آید، بلکه این‌طور است:</div>
+<p class="small">Payload واقعی توکن کاربر تست‌شده:</p>
+<div class="out">{
+  "sub": "84b48d80-79b9-4a16-8fdb-b41dc1d7232c",
+  "preferred_username": "sara-tax",
+  "authz": {
+    "scope": { "region": ["tehran-2", "tehran-1"], "branch": ["b-3"] }
+  },
+  "iam_access": "[{\"role\":\"SeniorAccountant\",\"scopes\":{\"branch\":[\"b-3\"],\"region\":[\"tehran-2\"]}}]",
+  "permissions": ["Orders.Approve","Orders.Create","Orders.Export","Orders.View"]
+}</div>
+<p>بنابراین در کد مصرف‌کننده باید <code>authz → scope → region</code> خوانده شود، نه یک کلید مسطح.</p>
+
+<h3>۴.۴ دو مسیر خواندن در سرویس مصرف‌کننده</h3>
+<table>
+<tr><th>مسیر</th><th>مزیت</th><th>محدودیت</th></tr>
+<tr><td>Claim <code>iam_access</code> (رشتهٔ JSON شامل نقش‌ها)</td><td>بدون تماس شبکه‌ای؛ نقش‌به‌نقش تفکیک شده</td><td>برای بار بزرگ ممکن است از توکن حذف شود؛ در آن صورت <code>EnsureLoadedAsync</code> از Facade می‌خواند</td></tr>
+<tr><td>Claimهای <code>authz.scope.*</code> (تودرتو)</td><td>مستقیم از توکن، بدون تجزیهٔ JSON دستی</td><td>تجمیع‌شده است (تفکیک نقش ندارد)</td></tr>
+</table>
+<div class="code">// در سرویس مصرف‌کننده
+builder.Services.AddCompanyAccessContext(o =&gt;
+    o.FacadeBaseUrl = configuration["Identity:AccessContext:FacadeBaseUrl"]);
+
+// در Endpoint
+await access.EnsureLoadedAsync(ct);
+var regions = access.GetScopeValues("region");                 // ["tehran-1","tehran-2"]
+bool ok = access.HasPermission("Orders.View", "region", "tehran-2");</div>
+
+<h3>۴.۵ فیلتر سطح دیتابیس</h3>
+<div class="code">query = await scopeFilter.ApplyAsync(query, effectiveScopes, ResourceKeys.Orders, ct);</div>
+<p>رفتار <strong>Deny-by-default</strong> است: اگر نگاشت منبع وجود نداشته باشد یا Handler ثبت نشده باشد یا کاربر Scope لازم را نداشته باشد، نتیجه <strong>خالی</strong> است. چند مقدار داخل یک کلید با OR و چند کلید مختلف با AND ترکیب می‌شوند.</p>
+<p class="small">نتیجهٔ واقعی تست روی order-service — کاربری با <code>region=tehran-1</code> (از گروه) و <code>region=tehran-2</code> (از خودش):</p>
+<div class="out">GET /api/orders/scoped
+[ { "id": "ord-1", "region": "tehran-1" },
+  { "id": "ord-2", "region": "tehran-2" } ]        ← فقط دو سفارش مجاز؛ ord-3 (global) حذف شد</div>
+<p class="small">و بررسی تک‌تک (<code>GET /api/orders/{id}/scoped-check?region=...</code>):</p>
+<div class="out">region=tehran-2  (مجاز)     → 200 + بدنهٔ سفارش
+region=tehran-1  (غیرمجاز)  → 403</div>
+<div class="box warn"><strong>AND بین ابعاد را جدی بگیرید:</strong> اگر کاربری هم <code>region</code> و هم <code>branch</code> داشته باشد و هر دو برای آن منبع نگاشت شده باشند، هر دو فیلتر اعمال می‌شوند (AND). در نمونهٔ order-service فیلتر <code>branch</code> برای ساده‌سازی روی همان فیلد <code>Region</code> عمل می‌کند؛ پس دادن <code>branch=b-3</code> نتیجه را <strong>خالی</strong> می‌کند و Endpoint <code>403</code> برمی‌گرداند. این رفتار درستِ Deny-by-default است، نه باگ — اما در طراحی ابعاد Scope دقت کنید که ابعاد واقعاً مستقل باشند.</div>
+
+<h3>۴.۶ دو ایراد مهمی که در این مرحله پیدا و رفع شد</h3>
+<table>
+<tr><th>نشانهٔ ظاهری</th><th>علت ریشه‌ای</th><th>وضعیت</th></tr>
+<tr><td>نوشتن Scope <code>204/200</code> می‌داد ولی Attribute در Keycloak ذخیره نمی‌شد و Claim خالی بود</td><td>User Profile اعلانی Keycloak با سیاست پیش‌فرض، هر Attribute <strong>اعلام‌نشده</strong> را بی‌صدا دور می‌ریزد. کد قبلی یک Attribute تحت‌اللفظی <code>authz.scope.*</code> می‌ساخت، ولی Keycloak Wildcard در نام Attribute را پشتیبانی نمی‌کند — پس هیچ Attribute واقعی اعلام نشده بود. اکنون به‌ازای هر کلید Scope یک Attribute مشخص (<code>authz.scope.region</code>، <code>authz.scope.branch</code>، …) با دسترسی فقط-ادمین اعلام می‌شود.</td><td><span class="badge">رفع شد</span></td></tr>
+<tr><td>Claimهای Scope در توکن نبودند</td><td>Client Scopeهای <code>authz-scopes</code> و <code>iam-access</code> به کلاینت‌ها متصل نبودند، پس Mapperها هرگز اجرا نمی‌شدند. اکنون در شروع کار Facade به‌صورت خودکار و تکرارپذیر (Idempotent) به همهٔ کلاینت‌ها متصل می‌شوند.</td><td><span class="badge">رفع شد</span></td></tr>
+<tr><td>مجوزهای <code>Orders.*</code> در توکن کاربر نبودند</td><td>Mapper تجمیع‌کنندهٔ Client Role روی کلاینت نبود؛ فقط Mapper نقش‌های Realm وجود داشت. اکنون <code>oidc-usermodel-client-role-mapper</code> اضافه شده است.</td><td><span class="badge">رفع شد</span></td></tr>
+</table>
+
+<div class="box warn"><strong>نکتهٔ مهم هنگام Import مجدد Realm:</strong> کدِ Facade به‌صورت خودکار فقط برای کلاینت‌هایی Mapper نقش می‌سازد که <em>خودشان Manifest ثبت می‌کنند</em> (مثل <code>order-service</code>). برای کلاینت خودِ <code>identity-facade</code> هیچ Manifestی ثبت نمی‌شود، پس Mapper تجمیع آن باید از <strong>فایل Realm</strong> بیاید — که اضافه شده است (<code>permission-client-role-aggregate</code> در <code>deploy/realm-company.json</code>). اگر Realm را دستی ویرایش کردید یا نسخهٔ قدیمی وارد کردید، نبودِ این Mapper باعث می‌شود کاربران فقط نقش‌های Realm را ببینند و مجوزهای سرویس‌ها (<code>Orders.*</code>) در توکنشان نیاید. با <code>GET /api/identity/me</code> یا Decode توکن بررسی کنید.</div>
+<div class="box"><strong>اتصال Client Scopeها فرق دارد:</strong> برخلاف Mapper بالا، اتصال <code>authz-scopes</code> و <code>iam-access</code> به کلاینت‌ها توسط کد در هر شروعِ Facade خودکار و تکرارپذیر انجام می‌شود (در تست، پس از حذف دستی، با راه‌اندازی مجدد به هر ۸ کلاینت بازگشت). پس این بخش نیاز به اقدام دستی ندارد.</div>
+<div class="box ok"><strong>خودترمیمی:</strong> اتصال Client Scopeها فقط در فایل Realm نوشته نشده (چون Import با سیاست «نادیده گرفتن موجود» روی Realmهای قدیمی اثر ندارد). Facade در هر شروع، نبودِ اتصال را تشخیص داده و برطرف می‌کند. در تست، اتصال‌ها دستی حذف شدند و پس از راه‌اندازی مجدد، خودکار به هر ۸ کلاینت بازگشتند.</div>
+
+<h2 id="s5">۵. ساخت کاربر همراه با نقش و Scope</h2>
+<p>یک درخواست، سه کار انجام می‌دهد: ساخت کاربر در Keycloak، نوشتن Attributeهای Scope، و عضویت در گروه نقش. اگر مرحلهٔ Scope شکست بخورد، کاربر ساخته‌شده <strong>بازگردانی (Rollback)</strong> و حذف می‌شود تا کاربر نیمه‌کاره نماند.</p>
+
+<h3>۵.۱ ساخت کامل کاربر</h3>
+<div class="code">cat &gt; new-user.json &lt;&lt;'EOF'
+{
+  "username": "sara-tax",
+  "email": "sara@company.local",
+  "firstName": "سارا",
+  "lastName": "مدیر",
+  "enabled": true,
+  "credentials": { "password": "SaraPass#1!", "temporary": false },
+  "assignments": [
+    { "role": "SeniorAccountant",
+      "scopes": { "region": ["tehran-2"], "branch": ["b-3"] } }
+  ]
+}
+EOF
+
+curl -s -X POST http://localhost:5080/api/identity/users \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json; charset=utf-8" \
+  --data-binary @new-user.json</div>
+<p class="small">پاسخ واقعی (<code>HTTP 201 Created</code>):</p>
+<div class="out">{
+  "id": "84b48d80-79b9-4a16-8fdb-b41dc1d7232c",
+  "username": "sara-tax",
+  "displayName": "سارا مدیر",
+  "enabled": true,
+  "attributes": {}
+}</div>
+<div class="box"><strong>چرا <code>attributes</code> در پاسخ خالی است؟</strong> چون Attributeها <em>پس از</em> ساخت کاربر و در مرحلهٔ جداگانه نوشته می‌شوند و پاسخ ساخت، نمای کاربر را همان لحظهٔ ایجاد برمی‌گرداند. برای دیدن Attributeها از <code>GET /users/{id}/scoped-access</code> استفاده کنید.</div>
+<p>با <code>"temporary": true</code> کاربر در اولین ورود مجبور به تغییر گذرواژه می‌شود (Recommended برای کاربران ساخته‌شده توسط ادمین).</p>
+
+<h3>۵.۲ پیام‌های خطای قابل‌فهم</h3>
+<p>همهٔ خطاهای اعتبارسنجی با <code>HTTP 400</code> و ساختار استاندارد RFC 9110 با <strong>آدرس دقیق فیلد</strong> برمی‌گردند. نمونه‌های واقعی از تست:</p>
+
+<p><strong>الف) نقش وجود ندارد:</strong></p>
+<div class="out">{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "One or more validation errors occurred.",
+  "status": 400,
+  "errors": {
+    "assignments[0].role": ["Role 'NoSuchRole' does not exist."]
+  }
+}</div>
+
+<p><strong>ب) کلید Scope تعریف نشده یا غیرفعال است:</strong></p>
+<div class="out">{
+  "status": 400,
+  "errors": {
+    "assignments[0].scopes.nonexistent-scope":
+      ["Scope 'nonexistent-scope' is not defined or is inactive."]
+  }
+}</div>
+
+<p><strong>ج) مقدار خالی:</strong></p>
+<div class="out">{
+  "status": 400,
+  "errors": {
+    "assignments[0].scopes.region": ["Scope must have at least one value."]
+  }
+}</div>
+
+<p><strong>د) Scope برای این نقش مجاز نیست</strong> (وقتی گروه <code>authz.allowed-scopes = ["region","branch","cost-center"]</code> دارد و <code>customer</code> خواسته شود):</p>
+<div class="out">{
+  "status": 400,
+  "errors": {
+    "assignments[0].scopes.customer":
+      ["Scope 'customer' is not allowed for role 'SeniorAccountant'."]
+  }
+}</div>
+
+<p><strong>ه) فیلدهای الزامی پروفایل ناقص است</strong> — این مورد در تست کشف و اضافه شد:</p>
+<div class="out">{
+  "status": 400,
+  "errors": {
+    "email":     ["'email' is required by the identity provider's user profile; without it the user cannot sign in."],
+    "firstName": ["'firstName' is required by the identity provider's user profile; without it the user cannot sign in."],
+    "lastName":  ["'lastName' is required by the identity provider's user profile; without it the user cannot sign in."]
+  }
+}</div>
+<div class="box err"><strong>چرا مورد «ه» اضافه شد:</strong> در User Profile این Realm، فیلدهای <code>email</code>، <code>firstName</code> و <code>lastName</code> برای نقش <code>user</code> الزامی‌اند. ساخت کاربر بدون آن‌ها با <code>201</code> <strong>موفق می‌شد</strong>، ولی کاربر بعداً هرگز نمی‌توانست وارد شود و خطای مبهم <code>Account is not fully set up</code> می‌گرفت. اکنون Facade فهرست فیلدهای الزامی را از خود Keycloak می‌خواند و <em>قبل از</em> ساخت کاربر، خطای field-level می‌دهد.</div>
+
+<p><strong>و) نام کاربری یا ایمیل تکراری:</strong></p>
+<div class="out">{
+  "code": "validation_error",
+  "message": "Failed to create user 'reza-tax': Failed to create user 'reza-tax': 409 {\"errorMessage\":\"User exists with same email\"}",
+  "correlationId": "866b0fbd-..."
+}</div>
+
+<h3>۵.۳ به‌روزرسانی کاربر</h3>
+<div class="code">curl -s -X PUT http://localhost:5080/api/identity/users/{userId} \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"firstName":"سارا","lastName":"مدیر ارشد","enabled":true}'</div>
+<p>به‌روزرسانی به‌صورت «بخوان، ادغام کن، بنویس» انجام می‌شود تا Attributeهای Scope پاک نشوند. برای تغییر گذرواژه از Admin Console یا Admin REST Keycloak استفاده کنید (این Endpoint گذرواژه را تغییر نمی‌دهد).</p>
+
+<h2 id="s6">۶. مدیریت رجیستری Scope</h2>
+<p>رجیستری، فهرست Scopeهای مجاز و نگاشت آن‌ها به منابع است. همهٔ آن در Attributeهای گروه Keycloak به نام <code>iam-scope-registry</code> نگه داشته می‌شود و از طریق API قابل مدیریت است.</p>
+
+<table>
+<tr><th>مسیر</th><th>مجوز</th><th>کاربرد</th></tr>
+<tr><td><code>GET /api/identity/scopes</code></td><td><code>identity.scopes.read</code></td><td>فهرست همهٔ Scopeها</td></tr>
+<tr><td><code>GET /api/identity/scopes/{key}</code></td><td><code>identity.scopes.read</code></td><td>جزئیات یک Scope</td></tr>
+<tr><td><code>GET /api/identity/scopes/{key}/resources</code></td><td><code>identity.scopes.read</code></td><td>کدام منابع از این Scope استفاده می‌کنند</td></tr>
+<tr><td><code>GET /api/identity/scopes/resources/list</code></td><td><code>identity.scopes.read</code></td><td>نگاشت کامل منابع به Scopeها</td></tr>
+<tr><td><code>POST /api/identity/scopes</code></td><td><code>identity.scopes.manage</code></td><td>ساخت Scope جدید</td></tr>
+<tr><td><code>PUT /api/identity/scopes/{key}</code></td><td><code>identity.scopes.manage</code></td><td>ویرایش یا غیرفعال‌سازی</td></tr>
+</table>
+
+<h3>۶.۱ خواندن رجیستری</h3>
+<div class="code">curl -s http://localhost:5080/api/identity/scopes -H "Authorization: Bearer $TOKEN"</div>
+<p class="small">پاسخ واقعی:</p>
+<div class="out">[
+  { "key": "branch",       "displayName": "Branch",       "isActive": true, "valueType": "String" },
+  { "key": "customer",     "displayName": "Customer",     "isActive": true, "valueType": "String" },
+  { "key": "department",   "displayName": "Department",   "isActive": true, "valueType": "String" },
+  { "key": "organization", "displayName": "Organization", "isActive": true, "valueType": "String" },
+  { "key": "project",      "displayName": "Project",      "isActive": true, "valueType": "String" },
+  { "key": "region",       "displayName": "Region",       "isActive": true, "valueType": "String" },
+  { "key": "test-key",     "displayName": "Test Key",     "isActive": true, "valueType": "String" },
+  { "key": "warehouse",    "displayName": "Warehouse",    "isActive": true, "valueType": "String" }
+]</div>
+
+<div class="code">curl -s http://localhost:5080/api/identity/scopes/resources/list -H "Authorization: Bearer $TOKEN"</div>
+<div class="out">[
+  { "key": "Branches",        "scopes": ["region"] },
+  { "key": "CustomerOrders",  "scopes": ["customer"] },
+  { "key": "Employees",       "scopes": ["region","branch","department","organization"] },
+  { "key": "Orders",          "scopes": ["region","branch","warehouse","customer"] }
+]</div>
+
+<div class="code">curl -s http://localhost:5080/api/identity/scopes/region/resources -H "Authorization: Bearer $TOKEN"</div>
+<div class="out">{ "scope": "region", "resources": ["Branches", "Employees", "Orders"] }</div>
+
+<h3>۶.۲ ساخت Scope جدید</h3>
+<div class="code">cat &gt; new-scope.json &lt;&lt;'EOF'
+{
+  "key": "cost-center",
+  "displayName": "مرکز هزینه",
+  "description": "مرکز هزینه مالی برای فیلتر داده‌ها"
+}
+EOF
+
+curl -s -X POST http://localhost:5080/api/identity/scopes \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json; charset=utf-8" \
+  --data-binary @new-scope.json</div>
+<p class="small">پاسخ واقعی (<code>HTTP 201 Created</code>):</p>
+<div class="out">{
+  "key": "cost-center",
+  "displayName": "مرکز هزینه",
+  "description": "مرکز هزینه مالی برای فیلتر داده‌ها",
+  "isActive": true,
+  "valueType": "String"
+}</div>
+<div class="box ok"><strong>ساخت یک Scope سه کار را خودکار انجام می‌دهد</strong> (تأییدشده در تست):
+<ol style="margin:6px 0">
+<li>Attribute <code>scope.cost-center</code> در گروه <code>iam-scope-registry</code> نوشته می‌شود.</li>
+<li>Mapper مربوط به Claim (<code>authz-scope-cost-center</code>) ساخته و به Client Scope <code>authz-scopes</code> اضافه می‌شود — <strong>بدون نیاز به راه‌اندازی مجدد</strong>.</li>
+<li>Attribute <code>authz.scope.cost-center</code> در User Profile اعلام می‌شود تا نوشتنش ممکن باشد.</li>
+</ol>
+پس بلافاصله می‌توانید آن را به کاربر اختصاص دهید و در توکن بعدی ببینید.</div>
+
+<div class="box err"><strong>دو ایرادی که در این مسیر پیدا و رفع شد:</strong>
+<ul style="margin:6px 0">
+<li><strong>خطای ۵۰۰ هنگام ساخت Scope با توضیح فارسی:</strong> ستون <code>GROUP_ATTRIBUTE.VALUE</code> در Keycloak حداکثر ۲۵۵ بایت است. JSON توضیح با فرارِ <code>\uXXXX</code> شش‌برابر حجیم می‌شد (خطای <code>ORA-12899</code>). اکنون JSON فشرده نوشته می‌شود (کاراکترهای فارسی خام) و اگر باز هم بلند بود، بین چند مقدارِ همان Attribute چندمقداری <strong>شکسته</strong> و هنگام خواندن به هم چسبانده می‌شود.</li>
+<li><strong>Endpointها به دیتابیس Oracle منسوخ وصل بودند:</strong> این مسیرها جداول legacy را می‌خواندند در حالی که اعتبارسنجی از Keycloak می‌خواند؛ یعنی ساخت Scope عملاً هیچ اثری نداشت. اکنون هر دو سمت از <code>iam-scope-registry</code> کار می‌کنند.</li>
+</ul></div>
+
+<h3>۶.۳ ویرایش و غیرفعال‌سازی</h3>
+<div class="code">curl -s -X PUT http://localhost:5080/api/identity/scopes/cost-center \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"isActive": false}'</div>
+<p>با <code>isActive: false</code> آن Scope برای تخصیص‌های <em>جدید</em> رد می‌شود («not defined or is inactive»)، ولی مقادیر قبلی کاربران پاک نمی‌شوند. برای حذف کامل، Attribute را از گروه رجیستری در Keycloak پاک کنید.</p>
+
+<h3>۶.۴ محدود کردن Scopeهای مجاز یک نقش</h3>
+<p>این کار با Attribute <code>authz.allowed-scopes</code> روی گروه همان نقش انجام می‌شود:</p>
+<div class="code"># از طریق Admin REST Keycloak
+curl -s -X PUT "$KEYCLOAK/admin/realms/company/groups/{groupId}" \
+  -H "Authorization: Bearer $KEYCLOAK_ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"SeniorAccountant","attributes":{"authz.allowed-scopes":["region","branch"]}}'</div>
+<div class="box warn"><strong>دو نکتهٔ عملی:</strong> ۱) اگر این Attribute تنظیم نشده باشد، همهٔ Scopeها برای آن نقش مجازند (رفتار باز). برای اعمال محدودیت حتماً آن را تنظیم کنید. ۲) چون PUT کل Attributeها را جایگزین می‌کند، Attributeهای دیگر را هم در بدنه نگه دارید. پس از تغییر، نتایج تا انقضای کش (حداکثر ۵ دقیقه) یا تا یک تغییر از طریق API که کش را Invalidate می‌کند، به‌روز نمی‌شوند.</div>
+
+<h3>۶.۵ کش و به‌روز بودن داده</h3>
+<p>دادهٔ رجیستری در دو لایه کش می‌شود: حافظهٔ محلی (L1) و Redis (L2) با عمر ۵ دقیقه. Redis باعث می‌شود چند نمونهٔ Facade کش یکدیگر را هم باطل کنند.</p>
+<table>
+<tr><th>رویداد</th><th>اثر روی کش</th></tr>
+<tr><td>ساخت / ویرایش Scope</td><td>بلافاصله باطل می‌شود</td></tr>
+<tr><td>ساخت / ویرایش / حذف نقش کسب‌وکاری</td><td>بلافاصله باطل می‌شود (چون <code>authz.allowed-scopes</code> می‌تواند عوض شود)</td></tr>
+<tr><td>افزودن / حذف مجوز نقش</td><td>بلافاصله باطل می‌شود</td></tr>
+<tr><td>تغییر دستی در Keycloak Console</td><td>تا ۵ دقیقه طول می‌کشد</td></tr>
+</table>
+
+<h2 id="s7">۷. تست سریع کل جریان</h2>
+<p>اسکریپت <code>deploy/smoke-test.sh</code> هر هفت گام جریان هدف را پشت‌سر هم اجرا و تأیید می‌کند (فقط <code>curl</code> و <code>python</code> لازم دارد):</p>
+<div class="code">cd deploy
+FACADE=http://localhost:5080 ./smoke-test.sh</div>
+<p class="small">خروجی واقعی:</p>
+<div class="out">== 1/7 — Super-admin login (facade proxy → Keycloak)
+  PASS login OK, Keycloak token issued
+
+== 2/7 — Verify super-admin management permissions in token
+  PASS admin token carries identity.{roles,users,scopes}.manage
+
+== 3/7 — Create business role 'smoke-accountant-1789773783'
+  PASS business role created and readable
+
+== 4/7 — Assign a registered permission to the role
+  PASS permission 'identity.users.read' assigned (client-role mapping)
+
+== 5/7 — Create user with scoped assignment (region=tehran-2)
+  PASS user 'smoke-user-1789773783' created
+
+== 6/7 — Login as the new user and verify token claims
+  PASS user token carries 'identity.users.read' and authz.scope.region=tehran-2
+
+== 7/7 — Access-context + scoped-access via facade
+  PASS access-context and scoped-access consistent with token
+
+All 7 steps passed.</div>
+<p>مجموعهٔ Postman هم آماده است: <code>postman/Identity service.postman_collection.json</code> را همراه Environment وارد کنید. مقادیر پیش‌فرض Environment پر شده‌اند، پس فقط <strong>Login</strong> را اجرا کنید تا <code>access_token</code> و <code>login_user_id</code> خودکار ذخیره شوند و بقیهٔ درخواست‌ها کار کنند.</p>
+
+<h2 id="s8">۸. عیب‌یابی</h2>
+<table>
+<tr><th>نشانه</th><th>علت احتمالی</th><th>راه‌حل</th></tr>
+<tr><td><code>400</code> با <code>Cannot transcode invalid UTF-8 JSON text</code></td><td>بدنهٔ فارسی مستقیم در خط فرمان ویندوز</td><td>بدنه را در فایل UTF-8 بگذارید و <code>--data-binary @file</code> بفرستید</td></tr>
+<tr><td><code>401</code> پس از چند دقیقه کار کردن</td><td>Access Token منقضی شده (عمر ۳۰۰ ثانیه)</td><td>Refresh کنید یا دوباره وارد شوید</td></tr>
+<tr><td><code>403</code> روی Endpointهای مدیریتی</td><td>کاربر مجوز <code>identity.*</code> ندارد</td><td>کاربر را عضو گروه <code>super-admins</code> کنید، یا مجوز لازم را به نقشش بدهید</td></tr>
+<tr><td>ساخت کاربر <code>201</code> می‌دهد ولی ورود کاربر خطای <code>Account is not fully set up</code> می‌دهد</td><td>فیلدهای الزامی پروفایل ناقص</td><td><code>email</code>، <code>firstName</code>، <code>lastName</code> را بفرستید (اکنون خود API هم از قبل خطا می‌دهد)</td></tr>
+<tr><td>Scope نوشته می‌شود ولی در توکن نیست</td><td>توکن قبل از تغییر صادر شده</td><td>Refresh یا ورود مجدد؛ توکن‌های صادرشده تغییر نمی‌کنند</td></tr>
+<tr><td>Endpoint فیلترشده <code>403</code> می‌دهد</td><td>نتیجهٔ فیلتر خالی شده (Deny-by-default) یا AND بین ابعاد</td><td>مقادیر Scope کاربر را با دادهٔ واقعی تطبیق دهید؛ ابعاد اضافی را بردارید</td></tr>
+<tr><td><code>Permission 'X' does not exist</code></td><td>سرویس مالک هنوز Manifest خود را ثبت نکرده</td><td>سرویس را (re)start کنید یا دستی ثبت کنید؛ سپس <code>POST /api/identity/permissions/reconcile-admin</code></td></tr>
+<tr><td>پس از Restart، کاتالوگ مجوزها خالی است</td><td>کاتالوگ در حافظه است</td><td>طبیعی است؛ سرویس‌ها هنگام شروع دوباره ثبت می‌کنند. اختصاص مجوز از Keycloak اعتبارسنجی می‌شود و کار می‌کند</td></tr>
+</table>
+
+<h2 id="s9">۹. چک‌لیست محیط واقعی</h2>
+<ul>
+<li>گذرواژهٔ <code>admin</code> و همهٔ Secretهای کلاینت عوض شوند و از Vault خوانده شوند.</li>
+<li>گرنت <code>password</code> روی کلاینت <code>identity-facade</code> بسته شود (<code>directAccessGrantsEnabled: false</code>) و ورود از طریق جریان استاندارد OIDC انجام شود.</li>
+<li>همه‌چیز پشت HTTPS باشد و <code>RequireHttpsMetadata</code> فعال شود.</li>
+<li><code>authz.allowed-scopes</code> برای همهٔ نقش‌ها صریحاً تنظیم شود (نبودش یعنی «همه مجاز»).</li>
+<li>Attributeهای Scope فقط توسط ادمین قابل نوشتن بمانند (User Profile Hardening در شروع کار اعمال می‌شود).</li>
+<li>Redis برای کش مشترک بین نمونه‌ها فعال بماند.</li>
+<li>پیش از استقرار، <code>smoke-test.sh</code> اجرا شود.</li>
+</ul>
+
+<div class="box"><strong>مواردی که آگاهانه باز مانده‌اند:</strong> اگر Keycloak در دسترس نباشد، رجیستری به فهرست پیش‌فرض Scopeها برمی‌گردد تا سیستم از کار نیفتد (رفتار باز). برای محیط واقعی سخت‌گیرانه‌تر، این رفتار باید به «رد کردن درخواست» تغییر کند. همچنین <code>IAuditSink</code> فعلاً هیچ‌کاره (Noop) است و رویدادهای امنیتی ثبت نمی‌شوند.</div>
+
+<p class="small">آخرین به‌روزرسانی این راهنما: پس از تست کامل روی استک docker (Keycloak، Oracle، Redis، Vault، Facade و order-service). همهٔ پاسخ‌های نشان‌داده‌شده خروجی واقعی اجرا هستند.</p>
+
+</body>
+</html>
