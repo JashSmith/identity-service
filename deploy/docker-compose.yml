@@ -74,6 +74,32 @@ services:
       retries: 30
       start_period: 90s
 
+  # Dev-only one-shot: Keycloak on plain HTTP counts every inbound connection that
+  # does not originate from 127.0.0.1 as "external", and the default master realm
+  # has sslRequired=external, which rejects the login page / admin token request
+  # with "HTTPS required". A fresh master realm can only be patched over a
+  # loopback connection, so this container shares the keycloak container's
+  # network namespace and calls kcadm against http://localhost:8080 (idempotent).
+  keycloak-ssl-patch:
+    image: quay.io/keycloak/keycloak:26.4
+    restart: "no"
+    network_mode: "service:keycloak"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user "$${KEYCLOAK_ADMIN}" --password "$${KEYCLOAK_ADMIN_PASSWORD}"
+        /opt/keycloak/bin/kcadm.sh update realms/master -s sslRequired=NONE
+        /opt/keycloak/bin/kcadm.sh update realms/company -s sslRequired=NONE
+        echo "sslRequired set to NONE on realms 'master' and 'company'"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin-development-only}
+
   keycloak-db:
     image: gvenzl/oracle-xe:21-slim
     environment:

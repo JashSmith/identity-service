@@ -2,7 +2,7 @@
   "realm": "company",
   "enabled": true,
   "displayName": "Company",
-  "sslRequired": "external",
+  "sslRequired": "none",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
