@@ -408,7 +408,7 @@
                   </div>
                   <div class="form-group" style="margin-bottom: 18px;">
                     <label class="form-label">Password</label>
-                    <input type="password" class="form-control" id="token-test-password" value="admin-development-only" required>
+                    <input type="password" class="form-control" id="token-test-password" value="admin" required>
                   </div>
                   <button type="submit" class="btn btn-primary" id="btn-mint-token" style="width: 100%;">
                     <span>Authenticate & Generate Token</span>
@@ -688,7 +688,10 @@
         </div>
         <div class="form-group" style="margin-bottom: 20px;">
           <label class="form-label">Password</label>
-          <input type="password" class="form-control" id="login-password" value="admin-development-only" required placeholder="••••••••">
+          <input type="password" class="form-control" id="login-password" value="admin" required placeholder="••••••••">
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;">
+            Default credentials: <code>admin</code> / <code>admin</code>
+          </div>
         </div>
         <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px;">Sign In to Console</button>
       </form>

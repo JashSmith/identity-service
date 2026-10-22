@@ -200,7 +200,8 @@
     try {
       const form = new URLSearchParams();
       form.append('grant_type', 'password');
-      form.append('client_id', 'admin-cli');
+      form.append('client_id', 'identity-facade');
+      form.append('client_secret', 'facade-development-only');
       form.append('username', username);
       form.append('password', password);
 
@@ -738,6 +739,7 @@
       const form = new URLSearchParams();
       form.append('grant_type', 'password');
       form.append('client_id', 'identity-facade');
+      form.append('client_secret', 'facade-development-only');
       form.append('username', username);
       form.append('password', password);
 
