@@ -22,7 +22,6 @@ public sealed class KeycloakClientRoleProvisioner(
 {
     private readonly KeycloakOptions _o = opts.Value;
     private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
-    private const string AdminGroupName = "key-admins";
     private const string SuperAdminGroupName = "super-admins";
     private const string MapperName = "permission-client-role-mapper";
 
@@ -260,10 +259,8 @@ public sealed class KeycloakClientRoleProvisioner(
         if (string.IsNullOrEmpty(clientUuid)) return false;
         var role = await GetClientRoleAsync(clientUuid, roleName, token, ct);
         if (role is null) return false;
-        // Map to both admin groups: key-admins (legacy) and super-admins (unrestricted).
-        var ok = await MapClientRoleToGroupAsync(AdminGroupName, clientUuid, role.Value, token, ct);
-        ok &= await MapClientRoleToGroupAsync(SuperAdminGroupName, clientUuid, role.Value, token, ct);
-        return ok;
+        // Map to unrestricted super-admins group.
+        return await MapClientRoleToGroupAsync(SuperAdminGroupName, clientUuid, role.Value, token, ct);
     }
 
     private async Task<bool> MapClientRoleToGroupAsync(string groupName, string clientUuid,
@@ -289,7 +286,7 @@ public sealed class KeycloakClientRoleProvisioner(
         var token = await TokenAsync(ct);
         if (string.IsNullOrEmpty(token)) return 0;
         var groupIds = new List<(string Name, string Id)>();
-        foreach (var gn in new[] { AdminGroupName, SuperAdminGroupName })
+        foreach (var gn in new[] { SuperAdminGroupName })
         {
             var gid = await ResolveGroupIdAsync(gn, token, ct);
             if (!string.IsNullOrEmpty(gid)) groupIds.Add((gn, gid));

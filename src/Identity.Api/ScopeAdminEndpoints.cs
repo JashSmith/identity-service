@@ -58,6 +58,10 @@ public static class ScopeAdminEndpoints
                     var created = await registry.CreateScopeAsync(req.Key.Trim(), req.DisplayName, req.Description, ct);
                     if (created is null)
                         return Results.Conflict(new ProblemResponse("conflict", $"Scope '{req.Key}' already exists.", Guid.NewGuid().ToString("N")));
+                    if (req.TargetResources is not null && req.TargetResources.Count > 0)
+                    {
+                        try { await registry.SetScopeResourcesAsync(created.Key, req.TargetResources, ct); } catch { /* best-effort */ }
+                    }
                     // Provision the authz.scope.<key> claim mapper now so new tokens carry the
                     // claim without a restart. Best-effort: startup EnsureAsync also reconciles.
                     using var mapperCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -82,9 +86,13 @@ public static class ScopeAdminEndpoints
                 try
                 {
                     var updated = await registry.UpdateScopeAsync(key, req.DisplayName, req.Description, req.IsActive, ct);
-                    return updated is null
-                        ? Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")))
-                        : Results.Ok(updated);
+                    if (updated is null)
+                        return Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")));
+                    if (req.TargetResources is not null)
+                    {
+                        try { await registry.SetScopeResourcesAsync(key, req.TargetResources, ct); } catch { /* best-effort */ }
+                    }
+                    return Results.Ok(updated);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -94,6 +102,20 @@ public static class ScopeAdminEndpoints
             .RequireAuthorization(IamPermissions.ScopesManage)
             .WithName("UpdateScope")
             .Produces<ScopeDefinitionDto>(200);
+
+        g.MapPut("/{key}/resources", async (string key, SetScopeResourcesRequest req, IScopeRegistryAdmin registry, CancellationToken ct) =>
+            {
+                var s = await registry.GetScopeAsync(key, ct);
+                if (s is null)
+                    return Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")));
+                var ok = await registry.SetScopeResourcesAsync(key, req.Resources ?? [], ct);
+                return ok
+                    ? Results.Ok(new { scope = key, resources = req.Resources ?? [] })
+                    : Results.BadRequest(new ProblemResponse("update_failed", "Failed to update resources", Guid.NewGuid().ToString("N")));
+            })
+            .RequireAuthorization(IamPermissions.ScopesManage)
+            .WithName("SetScopeResources")
+            .Produces<object>(200);
 
         g.MapDelete("/{key}", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
             {
@@ -117,5 +139,6 @@ public static class ScopeAdminEndpoints
     }
 }
 
-public sealed record CreateScopeRequest(string Key, string? DisplayName, string? Description);
-public sealed record UpdateScopeRequest(string? DisplayName, string? Description, bool? IsActive);
+public sealed record CreateScopeRequest(string Key, string? DisplayName, string? Description, IReadOnlyCollection<string>? TargetResources = null);
+public sealed record UpdateScopeRequest(string? DisplayName, string? Description, bool? IsActive, IReadOnlyCollection<string>? TargetResources = null);
+public sealed record SetScopeResourcesRequest(IReadOnlyCollection<string> Resources);

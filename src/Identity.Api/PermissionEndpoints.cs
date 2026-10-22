@@ -42,8 +42,8 @@ public static class PermissionEndpoints
             .WithName("ReconcileAdminPermissions").Produces<object>(200)
             .WithOpenApi(o =>
             {
-                o.Summary = "Reconcile Admin group — backfill any registered client roles missing from key-admins";
-                o.Description = "Idempotent. Adds all registered client roles not yet mapped to the Admin group (key-admins). Repairs drift / manual edits.";
+                o.Summary = "Reconcile Admin group — backfill any registered client roles missing from super-admins";
+                o.Description = "Idempotent. Adds all registered client roles not yet mapped to the Admin group (super-admins). Repairs drift / manual edits.";
                 return o;
             });
         g.MapPost("", async (

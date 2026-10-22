@@ -16,10 +16,12 @@ public static class AccessContextEndpoints
                 var perms = await dirs.GetUserPermissionsAsync(current.UserId, ct);
                 // Keycloak is the single source of truth: effective scopes = group ∪ user attributes.
                 var doc = await scopes.GetAsync(current.UserId, ct);
+                var effectiveScopes = await scopes.GetEffectiveAsync(current.UserId, ct);
                 var resp = new AccessContextResponse(
                     current.UserId, current.Username,
-                    perms.Select(p => p.Name).OrderBy(x => x, StringComparer.Ordinal).ToArray(),
-                    doc.Assignments.ToArray());
+                    perms.Select(p => p.Name).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.Ordinal).ToArray(),
+                    doc.Assignments.ToArray(),
+                    effectiveScopes);
                 return Results.Ok(resp);
             }).RequireAuthorization()
             .WithName("GetAccessContext")

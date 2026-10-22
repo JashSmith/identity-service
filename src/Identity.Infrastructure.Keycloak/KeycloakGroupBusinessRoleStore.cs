@@ -28,7 +28,7 @@ public sealed class KeycloakGroupBusinessRoleStore(
     private const string AllowedScopesAttr = "authz.allowed-scopes";
 
     /// <summary>Infrastructure groups that never surface as business roles.</summary>
-    private static readonly string[] InternalGroupNames = ["iam-scope-registry", "key-admins", "super-admins"];
+    private static readonly string[] InternalGroupNames = ["iam-scope-registry", "super-admins"];
 
     private sealed record GroupRef(string Id, string Name, string Path, Dictionary<string, string[]> Attributes);
 

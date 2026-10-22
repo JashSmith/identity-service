@@ -16,7 +16,9 @@
     resources: [],
     permissions: [],
     currentView: 'view-overview',
-    refreshInterval: null
+    refreshInterval: null,
+    lang: localStorage.getItem('dashboard_lang') || 'en',
+    theme: localStorage.getItem('dashboard_theme') || 'dark'
   };
 
   // DOM Elements Cache
@@ -141,8 +143,584 @@
     cpService: document.getElementById('cp-service'),
     toastContainer: document.getElementById('toast-container'),
     loginAlert: document.getElementById('login-alert'),
-    loginAlertMsg: document.getElementById('login-alert-msg')
+    loginAlertMsg: document.getElementById('login-alert-msg'),
+
+    // Preferences & Toggles
+    btnLangToggle: document.getElementById('btn-lang-toggle'),
+    currentLangLabel: document.getElementById('current-lang-label'),
+    btnThemeToggle: document.getElementById('btn-theme-toggle'),
+    currentThemeIcon: document.getElementById('current-theme-icon'),
+    radioLangFa: document.getElementById('radio-lang-fa'),
+    radioLangEn: document.getElementById('radio-lang-en'),
+    radioThemeDark: document.getElementById('radio-theme-dark'),
+    radioThemeLight: document.getElementById('radio-theme-light'),
+    btnResetPreferences: document.getElementById('btn-reset-preferences'),
+    cardLangFa: document.getElementById('card-lang-fa'),
+    cardLangEn: document.getElementById('card-lang-en'),
+    cardThemeDark: document.getElementById('card-theme-dark'),
+    cardThemeLight: document.getElementById('card-theme-light')
   };
+
+  // ==========================================
+  // Multilingual Dictionary (i18n)
+  // Default language: Persian ('fa')
+  // ==========================================
+  const i18n = {
+    fa: {
+      // Sidebar & Navigation
+      navCategoryGeneral: 'مدیریت و دسترسی',
+      navOverview: 'داشبورد مدیریتی',
+      navUsers: 'کاربران و Scopeها',
+      navRoles: 'نقش‌های سازمانی',
+      navScopes: 'تعریف Attribute Scopeها',
+      badgeRegistry: 'رجیستری',
+      navPermissions: 'کاتالوگ مجوزها',
+      navCategoryDev: 'توسعه و اعتبارسنجی',
+      navTokenTest: 'آزمایشگاه توکن (Playground)',
+      navScalar: 'مستندات API (Scalar)',
+      navCategoryPreferences: 'شخصی‌سازی',
+      navSettings: 'تنظیمات و زبان',
+      keycloakDbOnline: 'ارتباط با Keycloak و DB برقرار است',
+      realmSub: 'realm: company · postgres',
+      refresh: 'بروزرسانی',
+      signOut: 'خروج از حساب',
+      adminRole: 'مدیر ارشد سامانه',
+      
+      // Overview
+      metricTotalUsers: 'کل کاربران',
+      metricTotalUsersTrend: 'ثبت شده در Keycloak',
+      metricOnlineUsers: 'کاربران آنلاین',
+      metricOnlineUsersTrend: 'نشست‌های فعال جاری',
+      metricRoles: 'نقش‌های بیزینس',
+      metricRolesTrend: 'گروه‌ها و رول‌های فعال',
+      metricScopes: 'ابعاد Scope',
+      metricScopesTrend: 'اسکوپ‌های ثبت‌شده در رجیستری',
+      metricDb: 'موتور پایگاه داده',
+      metricDbSub: 'آنلاین (پورت ۵۴۳۲)',
+      quickActionsTitle: 'اقدامات سریع مدیریتی',
+      quickActionsSubtitle: 'ایجاد کاربر با اسکوپ و نقش، تعریف نقش‌های سازمانی و اسکوپ‌های ابعادی',
+      btnNewUser: '➕ ساخت کاربر جدید',
+      btnAddRole: '➕ ایجاد نقش سازمانی',
+      btnNewScope: '➕ اسکوپ جدید',
+      btnPlayground: 'آزمایشگاه توکن JWT',
+      archTitle: 'معماری احراز هویت و کنترل دسترسی چندسطحی',
+      archStatus: 'سیستم فعال و عملیاتی',
+      arch1Title: '۱. هویت و حساب کاربران',
+      arch1Desc: 'کاربران در کی‌کلوک تعریف شده و دارای اطلاعات هویتی، نقش و محدودیت‌های اسکوپ ابعادی در پروفایل هستند.',
+      arch2Title: '۲. نقش‌های سازمانی و گروه‌ها',
+      arch2Desc: 'نقش‌های بیزینس (مانند مدیر، حسابدار) به‌صورت گروه‌های Keycloak مدل‌سازی شده و مجوزهای میکروسرویس‌ها را تجمیع می‌کنند.',
+      arch3Title: '۳. اسکوپ‌های پویا (Attribute Scopes)',
+      arch3Desc: 'ابعاد دسترسی (مانند شعبه، منطقه، مرکز هزینه) در رجیستری iam-scope-registry تعریف و به هر کاربر مقادیر مجاز اختصاص می‌یابد.',
+      arch4Title: '۴. ادعاهای توکن و فیلترینگ داده',
+      arch4Desc: 'اسکوپ‌های کاربر در کلیم‌های authz.scope.<key> توکن JWT درج شده و میکروسرویس‌ها بر اساس آن داده‌ها را در سطح ردیف فیلتر می‌کنند.',
+
+      // Users
+      usersTitle: 'مدیریت کاربران و دسترسی‌های مبتنی بر Scope',
+      usersSubtitle: 'تعریف حساب‌های کاربری، انتساب نقش سازمانی، تنظیم مقادیر اسکوپ ابعادی، تغییر رمز و لغو نشست‌ها',
+      searchUsersPlaceholder: 'جستجوی کاربر بر اساس نام کاربری، ایمیل یا نام...',
+      filterAllUsers: 'همه کاربران',
+      filterOnlineUsers: 'فقط آنلاین',
+      filterOfflineUsers: 'فقط آفلاین',
+      btnCreateUser: '+ ساخت کاربر',
+      thUser: 'کاربر',
+      thNameEmail: 'نام و ایمیل',
+      thStatus: 'وضعیت',
+      thRoleScopes: 'نقش و مقادیر Scope',
+      thActions: 'عملیات',
+      loadingUsers: 'در حال دریافت اطلاعات کاربران از Keycloak...',
+      noUsersFound: 'هیچ کاربری با این مشخصات یافت نشد.',
+      noRole: 'بدون نقش',
+      noScopes: 'بدون اسکوپ محدودکننده (دسترسی نامحدود یا پیش‌فرض)',
+      activeStatus: 'آنلاین',
+      offlineStatus: 'آفلاین',
+      disabledBadge: 'غیرفعال',
+      btnEditUser: 'ویرایش',
+      btnManageScopes: 'نقش و اسکوپ‌ها',
+      btnRevokeSessions: 'لغو نشست‌ها',
+
+      // Roles
+      rolesTitle: 'مدیریت نقش‌های سازمانی',
+      rolesSubtitle: 'مدیریت نقش‌های ترکیبی و مجوزهای مرتبط با گروه‌های Keycloak',
+      btnCreateRole: '+ ایجاد نقش جدید',
+      loadingRoles: 'در حال بارگذاری نقش‌های سازمانی...',
+      noRolesFound: 'هیچ نقش سازمانی ثبت نشده است.',
+      permissionsCount: 'مجوز',
+      btnEditRole: 'ویرایش نقش',
+      btnDeleteRole: 'حذف',
+
+      // Scopes
+      scopeRegisterTitle: 'ثبت اسکوپ ابعادی جدید',
+      scopeRegisterSubtitle: 'تعریف بعد دسترسی برای کنترل دسترسی در سطح ردیف (مانند branch، region، cost_center)',
+      scopeKeyLabel: 'کلید اسکوپ (Scope Key) *',
+      scopeKeyHint: 'حروف کوچک انگلیسی، عدد، خط تیره و زیرخط (مانند branch, region)',
+      displayNameLabel: 'نام نمایشی *',
+      descriptionLabel: 'توضیحات',
+      targetResourcesLabel: 'منابع تحت پوشش (Target Resources - جدا شده با کاما)',
+      quickSuggestions: 'پیشنهاد سریع:',
+      btnRegisterScope: 'ثبت اسکوپ در رجیستری',
+      scopesRegistryTitle: 'اسکوپ‌های ابعادی ثبت‌شده',
+      scopesRegistrySubtitle: 'اسکوپ‌های فعال در گروه iam-scope-registry قابل انتساب به کاربران',
+      refreshList: 'بروزرسانی لیست',
+      thScopeKey: 'کلید اسکوپ',
+      thDisplayName: 'نام نمایشی',
+      thDescription: 'توضیحات',
+      thTargetResources: 'منابع تحت پوشش',
+      loadingScopes: 'در حال بارگذاری اسکوپ‌ها از رجیستری Keycloak...',
+      noScopesFound: 'هیچ اسکوپی ثبت نشده است. از فرم بالا برای ثبت اسکوپ جدید استفاده کنید.',
+      unboundResources: '(عمومی / نامشخص)',
+      btnEdit: 'ویرایش',
+      btnActivate: 'فعال‌سازی',
+      btnDeactivate: 'غیرفعال‌سازی',
+      btnDelete: '🗑️ حذف',
+      scopeActiveLabel: 'اسکوپ فعال باشد',
+      btnUpdateScope: 'بروزرسانی اسکوپ',
+      modalCreateScopeTitle: 'ثبت اسکوپ ابعادی جدید',
+      modalEditScopeTitle: 'ویرایش اسکوپ ابعادی',
+      modalDeleteScopeTitle: 'حذف اسکوپ از رجیستری',
+      deleteScopeWarning: 'آیا از حذف دائمی اسکوپ ابعادی مطمئن هستید؟',
+      fromRegistry: 'از رجیستری Keycloak',
+      deleteScopeWarningDesc: '⚠️ هشدار: حذف این اسکوپ تعاریف آن را از گروه iam-scope-registry و تمامی ارتباطات منابع پاک خواهد کرد.',
+      btnDeleteScopeConfirm: 'حذف دائمی اسکوپ',
+
+      // Permissions
+      permsCatalogTitle: 'کاتالوگ مجوزهای پلتفرم',
+      permsCatalogSubtitle: 'مجوزهای ثبت‌شده توسط میکروسرویس‌ها جهت ترکیب در نقش‌های سازمانی',
+      searchPermsPlaceholder: 'جستجوی مجوز (مثال: Orders.Read)...',
+      btnRegisterPerm: '+ ثبت دستی مجوز',
+      thPermName: 'نام مجوز (Permission)',
+      thOriginService: 'سرویس مبدا',
+      loadingPermissions: 'در حال بارگذاری کاتالوگ مجوزها...',
+      noPermsFound: 'هیچ مجوزی مطابق با جستجو یافت نشد.',
+      modalCreatePermTitle: 'ثبت دستی مجوز جدید',
+      permNameLabel: 'نام مجوز * (مانند Orders.Export, Reports.View)',
+      permNameHint: 'فرمت استاندارد: Resource.Action (مثال: Orders.Read, Orders.Manage)',
+      originServiceLabel: 'شناسه سرویس مبدا (Client ID)',
+      originServiceHint: 'کلاینت مورد نظر در Keycloak که رول در آن ایجاد می‌شود',
+
+      // Token Playground
+      tokenPlaygroundTitle: 'آزمایشگاه توکن و اعتبارسنجی دسترسی',
+      tokenPlaygroundSubtitle: 'ورود به عنوان هر کاربر، صدور توکن زنده JWT کی‌کلوک و بررسی کلیم‌های authz.scope.*',
+      tokenStep1Title: '۱. احراز هویت و صدور توکن JWT',
+      usernameLabel: 'نام کاربری',
+      passwordLabel: 'رمز عبور',
+      btnAuthenticateMint: 'احراز هویت و صدور توکن',
+      tokenStep2Title: '۲. اعتبارسنجی کانتکست دسترسی توکن',
+      tokenOutputTitle: 'محتوای دیکود شده توکن (Claims و Scopes)',
+
+      // Settings
+      settingsTitle: 'تنظیمات و شخصی‌سازی داشبورد',
+      settingsSubtitle: 'تنظیم زبان، جهت صفحه (راست‌چین/چپ‌چین) و تم ظاهری. تنظیمات در LocalStorage ذخیره می‌شوند.',
+      settingLangTitle: 'زبان و جهت صفحه (Language & Direction)',
+      settingLangDesc: 'انتخاب زبان رابط کاربری و جهت نوشتاری',
+      settingThemeTitle: 'تم ظاهری داشبورد (Dashboard Theme)',
+      settingThemeDesc: 'انتخاب بین تم دارک مدرن شیشه‌ای یا تم روشن مینیمال',
+      badgeDefault: 'پیش‌فرض',
+      langFaTitle: 'فارسی (Persian)',
+      langFaDesc: 'چیدمان کاملاً راست‌به‌چپ برای سایدبار، هدر، جداول و مودال‌ها',
+      langEnTitle: 'English (Left-to-Right)',
+      langEnDesc: 'چیدمان استاندارد چپ‌به‌راست (LTR)',
+      themeDarkTitle: 'Dark Glassmorphism (دارک مدرن شیشه‌ای)',
+      themeDarkDesc: 'طراحی تیره و شفاف با جلوه‌های نئونی و کنتراست بالا',
+      themeLightTitle: 'Clean Light (روشن مینیمال)',
+      themeLightDesc: 'طراحی سفید با کنتراست بالا مناسب برای محیط‌های پرنور',
+      storageNotice: '💾 تنظیمات شما بلافاصله در LocalStorage مرورگر ذخیره و در مراجعات بعدی حفظ می‌شوند.',
+      resetSettings: 'بازنشانی به پیش‌فرض (انگلیسی / دارک)',
+
+      // Modals General
+      cancel: 'انصراف',
+      save: 'ذخیره',
+      close: 'بستن',
+      modalCreateUserTitle: 'ساخت کاربر جدید',
+      modalCreateUserSubtitle: 'تعریف کاربر در Keycloak با مشخصات ورود، نقش سازمانی و محدودیت‌های اسکوپ ابعادی',
+      secIdentityCredentials: '۱. هویت و مشخصات ورود',
+      initialPasswordLabel: 'رمز عبور اولیه *',
+      firstNameLabel: 'نام',
+      lastNameLabel: 'نام خانوادگی',
+      emailLabel: 'آدرس ایمیل',
+      roleLabel: 'نقش سازمانی',
+      selectRole: '(یک نقش سازمانی انتخاب کنید)',
+      tempPasswordLabel: 'رمز عبور موقت (الزام تغییر در اولین ورود)',
+      accountEnabledLabel: 'حساب کاربری فعال باشد',
+      secAttributeScopes: '۲. اسکوپ‌های ابعادی (محدودیت‌های دسترسی پویا)',
+      btnNewScopePlus: '+ اسکوپ جدید',
+      scopesDescription: 'اسکوپ‌های مرتبط با این کاربر را تیک بزنید و مقادیر مجاز را وارد کنید (چندین مقدار با کاما جدا شوند، مثلاً: tehran-north, CC-9080):',
+      
+      modalUserScopesTitle: 'مدیریت نقش و اسکوپ‌های کاربر',
+      userPrefix: 'کاربر:',
+      businessRoleRequired: 'نقش سازمانی *',
+      secScopesCheckAndEnter: 'اسکوپ‌های ابعادی (انتخاب و مقداردهی)',
+      scopesCheckDesc: 'اسکوپ‌های انتخاب‌شده دسترسی کاربر به داده‌ها را به مقادیر تعیین‌شده محدود می‌کنند:',
+      btnSaveRoleScopes: 'ذخیره نقش و اسکوپ‌ها',
+
+      modalEditUserTitle: 'ویرایش مشخصات کاربر',
+      emailVerifiedLabel: 'ایمیل تایید شده باشد',
+      btnDeleteUser: '🗑️ حذف کاربر',
+      btnResetPassword: '🔑 تغییر رمز عبور',
+      btnSaveChanges: 'ذخیره تغییرات',
+
+      modalResetPasswordTitle: 'تغییر رمز عبور کاربر',
+      settingPwFor: 'تنظیم رمز جدید برای کاربر:',
+      newPasswordLabel: 'رمز عبور جدید *',
+      confirmPasswordLabel: 'تکرار رمز عبور جدید *',
+      tempPasswordNext: 'رمز موقت (باید در ورود بعدی تغییر کند)',
+
+      modalDeleteUserTitle: 'حذف کاربر از Keycloak',
+      deleteUserWarning: 'آیا از حذف دائمی کاربر مطمئن هستید؟',
+      deleteUserWarningDesc: '⚠️ هشدار: این عملیات غیرقابل بازگشت است. حساب کاربر، نشست‌های فعال و اسکوپ‌های اختصاص داده شده به طور کامل پاک می‌شوند.',
+      btnDeleteUserConfirm: 'حذف دائمی کاربر',
+
+      modalCreateRoleTitle: 'ایجاد نقش سازمانی جدید',
+      roleNameLabel: 'نام نقش * (مثال: Manager, Accountant, Clerk)',
+      selectPermissionsLabel: 'انتخاب مجوزها (Permissions)',
+      modalEditRoleTitle: 'ویرایش نقش سازمانی',
+      assignedPermsLabel: 'مجوزهای تخصیص داده شده',
+      btnSaveRoleChanges: 'ذخیره تغییرات نقش',
+
+      modalDeleteRoleTitle: 'حذف نقش سازمانی',
+      deleteRoleWarning: 'آیا از حذف دائمی نقش سازمانی مطمئن هستید؟',
+      deleteRoleWarningDesc: '⚠️ حذف ایمن: در صورتی که کاربری به این نقش اختصاص داده شده باشد، Keycloak اجازه حذف نخواهد داد.',
+      btnDeleteRoleConfirm: 'حذف نقش',
+
+      modalRevokeTitle: 'لغو نشست‌های فعال کاربر',
+      revokeWarning: 'آیا از لغو تمامی نشست‌های فعال کاربر مطمئن هستید؟',
+      revokeWarningDesc: 'این اقدام تمامی توکن‌های صادر شده قبلی را بلافاصله باطل کرده و ارتباط کاربر را قطع می‌کند.',
+      btnRevokeConfirm: 'لغو نشست‌ها',
+
+      modalDbTitle: 'وضعیت زیرساخت پایگاه داده',
+      dbActiveEngine: 'موتور فعال',
+      dbConnectionHealth: 'سلامت اتصال',
+      dbHostTarget: 'آدرس هاست',
+      dbName: 'نام دیتابیس',
+
+      modalLoginTitle: 'ورود به پنل مدیریت هویت',
+      modalLoginSubtitle: 'ورود با نام کاربری و رمز عبور مدیریتی Keycloak',
+      defaultCredentials: 'اطلاعات پیش‌فرض: admin / admin',
+      btnSignIn: 'ورود به پنل'
+    },
+    en: {
+      // Sidebar & Navigation
+      navCategoryGeneral: 'Management',
+      navOverview: 'Overview',
+      navUsers: 'Users & Scopes',
+      navRoles: 'Business Roles',
+      navScopes: 'Attribute Scopes',
+      badgeRegistry: 'Registry',
+      navPermissions: 'Permissions',
+      navCategoryDev: 'Developer & Verification',
+      navTokenTest: 'Token Playground',
+      navScalar: 'API Docs (Scalar)',
+      navCategoryPreferences: 'Preferences',
+      navSettings: 'Settings',
+      keycloakDbOnline: 'Keycloak & DB Online',
+      realmSub: 'company realm · postgres',
+      refresh: 'Refresh',
+      signOut: 'Sign Out',
+      adminRole: 'Super Admin',
+
+      // Overview
+      metricTotalUsers: 'Total Users',
+      metricTotalUsersTrend: 'Registered in Keycloak',
+      metricOnlineUsers: 'Online Users',
+      metricOnlineUsersTrend: 'Active online sessions',
+      metricRoles: 'Business Roles',
+      metricRolesTrend: 'Configured business roles',
+      metricScopes: 'Attribute Scopes',
+      metricScopesTrend: 'Active registry scopes',
+      metricDb: 'Database Engine',
+      metricDbSub: 'Online (5432)',
+      quickActionsTitle: 'Administrative Quick Actions',
+      quickActionsSubtitle: 'Create users with roles and scopes, define business roles, and register new attribute scopes',
+      btnNewUser: '➕ New User',
+      btnAddRole: '➕ Add Business Role',
+      btnNewScope: '➕ New Scope',
+      btnPlayground: 'Token Playground',
+      archTitle: 'Identity & Access Control Architecture',
+      archStatus: 'System Operational',
+      arch1Title: '1. User Identity & Provisioning',
+      arch1Desc: 'Users are defined in Keycloak with credential validation, business role mapping, and dynamic attribute scope restrictions stored on the user profile.',
+      arch2Title: '2. Business Roles & Groups',
+      arch2Desc: 'Composite business roles (e.g., Manager, Accountant) are modeled as Keycloak groups bundling granular service permissions.',
+      arch3Title: '3. Dynamic Attribute Scopes',
+      arch3Desc: 'Scope dimensions (e.g., branch, region, cost center) are registered in iam-scope-registry and assigned with specific authorized values per user.',
+      arch4Title: '4. Token Claims & Data Filtering',
+      arch4Desc: 'Scoped permissions propagate into authz.scope.<key> claims in minted JWT tokens, allowing microservices to enforce row-level filtering.',
+
+      // Users
+      usersTitle: 'Users & Scoped Access Management',
+      usersSubtitle: 'Manage user accounts, assign business roles, configure dynamic attribute scopes, reset passwords, and revoke sessions',
+      searchUsersPlaceholder: 'Search users by username, email, name...',
+      filterAllUsers: 'All Users',
+      filterOnlineUsers: 'Online Only',
+      filterOfflineUsers: 'Offline Only',
+      btnCreateUser: '+ Create User',
+      thUser: 'User',
+      thNameEmail: 'Name & Email',
+      thStatus: 'Status',
+      thRoleScopes: 'Role & Assigned Scopes',
+      thActions: 'Actions',
+      loadingUsers: 'Loading users from Keycloak...',
+      noUsersFound: 'No users found matching your search.',
+      noRole: 'No Role Assigned',
+      noScopes: 'No Scopes (Full/Default Access)',
+      activeStatus: 'Active',
+      offlineStatus: 'Offline',
+      disabledBadge: 'Disabled',
+      btnEditUser: 'Edit',
+      btnManageScopes: 'Role & Scopes',
+      btnRevokeSessions: 'Revoke Sessions',
+
+      // Roles
+      rolesTitle: 'Business Roles',
+      rolesSubtitle: 'Manage composite roles and permissions connected to Keycloak groups',
+      btnCreateRole: '+ Create Role',
+      loadingRoles: 'Loading business roles...',
+      noRolesFound: 'No business roles configured yet.',
+      permissionsCount: 'permissions',
+      btnEditRole: 'Edit Role',
+      btnDeleteRole: 'Delete',
+
+      // Scopes
+      scopeRegisterTitle: 'Register New Attribute Scope',
+      scopeRegisterSubtitle: 'Define a new scope dimension for row-level and multi-tenant access control (e.g., branch, region, cost center)',
+      scopeKeyLabel: 'Scope Key *',
+      scopeKeyHint: 'Lowercase letters, numbers, hyphens, and underscores',
+      displayNameLabel: 'Display Name *',
+      descriptionLabel: 'Description',
+      targetResourcesLabel: 'Target Resources (comma separated)',
+      quickSuggestions: 'Quick Suggestions:',
+      btnRegisterScope: 'Register Scope',
+      scopesRegistryTitle: 'Registered Attribute Scopes',
+      scopesRegistrySubtitle: 'Active scopes in the iam-scope-registry group available for user assignment',
+      refreshList: 'Refresh List',
+      thScopeKey: 'Scope Key',
+      thDisplayName: 'Display Name',
+      thDescription: 'Description',
+      thTargetResources: 'Target Resources',
+      loadingScopes: 'Loading scopes from Keycloak registry...',
+      noScopesFound: 'No attribute scopes registered yet. Use the form above to register a new scope.',
+      unboundResources: '(Unbound / Global)',
+      btnEdit: 'Edit',
+      btnActivate: 'Activate',
+      btnDeactivate: 'Deactivate',
+      btnDelete: '🗑️ Delete',
+      scopeActiveLabel: 'Scope Active',
+      btnUpdateScope: 'Update Scope',
+      modalCreateScopeTitle: 'Register New Attribute Scope',
+      modalEditScopeTitle: 'Edit Attribute Scope',
+      modalDeleteScopeTitle: 'Delete Attribute Scope',
+      deleteScopeWarning: 'Are you sure you want to permanently delete attribute scope',
+      fromRegistry: 'from the registry',
+      deleteScopeWarningDesc: '⚠️ Warning: Deleting this scope will remove its definition from the iam-scope-registry group in Keycloak.',
+      btnDeleteScopeConfirm: 'Delete Scope',
+
+      // Permissions
+      permsCatalogTitle: 'Platform Permissions Catalog',
+      permsCatalogSubtitle: 'Permissions registered by microservices available for role composition',
+      searchPermsPlaceholder: 'Search permissions (e.g. Orders.Read)...',
+      btnRegisterPerm: '+ Register Permission',
+      thPermName: 'Permission Name',
+      thOriginService: 'Origin Service',
+      loadingPermissions: 'Loading permissions catalog...',
+      noPermsFound: 'No matching permissions found.',
+      modalCreatePermTitle: 'Register New Permission',
+      permNameLabel: 'Permission Name * (e.g. Orders.Export, Reports.View)',
+      permNameHint: 'Standard format: Resource.Action (e.g. Orders.Read, Orders.Manage)',
+      originServiceLabel: 'Origin Service ID',
+      originServiceHint: 'Service client in Keycloak where the client role will be provisioned',
+
+      // Token Playground
+      tokenPlaygroundTitle: 'Token Playground & Access Verification',
+      tokenPlaygroundSubtitle: 'Sign in as any user, mint live Keycloak JWT tokens, and inspect authz.scope.* claims',
+      tokenStep1Title: '1. Sign In & Mint JWT Token',
+      usernameLabel: 'Username',
+      passwordLabel: 'Password',
+      btnAuthenticateMint: 'Authenticate & Mint Token',
+      tokenStep2Title: '2. Verify Token & Access Context',
+      tokenOutputTitle: 'Decoded Token Content (Claims & Scopes)',
+
+      // Settings
+      settingsTitle: 'Dashboard Settings & Preferences',
+      settingsSubtitle: 'Customize language, interface direction (RTL/LTR), and theme. Settings are automatically saved to LocalStorage.',
+      settingLangTitle: 'Language & Direction',
+      settingLangDesc: 'Select interface language and text layout direction',
+      settingThemeTitle: 'Dashboard Theme',
+      settingThemeDesc: 'Choose dark glassmorphism or clean light appearance',
+      badgeDefault: 'Default',
+      langFaTitle: 'فارسی (Persian)',
+      langFaDesc: 'Right-to-Left (RTL) interface for sidebar, headers, and modals',
+      langEnTitle: 'English (Left-to-Right)',
+      langEnDesc: 'Standard Left-to-Right (LTR) layout and typography',
+      themeDarkTitle: 'Dark Glassmorphism',
+      themeDarkDesc: 'Modern dark glassmorphic styling with neon accents and high contrast',
+      themeLightTitle: 'Clean Light',
+      themeLightDesc: 'High contrast, clean light background for bright working environments',
+      storageNotice: '💾 Preferences are saved to LocalStorage and persist across visits.',
+      resetSettings: 'Reset to Defaults (English / Dark)',
+
+      // Modals General
+      cancel: 'Cancel',
+      save: 'Save',
+      close: 'Close',
+      modalCreateUserTitle: 'Create New User',
+      modalCreateUserSubtitle: 'Provision user in Keycloak with credentials, business role, and attribute scopes',
+      secIdentityCredentials: '1. Identity & Credentials',
+      initialPasswordLabel: 'Initial Password *',
+      firstNameLabel: 'First Name',
+      lastNameLabel: 'Last Name',
+      emailLabel: 'Email Address',
+      roleLabel: 'Business Role',
+      selectRole: '(Select a Business Role)',
+      tempPasswordLabel: 'Temporary Password (must change on first sign-in)',
+      accountEnabledLabel: 'Account Enabled',
+      secAttributeScopes: '2. Attribute Scopes (Dynamic Access Restrictions)',
+      btnNewScopePlus: '+ New Scope',
+      scopesDescription: 'Check the scopes that apply to this user and specify authorized values (comma-separated for multiple values, e.g. tehran-north, CC-9080):',
+
+      modalUserScopesTitle: 'Manage Role & Scopes',
+      userPrefix: 'User:',
+      businessRoleRequired: 'Business Role *',
+      secScopesCheckAndEnter: 'Attribute Scopes (Check and enter values)',
+      scopesCheckDesc: 'Checked scopes restrict the user\'s data access to the specified values:',
+      btnSaveRoleScopes: 'Save Role & Scopes',
+
+      modalEditUserTitle: 'Edit User Profile',
+      emailVerifiedLabel: 'Email Verified',
+      btnDeleteUser: '🗑️ Delete User',
+      btnResetPassword: '🔑 Reset Password',
+      btnSaveChanges: 'Save Changes',
+
+      modalResetPasswordTitle: 'Reset User Password',
+      settingPwFor: 'Setting a new password for:',
+      newPasswordLabel: 'New Password *',
+      confirmPasswordLabel: 'Confirm New Password *',
+      tempPasswordNext: 'Temporary Password (must change on next sign-in)',
+
+      modalDeleteUserTitle: 'Delete User from Keycloak',
+      deleteUserWarning: 'Are you sure you want to permanently delete user',
+      deleteUserWarningDesc: '⚠️ Warning: This action is permanent and cannot be undone. The user account, active sessions, and assigned scopes will be completely deleted from Keycloak.',
+      btnDeleteUserConfirm: 'Delete User',
+
+      modalCreateRoleTitle: 'Create Business Role',
+      roleNameLabel: 'Role Name * (e.g. Manager, Accountant, Clerk)',
+      selectPermissionsLabel: 'Select Permissions',
+      modalEditRoleTitle: 'Edit Business Role',
+      assignedPermsLabel: 'Assigned Permissions',
+      btnSaveRoleChanges: 'Save Role Changes',
+
+      modalDeleteRoleTitle: 'Delete Business Role',
+      deleteRoleWarning: 'Are you sure you want to permanently delete business role',
+      deleteRoleWarningDesc: '⚠️ Safe Deletion: Keycloak will block deletion if any user accounts are currently assigned to this role.',
+      btnDeleteRoleConfirm: 'Delete Role',
+
+      modalRevokeTitle: 'Revoke User Sessions',
+      revokeWarning: 'Are you sure you want to revoke all active sessions for user',
+      revokeWarningDesc: 'This will invalidate all issued tokens immediately and disconnect the user.',
+      btnRevokeConfirm: 'Revoke Sessions',
+
+      modalDbTitle: 'Database Infrastructure Status',
+      dbActiveEngine: 'Active Engine',
+      dbConnectionHealth: 'Connection Health',
+      dbHostTarget: 'Host Target',
+      dbName: 'Database Name',
+
+      modalLoginTitle: 'Admin Sign In',
+      modalLoginSubtitle: 'Sign in with your Keycloak administrative credentials',
+      defaultCredentials: 'Default credentials: admin / admin',
+      btnSignIn: 'Sign In'
+    }
+  };
+
+  // Translation lookup helper
+  function t(key, fallback = '') {
+    const langObj = i18n[state.lang] || i18n.en;
+    if (langObj && langObj[key] !== undefined) {
+      return langObj[key];
+    }
+    const enObj = i18n.en || {};
+    if (enObj[key] !== undefined) {
+      return enObj[key];
+    }
+    return fallback;
+  }
+
+  // Parse comma-separated Target Resources
+  function parseTargetResources(val) {
+    if (!val || typeof val !== 'string') return [];
+    return val
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }
+
+  // Apply Language & Direction
+  function applyLanguage(lang) {
+    state.lang = lang === 'en' ? 'en' : 'fa';
+    localStorage.setItem('dashboard_lang', state.lang);
+    document.documentElement.setAttribute('lang', state.lang);
+    document.documentElement.setAttribute('dir', state.lang === 'fa' ? 'rtl' : 'ltr');
+
+    if (elements.currentLangLabel) {
+      elements.currentLangLabel.textContent = state.lang === 'fa' ? 'EN' : 'FA';
+    }
+
+    if (elements.radioLangFa && elements.radioLangEn) {
+      elements.radioLangFa.checked = (state.lang === 'fa');
+      elements.radioLangEn.checked = (state.lang === 'en');
+      elements.cardLangFa?.classList.toggle('active', state.lang === 'fa');
+      elements.cardLangEn?.classList.toggle('active', state.lang === 'en');
+    }
+
+    // Translate DOM elements with data-i18n
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      const val = t(key);
+      if (val) {
+        el.textContent = val;
+      }
+    });
+
+    // Translate placeholders with data-i18n-placeholder
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const key = el.getAttribute('data-i18n-placeholder');
+      const val = t(key);
+      if (val) el.placeholder = val;
+    });
+
+    // Translate titles
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+      const key = el.getAttribute('data-i18n-title');
+      const val = t(key);
+      if (val) el.title = val;
+    });
+
+    // Re-title the current page
+    switchView(state.currentView);
+
+    // Re-render active view components
+    renderUsersTable();
+    renderBusinessRoles();
+    renderScopesTable();
+    renderPermissionsTable();
+    updateMetrics();
+  }
+
+  // Apply Theme (Dark / Light)
+  function applyTheme(theme) {
+    state.theme = theme === 'light' ? 'light' : 'dark';
+    localStorage.setItem('dashboard_theme', state.theme);
+    document.documentElement.setAttribute('data-theme', state.theme);
+
+    if (elements.currentThemeIcon) {
+      elements.currentThemeIcon.textContent = state.theme === 'light' ? '☀️' : '🌙';
+    }
+
+    if (elements.radioThemeDark && elements.radioThemeLight) {
+      elements.radioThemeDark.checked = (state.theme === 'dark');
+      elements.radioThemeLight.checked = (state.theme === 'light');
+      elements.cardThemeDark?.classList.toggle('active', state.theme === 'dark');
+      elements.cardThemeLight?.classList.toggle('active', state.theme === 'light');
+    }
+  }
 
   // ==========================================
   // Helper: API Fetch with Bearer Auth
@@ -313,14 +891,15 @@
     if (activeNav) activeNav.classList.add('active');
 
     const titles = {
-      'view-overview': 'Dashboard Overview',
-      'view-users': 'Users & Scoped Access Management',
-      'view-roles': 'Business Roles',
-      'view-scopes': 'Attribute Scope Registry',
-      'view-permissions': 'Platform Permissions Catalog',
-      'view-token-test': 'Token Playground & Access Verification'
+      'view-overview': t('navOverview', 'Dashboard Overview'),
+      'view-users': t('navUsers', 'Users & Scoped Access Management'),
+      'view-roles': t('navRoles', 'Business Roles'),
+      'view-scopes': t('navScopes', 'Attribute Scope Registry'),
+      'view-permissions': t('navPermissions', 'Platform Permissions Catalog'),
+      'view-token-test': t('navTokenTest', 'Token Playground & Access Verification'),
+      'view-settings': t('navSettings', 'Dashboard Settings & Preferences')
     };
-    elements.pageHeading.textContent = titles[viewId] || 'Identity Management';
+    elements.pageHeading.textContent = titles[viewId] || t('navOverview', 'Dashboard Overview');
   }
 
   // ==========================================
@@ -410,7 +989,7 @@
     });
 
     if (filtered.length === 0) {
-      elements.usersTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-faint); padding: 32px;">No matching users found.</td></tr>`;
+      elements.usersTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-faint); padding: 32px;">${t('noUsersFound', 'No matching users found.')}</td></tr>`;
       return;
     }
 
@@ -418,8 +997,8 @@
       const isOnline = !!u.isOnline;
       const sessionCount = u.activeSessionsCount || (isOnline ? 1 : 0);
       const statusBadge = isOnline
-        ? `<span class="badge badge-online"><span class="badge-dot"></span> Online (${sessionCount})</span>`
-        : `<span class="badge badge-offline"><span class="badge-dot"></span> Offline</span>`;
+        ? `<span class="badge badge-online"><span class="badge-dot"></span> ${t('activeStatus', 'Online')} (${sessionCount})</span>`
+        : `<span class="badge badge-offline"><span class="badge-dot"></span> ${t('offlineStatus', 'Offline')}</span>`;
 
       // 1. Business role (from iam.business_role OR iam.scoped_access)
       let roleName = '';
@@ -462,11 +1041,11 @@
 
       const roleBadge = roleName
         ? `<span class="role-badge">🛡️ ${escapeHtml(roleName)}</span>`
-        : `<span style="color: var(--text-faint); font-size: 0.78rem;">(No Role)</span>`;
+        : `<span style="color: var(--text-faint); font-size: 0.78rem;">${t('noRole', '(No Role)')}</span>`;
 
       const scopesHtml = scopesDisplay.length > 0
         ? `<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px;">${scopesDisplay.join('')}</div>`
-        : `<div style="color: var(--text-faint); font-size: 0.75rem; margin-top: 3px;">No Scopes Assigned</div>`;
+        : `<div style="color: var(--text-faint); font-size: 0.75rem; margin-top: 3px;">${t('noScopes', 'No Scopes Assigned')}</div>`;
 
       return `
         <tr data-user-id="${escapeHtml(u.id)}">
@@ -491,19 +1070,19 @@
           <td style="text-align: right;">
             <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
               <button class="btn btn-sm btn-primary btn-manage-scopes" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="Manage Role & Scopes">
-                Role & Scopes
+                ${t('btnManageScopes', 'Role & Scopes')}
               </button>
               <button class="btn btn-sm btn-secondary btn-edit-user" data-user='${JSON.stringify(u).replace(/'/g, "&apos;")}' title="Edit User Profile">
-                Edit
+                ${t('btnEditUser', 'Edit')}
               </button>
               <button class="btn btn-sm btn-secondary btn-reset-password" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="Reset Password">
-                🔑 Reset Password
+                ${t('btnResetPassword', '🔑 Reset Password')}
               </button>
               <button class="btn btn-sm btn-ghost btn-revoke-tokens" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="Revoke Sessions">
-                Revoke
+                ${t('btnRevokeSessions', 'Revoke')}
               </button>
               <button class="btn btn-sm btn-outline-danger btn-delete-user" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="Delete User">
-                🗑️ Delete
+                ${t('btnDelete', '🗑️ Delete')}
               </button>
             </div>
           </td>
@@ -701,37 +1280,37 @@
   function renderScopesTable() {
     if (!elements.scopesTableBody) return;
     if (!state.scopes || state.scopes.length === 0) {
-      elements.scopesTableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-faint); padding: 32px;">No attribute scopes registered yet. Use the form above to register a new scope.</td></tr>`;
+      elements.scopesTableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-faint); padding: 32px;">${t('noScopesFound', 'No attribute scopes registered yet. Use the form above to register a new scope.')}</td></tr>`;
       return;
     }
 
     elements.scopesTableBody.innerHTML = state.scopes.map(s => {
       const boundRes = (state.resources || [])
         .filter(r => r.scopes && r.scopes.some(sc => sc.toLowerCase() === s.key.toLowerCase()))
-        .map(r => `<span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #a5b4fc; font-size: 0.72rem;">${escapeHtml(r.key)}</span>`)
+        .map(r => `<span class="resource-pill">${escapeHtml(r.key)}</span>`)
         .join(' ');
 
       const statusBadge = s.isActive
-        ? `<span class="badge badge-online"><span class="badge-dot"></span> Active</span>`
-        : `<span class="badge badge-offline"><span class="badge-dot"></span> Inactive</span>`;
+        ? `<span class="badge badge-online"><span class="badge-dot"></span> ${t('activeStatus', 'Active')}</span>`
+        : `<span class="badge badge-offline"><span class="badge-dot"></span> ${t('disabledBadge', 'Inactive')}</span>`;
 
       return `
         <tr>
           <td><span class="scope-chip">${escapeHtml(s.key)}</span></td>
           <td style="font-weight: 600; color: var(--text-main);">${escapeHtml(s.displayName || s.key)}</td>
           <td style="color: var(--text-muted); font-size: 0.85rem;">${escapeHtml(s.description || '-')}</td>
-          <td>${boundRes || '<span style="color: var(--text-faint); font-size: 0.78rem;">(Unbound)</span>'}</td>
+          <td>${boundRes || `<span style="color: var(--text-faint); font-size: 0.78rem;">${t('unboundResources', '(Unbound)')}</span>`}</td>
           <td>${statusBadge}</td>
           <td style="text-align: right;">
             <div style="display: flex; gap: 6px; justify-content: flex-end;">
               <button class="btn btn-sm btn-secondary btn-edit-scope" data-scope='${JSON.stringify(s)}'>
-                Edit
+                ${t('btnEdit', 'Edit')}
               </button>
               <button class="btn btn-sm btn-ghost btn-toggle-scope" data-key="${escapeHtml(s.key)}" data-active="${!!s.isActive}">
-                ${s.isActive ? 'Deactivate' : 'Activate'}
+                ${s.isActive ? t('btnDeactivate', 'Deactivate') : t('btnActivate', 'Activate')}
               </button>
               <button class="btn btn-sm btn-ghost btn-delete-scope" data-key="${escapeHtml(s.key)}" style="color: var(--danger);">
-                🗑️ Delete
+                ${t('btnDelete', '🗑️ Delete')}
               </button>
             </div>
           </td>
@@ -747,6 +1326,15 @@
         document.getElementById('es-display').value = s.displayName || s.key;
         document.getElementById('es-desc').value = s.description || '';
         document.getElementById('es-active').checked = !!s.isActive;
+
+        // Populate Target Resources for editing!
+        const currentResources = (state.resources || [])
+          .filter(r => r.scopes && r.scopes.some(sc => sc.toLowerCase() === s.key.toLowerCase()))
+          .map(r => r.key);
+        const esRes = document.getElementById('es-resources');
+        if (esRes) {
+          esRes.value = currentResources.join(', ');
+        }
         openModal(elements.modalEditScope);
       });
     });
@@ -925,7 +1513,7 @@
         renderPermissionsSelector();
       }
     } catch (err) {
-      elements.permissionsTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger); padding: 24px;">Failed to load permissions catalog.</td></tr>`;
+      elements.permissionsTableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger); padding: 24px;">Failed to load permissions catalog.</td></tr>`;
     }
   }
 
@@ -939,7 +1527,7 @@
     });
 
     if (filtered.length === 0) {
-      elements.permissionsTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-faint); padding: 32px;">No matching permissions found.</td></tr>`;
+      elements.permissionsTableBody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-faint); padding: 32px;">${t('noPermsFound', 'No matching permissions found.')}</td></tr>`;
       return;
     }
 
@@ -948,8 +1536,7 @@
         <td style="font-family: monospace; font-weight: 600; color: #38bdf8;">${escapeHtml(p.name)}</td>
         <td>${escapeHtml(p.description || '-')}</td>
         <td><span class="badge" style="background: rgba(168,85,247,0.15); color: #c084fc;">${escapeHtml(p.declaringService)}</span></td>
-        <td>v${escapeHtml(p.version || '1')}</td>
-        <td><span class="badge badge-online"><span class="badge-dot"></span> Active</span></td>
+        <td><span class="badge badge-online"><span class="badge-dot"></span> ${t('activeStatus', 'Active')}</span></td>
       </tr>
     `).join('');
   }
@@ -1261,15 +1848,16 @@
       const key = document.getElementById('inline-cs-key').value.trim().toLowerCase();
       const displayName = document.getElementById('inline-cs-display').value.trim();
       const description = document.getElementById('inline-cs-desc').value.trim() || null;
+      const targetResources = parseTargetResources(document.getElementById('inline-cs-resources')?.value);
 
       try {
         const res = await apiFetch('/api/identity/scopes', {
           method: 'POST',
-          body: JSON.stringify({ key, displayName, description })
+          body: JSON.stringify({ key, displayName, description, targetResources })
         });
 
         if (res.ok) {
-          showToast(`Scope '${displayName}' (${key}) registered successfully!`, 'success');
+          showToast(state.lang === 'fa' ? `اسکوپ '${displayName}' (${key}) با موفقیت ثبت شد!` : `Scope '${displayName}' (${key}) registered successfully!`, 'success');
           elements.inlineFormCreateScope.reset();
           await loadScopes();
           updateMetrics();
@@ -1290,15 +1878,16 @@
       const key = document.getElementById('cs-key').value.trim().toLowerCase();
       const displayName = document.getElementById('cs-display').value.trim();
       const description = document.getElementById('cs-desc').value.trim() || null;
+      const targetResources = parseTargetResources(document.getElementById('cs-resources')?.value);
 
       try {
         const res = await apiFetch('/api/identity/scopes', {
           method: 'POST',
-          body: JSON.stringify({ key, displayName, description })
+          body: JSON.stringify({ key, displayName, description, targetResources })
         });
 
         if (res.ok) {
-          showToast(`Scope '${key}' registered successfully!`, 'success');
+          showToast(state.lang === 'fa' ? `اسکوپ '${key}' با موفقیت ثبت شد!` : `Scope '${key}' registered successfully!`, 'success');
           closeModal(elements.modalCreateScope);
           elements.formCreateScope.reset();
           await loadScopes();
@@ -1320,15 +1909,16 @@
     const displayName = document.getElementById('es-display').value.trim();
     const description = document.getElementById('es-desc').value.trim() || null;
     const isActive = document.getElementById('es-active').checked;
+    const targetResources = parseTargetResources(document.getElementById('es-resources')?.value);
 
     try {
       const res = await apiFetch(`/api/identity/scopes/${encodeURIComponent(key)}`, {
         method: 'PUT',
-        body: JSON.stringify({ displayName, description, isActive })
+        body: JSON.stringify({ displayName, description, isActive, targetResources })
       });
 
       if (res.ok) {
-        showToast(`Scope '${key}' updated successfully!`, 'success');
+        showToast(state.lang === 'fa' ? `اسکوپ '${key}' با موفقیت بروزرسانی شد!` : `Scope '${key}' updated successfully!`, 'success');
         closeModal(elements.modalEditScope);
         await loadScopes();
       } else {
@@ -1622,6 +2212,86 @@
     elements.cardDbMetric.addEventListener('click', () => openModal(elements.modalDbInfo));
   }
 
+  // Chip suggestions for Target Resources
+  document.querySelectorAll('.chip-clickable[data-suggest]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const suggest = btn.getAttribute('data-suggest');
+      const targetId = btn.getAttribute('data-target');
+      const targetInput = document.getElementById(targetId);
+      if (!targetInput) return;
+
+      const current = parseTargetResources(targetInput.value);
+      if (!current.includes(suggest)) {
+        current.push(suggest);
+        targetInput.value = current.join(', ');
+      }
+    });
+  });
+
+  // Header Quick Toggles
+  if (elements.btnLangToggle) {
+    elements.btnLangToggle.addEventListener('click', () => {
+      const nextLang = state.lang === 'fa' ? 'en' : 'fa';
+      applyLanguage(nextLang);
+      showToast(state.lang === 'fa' ? 'زبان داشبورد به فارسی تغییر کرد' : 'Switched language to English', 'info');
+    });
+  }
+
+  if (elements.btnThemeToggle) {
+    elements.btnThemeToggle.addEventListener('click', () => {
+      const nextTheme = state.theme === 'dark' ? 'light' : 'dark';
+      applyTheme(nextTheme);
+      const isDark = state.theme === 'dark';
+      const msg = isDark
+        ? (state.lang === 'fa' ? 'تم تیره (Dark) فعال شد' : 'Dark theme activated')
+        : (state.lang === 'fa' ? 'تم روشن (Light) فعال شد' : 'Light theme activated');
+      showToast(msg, 'info');
+    });
+  }
+
+  // Settings Radio Listeners
+  if (elements.radioLangFa) {
+    elements.radioLangFa.addEventListener('change', () => {
+      if (elements.radioLangFa.checked) {
+        applyLanguage('fa');
+        showToast('زبان داشبورد به فارسی تغییر کرد.', 'info');
+      }
+    });
+  }
+  if (elements.radioLangEn) {
+    elements.radioLangEn.addEventListener('change', () => {
+      if (elements.radioLangEn.checked) {
+        applyLanguage('en');
+        showToast('Switched language to English.', 'info');
+      }
+    });
+  }
+
+  if (elements.radioThemeDark) {
+    elements.radioThemeDark.addEventListener('change', () => {
+      if (elements.radioThemeDark.checked) {
+        applyTheme('dark');
+        showToast(state.lang === 'fa' ? 'تم دارک فعال شد.' : 'Dark theme activated.', 'info');
+      }
+    });
+  }
+  if (elements.radioThemeLight) {
+    elements.radioThemeLight.addEventListener('change', () => {
+      if (elements.radioThemeLight.checked) {
+        applyTheme('light');
+        showToast(state.lang === 'fa' ? 'تم روشن فعال شد.' : 'Light theme activated.', 'info');
+      }
+    });
+  }
+
+  if (elements.btnResetPreferences) {
+    elements.btnResetPreferences.addEventListener('click', () => {
+      applyLanguage('en');
+      applyTheme('dark');
+      showToast(state.lang === 'fa' ? 'تنظیمات به حالت پیش‌فرض (انگلیسی و تم دارک) بازنشانی شدند.' : 'Preferences reset to defaults (English / Dark).', 'success');
+    });
+  }
+
   // Auto-refresh online statuses every 20 seconds
   state.refreshInterval = setInterval(() => {
     if (state.token && state.currentView === 'view-users') {
@@ -1632,6 +2302,8 @@
 
   // App Startup
   window.addEventListener('DOMContentLoaded', async () => {
+    applyLanguage(state.lang);
+    applyTheme(state.theme);
     await loadDatabaseInfo();
     if (!state.token) {
       promptLogin();

@@ -142,7 +142,7 @@ builder.Services.AddOpenApi("v1", o =>
         document.Info.Description =
             "Keycloak-centric facade — auth proxy, directory, permissions, key lifecycle. " +
             "Present a Keycloak-issued JWT via the Bearer scheme below; privileged groups need the " +
-            "matching Identity.* permission claims (e.g. Identity.Keys.Generate for key admin routes).";
+            "matching Identity.* permission claims (e.g. identity.users.manage, identity.roles.manage).";
         var bearer = new Microsoft.OpenApi.OpenApiSecurityScheme
         {
             Type = Microsoft.OpenApi.SecuritySchemeType.Http,

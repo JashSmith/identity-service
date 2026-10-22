@@ -82,7 +82,11 @@ public sealed class FacadeResolvingAccessContext : ICurrentAccessContext
             if (dto is null) return;
 
             var assignments = (dto.Assignments ?? Array.Empty<ScopedRoleAssignment>())
-                .Where(a => !string.IsNullOrWhiteSpace(a.Role)).ToArray();
+                .Where(a => !string.IsNullOrWhiteSpace(a.Role)).ToList();
+            if (assignments.Count == 0 && dto.Scopes != null && dto.Scopes.Count > 0)
+            {
+                assignments.Add(new ScopedRoleAssignment("_effective", dto.Scopes));
+            }
             var permissions = (dto.Permissions ?? Array.Empty<string>())
                 .Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.Ordinal).ToArray();
 

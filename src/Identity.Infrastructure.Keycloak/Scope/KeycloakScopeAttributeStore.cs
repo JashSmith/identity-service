@@ -145,38 +145,48 @@ public sealed class KeycloakScopeAttributeStore(
         var uj = await GetUserJsonAsync(userId, token, ct);
         if (uj is null) return ScopedAccessDocument.Empty;
         var scopeAttrs = ExtractScopeAttrs(uj.Value);
-        if (scopeAttrs.Count > 0 || true) // always try group merge; fallback legacy if both empty handled below
+        var groups = await GetUserGroupsWithIdsAsync(userId, token, ct);
+        // Union group scopes + user scopes per key
+        var mergedByKey = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var v in scopeAttrs) { if (!mergedByKey.TryGetValue(v.Key, out var s)) { s=new HashSet<string>(StringComparer.Ordinal); mergedByKey[v.Key]=s; } foreach (var x in v.Value) s.Add(x); }
+        foreach (var g in groups)
         {
-            var groups = await GetUserGroupsWithIdsAsync(userId, token, ct);
-            // Union group scopes + user scopes per key
-            var mergedByKey = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            foreach (var v in scopeAttrs) { if (!mergedByKey.TryGetValue(v.Key, out var s)) { s=new HashSet<string>(StringComparer.Ordinal); mergedByKey[v.Key]=s; } foreach (var x in v.Value) s.Add(x); }
-            foreach (var g in groups)
-            {
-                var gAttrs = await GetGroupScopeAttrsAsync(g.id, token, ct);
-                foreach (var kv in gAttrs) { if (!mergedByKey.TryGetValue(kv.Key, out var s)) { s=new HashSet<string>(StringComparer.Ordinal); mergedByKey[kv.Key]=s; } foreach (var x in kv.Value) s.Add(x); }
-            }
-            if (mergedByKey.Count>0)
-            {
-                var flat = mergedByKey.ToDictionary(k=>k.Key, v=>(IReadOnlyCollection<string>)v.Value.OrderBy(x=>x,StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
-                // Expose as one doc with one assignment per group (or single) sharing the merged scopes — keeps AccessContext shape
-                var byRole = new List<ScopedRoleAssignment>();
-                if (groups.Count>0) foreach (var g in groups) byRole.Add(new ScopedRoleAssignment(g.name, flat));
-                else byRole.Add(new ScopedRoleAssignment("_user", flat));
-                // If legacy attribute also present and groups empty, still return merged; otherwise prefer merged result
-                if (byRole.Count>0) return new ScopedAccessDocument(byRole);
-            }
-            if (scopeAttrs.Count>0)
-            {
-                // Fallback without group fetch
-                var groups2 = await GetUserGroupsAsync(userId, token, ct);
-                var byRole2 = new List<ScopedRoleAssignment>();
-                foreach (var g in groups2) byRole2.Add(new ScopedRoleAssignment(g, scopeAttrs.ToDictionary(k=>k.Key, v=>(IReadOnlyCollection<string>)v.Value, StringComparer.Ordinal)));
-                if (byRole2.Count==0) byRole2.Add(new ScopedRoleAssignment("_user", scopeAttrs.ToDictionary(k=>k.Key, v=>(IReadOnlyCollection<string>)v.Value, StringComparer.Ordinal)));
-                return new ScopedAccessDocument(byRole2);
-            }
+            var gAttrs = await GetGroupScopeAttrsAsync(g.id, token, ct);
+            foreach (var kv in gAttrs) { if (!mergedByKey.TryGetValue(kv.Key, out var s)) { s=new HashSet<string>(StringComparer.Ordinal); mergedByKey[kv.Key]=s; } foreach (var x in kv.Value) s.Add(x); }
         }
         var raw = ExtractSingleAttr(uj.Value, ScopedAccessConstants.AttributeName);
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            try
+            {
+                var legacyDoc = serializer.Deserialize(raw);
+                foreach (var a in legacyDoc.Assignments)
+                foreach (var kv in a.Scopes)
+                {
+                    if (!mergedByKey.TryGetValue(kv.Key, out var s))
+                    {
+                        s = new HashSet<string>(StringComparer.Ordinal);
+                        mergedByKey[kv.Key] = s;
+                    }
+                    foreach (var x in kv.Value) s.Add(x);
+                }
+            }
+            catch { }
+        }
+        if (mergedByKey.Count > 0)
+        {
+            var flat = mergedByKey.ToDictionary(k=>k.Key, v=>(IReadOnlyCollection<string>)v.Value.OrderBy(x=>x,StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+            var byRole = new List<ScopedRoleAssignment>();
+            if (groups.Count > 0)
+            {
+                foreach (var g in groups) byRole.Add(new ScopedRoleAssignment(g.name, flat));
+            }
+            else
+            {
+                byRole.Add(new ScopedRoleAssignment("_user", flat));
+            }
+            return new ScopedAccessDocument(byRole);
+        }
         if (!string.IsNullOrWhiteSpace(raw)) return serializer.Deserialize(raw);
         return ScopedAccessDocument.Empty;
     }

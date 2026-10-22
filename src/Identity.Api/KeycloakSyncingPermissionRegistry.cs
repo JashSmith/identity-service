@@ -8,7 +8,7 @@ namespace Identity.Api;
 /// best-effort creates matching Keycloak <b>client roles</b> on the owning service client
 /// (clientId == serviceId) via <see cref="IKeycloakClientRoleProvisioner"/>.
 /// Also ensures a per-client oidc-usermodel-client-role-mapper → permissions claim and
-/// auto-maps every new role to the Admin group (key-admins) so admins need no manual grant.
+/// auto-maps every new role to the Admin group (super-admins) so admins need no manual grant.
 /// Fallback to legacy realm roles via <see cref="IKeycloakRoleProvisioner"/> when the client
 /// provisioner is unavailable (tests).
 /// Roles are never deleted when they disappear from a manifest (only soft-deprecated locally).

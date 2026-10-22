@@ -118,45 +118,7 @@
         "client.secret.creation.time": "0"
       },
       "protocolMappers": [
-        {
-          "name": "permission-client-role-aggregate",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-client-role-mapper",
-          "config": {
-            "claim.name": "permissions",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "userinfo.token.claim": "true",
-            "access.token.claim": "true",
-            "id.token.claim": "false"
-          }
-        },
-        {
-          "name": "permission-claim",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
-          "config": {
-            "claim.name": "permissions",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "userinfo.token.claim": "true",
-            "access.token.claim": "true",
-            "id.token.claim": "false"
-          }
-        },
-        {
-          "name": "permission-singular-claim",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
-          "config": {
-            "claim.name": "permission",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "userinfo.token.claim": "true",
-            "access.token.claim": "true",
-            "id.token.claim": "false"
-          }
-        },
+
         {
           "name": "facade-audience",
           "protocol": "openid-connect",
@@ -226,32 +188,7 @@
         "client.secret.creation.time": "0"
       },
       "protocolMappers": [
-        {
-          "name": "permission-claim",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
-          "config": {
-            "claim.name": "permissions",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "userinfo.token.claim": "true",
-            "access.token.claim": "true",
-            "id.token.claim": "false"
-          }
-        },
-        {
-          "name": "permission-singular-claim",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
-          "config": {
-            "claim.name": "permission",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "userinfo.token.claim": "true",
-            "access.token.claim": "true",
-            "id.token.claim": "false"
-          }
-        },
+
         {
           "name": "identity-facade-audience",
           "protocol": "openid-connect",
@@ -316,11 +253,11 @@
           }
         },
         {
-          "name": "permission-singular-claim",
+          "name": "client-roles-mapper",
           "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
           "config": {
-            "claim.name": "permission",
+            "claim.name": "permissions",
             "jsonType.label": "String",
             "multivalued": "true",
             "userinfo.token.claim": "true",

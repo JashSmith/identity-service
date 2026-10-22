@@ -74,4 +74,5 @@ public sealed record AccessContextResponse(
     string? UserId,
     string? Username,
     IReadOnlyCollection<string> Permissions,
-    IReadOnlyCollection<ScopedRoleAssignment> Assignments);
+    IReadOnlyCollection<ScopedRoleAssignment> Assignments,
+    IReadOnlyDictionary<string, IReadOnlyCollection<string>>? Scopes = null);

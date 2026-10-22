@@ -54,6 +54,7 @@ public interface IScopeRegistryAdmin
     Task<ScopeDefinitionDto?> CreateScopeAsync(string key, string? displayName, string? description, CancellationToken ct);
     Task<ScopeDefinitionDto?> UpdateScopeAsync(string key, string? displayName, string? description, bool? isActive, CancellationToken ct);
     Task<bool> DeleteScopeAsync(string key, CancellationToken ct);
+    Task<bool> SetScopeResourcesAsync(string key, IReadOnlyCollection<string> resources, CancellationToken ct);
 }
 
 public interface IScopeCacheInvalidator { void Invalidate(); }
