@@ -194,10 +194,13 @@ public sealed class KeycloakClientRoleProvisioner(
 
         // Grant the facade management permissions (identity.*) so super-admins pass RequireAuthorization.
         var granted = new List<object>();
-        foreach (var perm in new[] { "identity.users.read", "identity.users.manage", "identity.roles.read",
-                     "identity.roles.manage", "identity.scopes.read", "identity.scopes.manage" })
+        foreach (var perm in new[] {
+                     "identity.users.read", "identity.users.manage",
+                     "identity.roles.read", "identity.roles.manage",
+                     "identity.scopes.read", "identity.scopes.manage",
+                     "identity.permissions.read", "identity.permissions.register" })
         {
-            var role = await LookupRealmRoleByNameAsync(perm, token, ct);
+            var role = await EnsureRealmRoleAsync(perm, token, ct);
             if (role is not null) granted.Add(new { id = role.Value.Id, name = role.Value.Name });
         }
         if (granted.Count > 0)
@@ -214,6 +217,23 @@ public sealed class KeycloakClientRoleProvisioner(
         }
         // Backfill client roles from every service client (idempotent diff).
         await ReconcileAdminAsync(ct);
+    }
+
+    private async Task<(string Id, string Name)?> EnsureRealmRoleAsync(string roleName, string token, CancellationToken ct)
+    {
+        var existing = await LookupRealmRoleByNameAsync(roleName, token, ct);
+        if (existing is not null) return existing;
+        try
+        {
+            var req = new HttpRequestMessage(HttpMethod.Post, $"{AdminBase}/{_o.Realm}/roles")
+            { Content = JsonContent.Create(new { name = roleName, description = $"Facade role {roleName}" }) };
+            req.Headers.Add("Authorization", $"Bearer {token}");
+            var res = await http.SendAsync(req, ct);
+            if (res.IsSuccessStatusCode || res.StatusCode == HttpStatusCode.Conflict)
+                return await LookupRealmRoleByNameAsync(roleName, token, ct);
+        }
+        catch { }
+        return null;
     }
 
     private async Task<(string Id, string Name)?> LookupRealmRoleByNameAsync(string roleName, string token, CancellationToken ct)

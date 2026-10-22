@@ -33,8 +33,14 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
             .Concat(ctx.User.FindAll("permissions"))
             .Select(x => x.Value).ToList();
         
-        if (permissions.Contains(req.Permission, StringComparer.Ordinal) ||
-            ctx.User.IsInRole(req.Permission)) ctx.Succeed(req);
+        if (permissions.Contains(req.Permission, StringComparer.OrdinalIgnoreCase) ||
+            permissions.Contains("realm-admin", StringComparer.OrdinalIgnoreCase) ||
+            ctx.User.Claims.Any(c => (c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "roles" || c.Type == "role") &&
+                                     (string.Equals(c.Value, req.Permission, StringComparison.OrdinalIgnoreCase) ||
+                                      string.Equals(c.Value, "realm-admin", StringComparison.OrdinalIgnoreCase))))
+        {
+            ctx.Succeed(req);
+        }
         return Task.CompletedTask;
     }
 }

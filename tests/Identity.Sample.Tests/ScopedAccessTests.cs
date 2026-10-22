@@ -241,13 +241,15 @@ public sealed class CompositeResolutionTests
 public sealed class FacadePermissionsRegistrationTests
 {
     [Fact]
-    public void IamPermissionSource_Exposes_Six_Permissions()
+    public void IamPermissionSource_Exposes_Expected_Permissions()
     {
         var src = new Identity.Api.IamPermissionSource();
         var perms = src.GetPermissions();
-        Assert.Equal(6, perms.Count);
+        Assert.Equal(8, perms.Count);
         Assert.Contains(perms, p => p.Name == Identity.Api.IamPermissions.UsersRead);
         Assert.Contains(perms, p => p.Name == Identity.Api.IamPermissions.ScopesManage);
+        Assert.Contains(perms, p => p.Name == Identity.Api.IamPermissions.PermissionsRead);
+        Assert.Contains(perms, p => p.Name == Identity.Api.IamPermissions.PermissionsRegister);
     }
 
     [Fact]

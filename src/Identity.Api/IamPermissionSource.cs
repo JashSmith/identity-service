@@ -12,5 +12,7 @@ public sealed class IamPermissionSource : IPermissionDefinitionSource
         new PermissionDescriptor(IamPermissions.RolesManage, "Manage business (composite) roles"),
         new PermissionDescriptor(IamPermissions.ScopesRead, "Read scoped access assignments"),
         new PermissionDescriptor(IamPermissions.ScopesManage, "Manage scoped access assignments"),
+        new PermissionDescriptor(IamPermissions.PermissionsRead, "Read registered permissions catalog"),
+        new PermissionDescriptor(IamPermissions.PermissionsRegister, "Register service permission manifests"),
     };
 }

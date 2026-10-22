@@ -24,74 +24,6 @@
         "description": "UMA authorization"
       },
       {
-        "name": "Identity.Users.Read",
-        "description": "Read users / directory"
-      },
-      {
-        "name": "Identity.Roles.Read",
-        "description": "Read roles"
-      },
-      {
-        "name": "Identity.Permissions.Read",
-        "description": "Read/list permissions"
-      },
-      {
-        "name": "Identity.Permissions.Register",
-        "description": "Register permission manifests"
-      },
-      {
-        "name": "Identity.Keys.View",
-        "description": "View signing keys"
-      },
-      {
-        "name": "Identity.Keys.Generate",
-        "description": "Generate signing keys"
-      },
-      {
-        "name": "Identity.Keys.Import",
-        "description": "Import signing keys"
-      },
-      {
-        "name": "Identity.Keys.Stage",
-        "description": "Stage keys passive"
-      },
-      {
-        "name": "Identity.Keys.Validate",
-        "description": "Validate keys"
-      },
-      {
-        "name": "Identity.Keys.Activate",
-        "description": "Activate keys"
-      },
-      {
-        "name": "Identity.Keys.Passivate",
-        "description": "Passivate keys"
-      },
-      {
-        "name": "Identity.Keys.Retire",
-        "description": "Retire keys"
-      },
-      {
-        "name": "Identity.Keys.Destroy",
-        "description": "Destroy keys"
-      },
-      {
-        "name": "Identity.Keys.Rotate",
-        "description": "Rotate keys"
-      },
-      {
-        "name": "Identity.Keys.EmergencyRotate",
-        "description": "Emergency rotate"
-      },
-      {
-        "name": "Identity.Keys.Rollback",
-        "description": "Rollback keys"
-      },
-      {
-        "name": "Identity.Keys.History",
-        "description": "View key history"
-      },
-      {
         "name": "identity.users.read",
         "description": "Read users / directory"
       },
@@ -114,28 +46,18 @@
       {
         "name": "identity.scopes.manage",
         "description": "Manage scoped access assignments"
+      },
+      {
+        "name": "identity.permissions.read",
+        "description": "Read permissions catalog"
+      },
+      {
+        "name": "identity.permissions.register",
+        "description": "Register service permission manifests"
       }
     ]
   },
   "groups": [
-    {
-      "name": "key-admins",
-      "realmRoles": [
-        "Identity.Keys.View",
-        "Identity.Keys.Generate",
-        "Identity.Keys.Import",
-        "Identity.Keys.Stage",
-        "Identity.Keys.Validate",
-        "Identity.Keys.Activate",
-        "Identity.Keys.Passivate",
-        "Identity.Keys.Retire",
-        "Identity.Keys.Destroy",
-        "Identity.Keys.Rotate",
-        "Identity.Keys.EmergencyRotate",
-        "Identity.Keys.Rollback",
-        "Identity.Keys.History"
-      ]
-    },
     {
       "name": "super-admins",
       "attributes": {
@@ -149,7 +71,9 @@
         "identity.roles.read",
         "identity.roles.manage",
         "identity.scopes.read",
-        "identity.scopes.manage"
+        "identity.scopes.manage",
+        "identity.permissions.read",
+        "identity.permissions.register"
       ]
     },
     {
@@ -496,7 +420,7 @@
       "enabled": true,
       "serviceAccountClientId": "order-service",
       "realmRoles": [
-        "Identity.Permissions.Register"
+        "identity.permissions.register"
       ],
       "email": "service-account-order-service@company.local",
       "emailVerified": true,
@@ -516,20 +440,16 @@
         }
       ],
       "realmRoles": [
-        "Identity.Users.Read",
-        "Identity.Roles.Read",
-        "Identity.Permissions.Read",
-        "Identity.Permissions.Register",
-        "Identity.Keys.View",
-        "Identity.Keys.Generate",
-        "Identity.Keys.Import",
-        "Identity.Keys.History",
-        "Identity.Keys.Rotate",
-        "Identity.Keys.Rollback",
-        "Identity.Keys.Destroy"
+        "identity.users.read",
+        "identity.users.manage",
+        "identity.roles.read",
+        "identity.roles.manage",
+        "identity.scopes.read",
+        "identity.scopes.manage",
+        "identity.permissions.read",
+        "identity.permissions.register"
       ],
       "groups": [
-        "key-admins",
         "super-admins"
       ],
       "email": "admin@company.local",

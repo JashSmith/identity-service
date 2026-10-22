@@ -1,3 +1,4 @@
+name: IdentityService
 services:
   identity-facade:
     build:
@@ -24,9 +25,9 @@ services:
       Identity__Redis__Configuration: redis:6379
       # Multi-Database Configuration for Dashboard & Identity Service
       Database__Provider: ${DB_PROVIDER:-postgres}
-      Database__ConnectionStrings__postgres: "Host=postgres-db;Port=5432;Database=keycloak;Username=keycloak;Password=${DB_PASSWORD:-keycloak-development-only}"
-      Database__ConnectionStrings__mssql: "Server=mssql-db,1433;Database=keycloak;User Id=sa;Password=${DB_PASSWORD:-SqlPassword123!Safe};TrustServerCertificate=True"
-      Database__ConnectionStrings__oracle: "User Id=keycloak;Password=${DB_PASSWORD:-keycloak-development-only};Data Source=oracle-db:1521/XEPDB1"
+      Database__ConnectionStrings__postgres: "Host=postgres-db;Port=5432;Database=keycloak;Username=keycloak;Password=${DB_PASSWORD:-KeycloakDev#2026!}"
+      Database__ConnectionStrings__mssql: "Server=mssql-db,1433;Database=keycloak;User Id=sa;Password=${MSSQL_SA_PASSWORD:-${DB_PASSWORD:-KeycloakDev#2026!}};TrustServerCertificate=True"
+      Database__ConnectionStrings__oracle: "User Id=keycloak;Password=${DB_PASSWORD:-KeycloakDev#2026!};Data Source=oracle-db:1521/XEPDB1"
     ports: [ "${FACADE_HTTP_PORT:-5080}:5080" ]
     healthcheck:
       # aspnet image ships no curl — probe over /dev/tcp.
@@ -45,6 +46,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Keycloak.Dockerfile
+      args:
+        DB_VENDOR: ${DB_PROVIDER:-postgres}
     command: start-dev --http-port=8080 --import-realm
     environment:
       # Database Provider: postgres | mssql | oracle
@@ -127,17 +130,17 @@ services:
     profiles: [ "mssql" ]
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${DB_PASSWORD:-SqlPassword123!Safe}
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-${DB_PASSWORD:-KeycloakDev#2026!}}
       MSSQL_PID: Developer
     ports: [ "${MSSQL_PORT:-1434}:1433" ]
     volumes: [ keycloak-mssql-data:/var/opt/mssql ]
     healthcheck:
       # Probes SQL server and ensures 'keycloak' database exists
       test: [ "CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"IF DB_ID('keycloak') IS NULL CREATE DATABASE [keycloak]; SELECT 1;\"" ]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 25
-      start_period: 20s
+      start_period: 10s
 
   # --- Database Option 3: Oracle Database ---
   oracle-db:
