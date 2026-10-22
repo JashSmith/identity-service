@@ -81,7 +81,9 @@
     revokeTargetId: document.getElementById('revoke-target-id'),
     revokeTargetUsername: document.getElementById('revoke-target-username'),
     btnExecuteRevoke: document.getElementById('btn-execute-revoke'),
-    toastContainer: document.getElementById('toast-container')
+    toastContainer: document.getElementById('toast-container'),
+    loginAlert: document.getElementById('login-alert'),
+    loginAlertMsg: document.getElementById('login-alert-msg')
   };
 
   // ==========================================
@@ -116,6 +118,17 @@
   // Toast Notifications
   // ==========================================
   function showToast(message, type = 'info') {
+    // Top-layer handling: if a modal dialog is open via showModal(),
+    // elements in <body> are placed beneath ::backdrop and blurred.
+    // Ensure the toast container is mounted inside the active dialog
+    // so toasts always render in the Top Layer above everything.
+    const activeDialog = document.querySelector('dialog[open]');
+    if (activeDialog && elements.toastContainer.parentElement !== activeDialog) {
+      activeDialog.appendChild(elements.toastContainer);
+    } else if (!activeDialog && elements.toastContainer.parentElement !== document.body) {
+      document.body.appendChild(elements.toastContainer);
+    }
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
@@ -124,6 +137,8 @@
       iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
     } else if (type === 'error') {
       iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+    } else if (type === 'warning') {
+      iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
     } else {
       iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
     }
@@ -152,17 +167,37 @@
   function openModal(modal) {
     if (modal && typeof modal.showModal === 'function') {
       modal.showModal();
+      if (elements.toastContainer && elements.toastContainer.parentElement !== modal) {
+        modal.appendChild(elements.toastContainer);
+      }
     }
   }
 
   function closeModal(modal) {
     if (modal && typeof modal.close === 'function') {
       modal.close();
+      syncToastContainerParent();
+    }
+  }
+
+  function syncToastContainerParent() {
+    const remainingDialog = document.querySelector('dialog[open]');
+    if (remainingDialog) {
+      if (elements.toastContainer.parentElement !== remainingDialog) {
+        remainingDialog.appendChild(elements.toastContainer);
+      }
+    } else if (elements.toastContainer && elements.toastContainer.parentElement !== document.body) {
+      document.body.appendChild(elements.toastContainer);
     }
   }
 
   // Setup Light-Dismiss Fallback for modern dialogs
   document.querySelectorAll('dialog').forEach(dialog => {
+    // Sync toast container whenever a dialog closes
+    dialog.addEventListener('close', () => {
+      syncToastContainerParent();
+    });
+
     // Light-dismiss click outside fallback
     dialog.addEventListener('click', (event) => {
       if (dialog.getAttribute('closedby') === 'none') return;
@@ -177,26 +212,45 @@
       );
 
       if (!isContent) {
-        dialog.close();
+        closeModal(dialog);
       }
     });
 
     // Close buttons inside dialog
     dialog.querySelectorAll('[data-close-modal]').forEach(btn => {
-      btn.addEventListener('click', () => dialog.close());
+      btn.addEventListener('click', () => closeModal(dialog));
     });
   });
 
   // ==========================================
   // Authentication & Session
   // ==========================================
+  function showLoginAlert(message, type = 'error') {
+    if (elements.loginAlert && elements.loginAlertMsg) {
+      elements.loginAlert.className = `dialog-alert dialog-alert-${type}`;
+      elements.loginAlertMsg.textContent = message;
+      elements.loginAlert.style.display = 'flex';
+    }
+  }
+
+  function hideLoginAlert() {
+    if (elements.loginAlert) {
+      elements.loginAlert.style.display = 'none';
+    }
+  }
+
   function promptLogin() {
     state.token = '';
     sessionStorage.removeItem('identity_admin_token');
+    hideLoginAlert();
     openModal(elements.modalLogin);
   }
 
   async function handleLogin(username, password) {
+    hideLoginAlert();
+    const btnSubmit = document.getElementById('btn-login-submit') || elements.formLogin.querySelector('button[type="submit"]');
+    if (btnSubmit) btnSubmit.disabled = true;
+
     try {
       const form = new URLSearchParams();
       form.append('grant_type', 'password');
@@ -212,8 +266,13 @@
       });
 
       if (!res.ok) {
-        const errText = await res.text();
-        showToast(`Login failed: Invalid credentials or rejected by Keycloak`, 'error');
+        let errDesc = 'Invalid credentials or rejected by Keycloak';
+        try {
+          const errJson = await res.json();
+          errDesc = errJson.error_description || errJson.message || errDesc;
+        } catch { }
+        showLoginAlert(errDesc, 'error');
+        showToast(`Login failed: ${errDesc}`, 'error');
         return false;
       }
 
@@ -221,6 +280,7 @@
       state.token = data.access_token || data.accessToken;
       sessionStorage.setItem('identity_admin_token', state.token);
 
+      hideLoginAlert();
       closeModal(elements.modalLogin);
       showToast(`Welcome back, ${username}! Authenticated successfully.`, 'success');
       
@@ -228,8 +288,11 @@
       await refreshAllData();
       return true;
     } catch (err) {
+      showLoginAlert('Network error contacting Identity Service', 'error');
       showToast('Network error contacting Identity Service', 'error');
       return false;
+    } finally {
+      if (btnSubmit) btnSubmit.disabled = false;
     }
   }
 
@@ -821,6 +884,9 @@
     const p = document.getElementById('login-password').value;
     await handleLogin(u, p);
   });
+
+  document.getElementById('login-username')?.addEventListener('input', hideLoginAlert);
+  document.getElementById('login-password')?.addEventListener('input', hideLoginAlert);
 
   // ==========================================
   // Global Event Listeners & Initialization
