@@ -12,6 +12,8 @@
     currentUser: null,
     users: [],
     roles: [],
+    scopes: [],
+    resources: [],
     permissions: [],
     currentView: 'view-overview',
     refreshInterval: null
@@ -31,6 +33,8 @@
     statTotalUsers: document.getElementById('stat-total-users'),
     statOnlineUsers: document.getElementById('stat-online-users'),
     statBusinessRoles: document.getElementById('stat-business-roles'),
+    statScopes: document.getElementById('stat-scopes'),
+    scopesCountBadge: document.getElementById('scopes-count-badge'),
     statPermissions: document.getElementById('stat-permissions'),
     statDbProvider: document.getElementById('stat-db-provider'),
     statDbSub: document.getElementById('stat-db-sub'),
@@ -56,6 +60,11 @@
     // Roles View
     businessRolesGrid: document.getElementById('business-roles-grid'),
 
+    // Scopes View
+    scopesTableBody: document.getElementById('scopes-table-body'),
+    inlineFormCreateScope: document.getElementById('inline-form-create-scope'),
+    btnRefreshScopes: document.getElementById('btn-refresh-scopes'),
+
     // Permissions View
     permissionsTableBody: document.getElementById('permissions-table-body'),
     permSearchInput: document.getElementById('perm-search-input'),
@@ -73,10 +82,23 @@
     formLogin: document.getElementById('form-login'),
     modalCreateUser: document.getElementById('modal-create-user'),
     formCreateUser: document.getElementById('form-create-user'),
+    cuRoleSelect: document.getElementById('cu-role-select'),
+    cuScopesContainer: document.getElementById('cu-scopes-container'),
+    btnModalAddScope: document.getElementById('btn-modal-add-scope'),
+    modalUserScopes: document.getElementById('modal-user-scopes'),
+    formUserScopes: document.getElementById('form-user-scopes'),
+    usUserId: document.getElementById('us-user-id'),
+    usUsernameDisplay: document.getElementById('us-username-display'),
+    usRoleSelect: document.getElementById('us-role-select'),
+    usScopesContainer: document.getElementById('us-scopes-container'),
     modalEditUser: document.getElementById('modal-edit-user'),
     formEditUser: document.getElementById('form-edit-user'),
     modalCreateRole: document.getElementById('modal-create-role'),
     formCreateRole: document.getElementById('form-create-role'),
+    modalCreateScope: document.getElementById('modal-create-scope'),
+    formCreateScope: document.getElementById('form-create-scope'),
+    modalEditScope: document.getElementById('modal-edit-scope'),
+    formEditScope: document.getElementById('form-edit-scope'),
     modalConfirmRevoke: document.getElementById('modal-confirm-revoke'),
     revokeTargetId: document.getElementById('revoke-target-id'),
     revokeTargetUsername: document.getElementById('revoke-target-username'),
@@ -98,136 +120,86 @@
       headers['Content-Type'] = 'application/json';
     }
 
-    try {
-      const response = await fetch(url, { ...options, headers });
-      if (response.status === 401) {
-        showToast('Authentication required or session expired. Please sign in.', 'error');
-        promptLogin();
-        throw new Error('Unauthorized');
-      }
-      return response;
-    } catch (err) {
-      if (err.message !== 'Unauthorized') {
-        console.error('API Fetch Error:', err);
-      }
-      throw err;
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 401) {
+      promptLogin();
+      throw new Error('Unauthorized');
     }
+    return response;
   }
 
   // ==========================================
-  // Toast Notifications
+  // Helper: UI Toast Notifications
   // ==========================================
   function showToast(message, type = 'info') {
-    // Top-layer handling: if a modal dialog is open via showModal(),
-    // elements in <body> are placed beneath ::backdrop and blurred.
-    // Ensure the toast container is mounted inside the active dialog
-    // so toasts always render in the Top Layer above everything.
-    const activeDialog = document.querySelector('dialog[open]');
-    if (activeDialog && elements.toastContainer.parentElement !== activeDialog) {
-      activeDialog.appendChild(elements.toastContainer);
-    } else if (!activeDialog && elements.toastContainer.parentElement !== document.body) {
-      document.body.appendChild(elements.toastContainer);
-    }
-
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
-    let iconSvg = '';
-    if (type === 'success') {
-      iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
-    } else if (type === 'error') {
-      iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
-    } else if (type === 'warning') {
-      iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
-    } else {
-      iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
-    }
-
-    toast.innerHTML = `${iconSvg} <span>${escapeHtml(message)}</span>`;
+    const icon = type === 'success' ? '✓' : (type === 'error' ? '✕' : (type === 'warning' ? '⚠' : 'ℹ'));
+    toast.innerHTML = `<span style="font-weight:700;">${icon}</span><span>${escapeHtml(message)}</span>`;
+    
     elements.toastContainer.appendChild(toast);
-
     setTimeout(() => {
       toast.style.opacity = '0';
       toast.style.transform = 'translateY(10px)';
       toast.style.transition = 'all 0.3s ease';
       setTimeout(() => toast.remove(), 300);
-    }, 4500);
+    }, 4000);
   }
 
   function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.innerText = str;
-    return div.innerHTML;
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   // ==========================================
-  // Modal Utilities (Native Dialog + Light-Dismiss Fallback)
+  // Modal Helpers (<dialog> API)
   // ==========================================
-  function openModal(modal) {
-    if (modal && typeof modal.showModal === 'function') {
-      modal.showModal();
-      if (elements.toastContainer && elements.toastContainer.parentElement !== modal) {
-        modal.appendChild(elements.toastContainer);
-      }
+  function openModal(dialogElement) {
+    if (!dialogElement) return;
+    if (typeof dialogElement.showModal === 'function') {
+      dialogElement.showModal();
+    } else {
+      dialogElement.setAttribute('open', '');
     }
   }
 
-  function closeModal(modal) {
-    if (modal && typeof modal.close === 'function') {
-      modal.close();
-      syncToastContainerParent();
+  function closeModal(dialogElement) {
+    if (!dialogElement) return;
+    if (typeof dialogElement.close === 'function') {
+      dialogElement.close();
+    } else {
+      dialogElement.removeAttribute('open');
     }
   }
 
-  function syncToastContainerParent() {
-    const remainingDialog = document.querySelector('dialog[open]');
-    if (remainingDialog) {
-      if (elements.toastContainer.parentElement !== remainingDialog) {
-        remainingDialog.appendChild(elements.toastContainer);
-      }
-    } else if (elements.toastContainer && elements.toastContainer.parentElement !== document.body) {
-      document.body.appendChild(elements.toastContainer);
-    }
-  }
-
-  // Setup Light-Dismiss Fallback for modern dialogs
-  document.querySelectorAll('dialog').forEach(dialog => {
-    // Sync toast container whenever a dialog closes
-    dialog.addEventListener('close', () => {
-      syncToastContainerParent();
-    });
-
-    // Light-dismiss click outside fallback
-    dialog.addEventListener('click', (event) => {
-      if (dialog.getAttribute('closedby') === 'none') return;
-      if (event.target !== dialog) return;
-
-      const rect = dialog.getBoundingClientRect();
-      const isContent = (
-        rect.top <= event.clientY &&
-        event.clientY <= rect.top + rect.height &&
-        rect.left <= event.clientX &&
-        event.clientX <= rect.left + rect.width
-      );
-
-      if (!isContent) {
-        closeModal(dialog);
-      }
-    });
-
-    // Close buttons inside dialog
-    dialog.querySelectorAll('[data-close-modal]').forEach(btn => {
-      btn.addEventListener('click', () => closeModal(dialog));
+  // Bind close buttons with [data-close-modal]
+  document.querySelectorAll('[data-close-modal]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const modalId = btn.getAttribute('data-close-modal');
+      const targetModal = document.getElementById(modalId);
+      if (targetModal) closeModal(targetModal);
     });
   });
 
   // ==========================================
   // Authentication & Session
   // ==========================================
-  function showLoginAlert(message, type = 'error') {
+  function promptLogin() {
+    state.token = '';
+    state.currentUser = null;
+    sessionStorage.removeItem('identity_admin_token');
+    hideLoginAlert();
+    openModal(elements.modalLogin);
+  }
+
+  function showLoginAlert(message) {
     if (elements.loginAlert && elements.loginAlertMsg) {
-      elements.loginAlert.className = `dialog-alert dialog-alert-${type}`;
       elements.loginAlertMsg.textContent = message;
       elements.loginAlert.style.display = 'flex';
     }
@@ -239,18 +211,8 @@
     }
   }
 
-  function promptLogin() {
-    state.token = '';
-    sessionStorage.removeItem('identity_admin_token');
-    hideLoginAlert();
-    openModal(elements.modalLogin);
-  }
-
   async function handleLogin(username, password) {
     hideLoginAlert();
-    const btnSubmit = document.getElementById('btn-login-submit') || elements.formLogin.querySelector('button[type="submit"]');
-    if (btnSubmit) btnSubmit.disabled = true;
-
     try {
       const form = new URLSearchParams();
       form.append('grant_type', 'password');
@@ -265,38 +227,26 @@
         body: form
       });
 
+      const body = await res.json();
       if (!res.ok) {
-        let errDesc = 'Invalid credentials or rejected by Keycloak';
-        try {
-          const errJson = await res.json();
-          errDesc = errJson.error_description || errJson.message || errDesc;
-        } catch { }
-        showLoginAlert(errDesc, 'error');
-        showToast(`Login failed: ${errDesc}`, 'error');
-        return false;
+        showLoginAlert(body.message || body.error_description || 'Sign in failed: invalid credentials');
+        return;
       }
 
-      const data = await res.json();
-      state.token = data.access_token || data.accessToken;
+      state.token = body.access_token || body.accessToken;
       sessionStorage.setItem('identity_admin_token', state.token);
-
-      hideLoginAlert();
       closeModal(elements.modalLogin);
-      showToast(`Welcome back, ${username}! Authenticated successfully.`, 'success');
-      
+      showToast('Signed in successfully!', 'success');
+
       await loadCurrentUserProfile();
       await refreshAllData();
-      return true;
     } catch (err) {
-      showLoginAlert('Network error contacting Identity Service', 'error');
-      showToast('Network error contacting Identity Service', 'error');
-      return false;
-    } finally {
-      if (btnSubmit) btnSubmit.disabled = false;
+      showLoginAlert(`Connection error: ${err.message}`);
     }
   }
 
   async function loadCurrentUserProfile() {
+    if (!state.token) return;
     try {
       const res = await apiFetch('/api/identity/me');
       if (res.ok) {
@@ -326,13 +276,13 @@
     const activeNav = document.querySelector(`[data-view="${viewId}"]`);
     if (activeNav) activeNav.classList.add('active');
 
-    // Update Heading
     const titles = {
-      'view-overview': 'Dashboard Overview',
-      'view-users': 'Users & Session Management',
+      'view-overview': 'Overview (داشبورد مدیریت)',
+      'view-users': 'Users & Scoped Access (مدیریت کاربران و اسکوپ‌ها)',
       'view-roles': 'Business Roles (نقش‌های کسب‌وکاری)',
-      'view-permissions': 'Platform Permissions Catalog',
-      'view-token-test': 'Token Minting & Service Verification'
+      'view-scopes': 'Attribute Scope Registry (ساخت و مدیریت Scopeها)',
+      'view-permissions': 'Platform Permissions Catalog (دسترسی‌ها)',
+      'view-token-test': 'Token Playground & Access Verification'
     };
     elements.pageHeading.textContent = titles[viewId] || 'Identity Management';
   }
@@ -342,8 +292,9 @@
   // ==========================================
   async function refreshAllData() {
     await Promise.all([
-      loadUsers(),
+      loadScopes(),
       loadBusinessRoles(),
+      loadUsers(),
       loadPermissions(),
       loadDatabaseInfo()
     ]);
@@ -368,20 +319,14 @@
           elements.statDbSub.className = isHealthy ? 'metric-trend online' : 'metric-trend';
         }
 
-        if (elements.sidebarDbLabel) elements.sidebarDbLabel.textContent = `Database: ${providerName}`;
-        if (elements.sidebarDbSub) elements.sidebarDbSub.textContent = statusText;
+        if (elements.sidebarDbLabel) {
+          elements.sidebarDbLabel.textContent = `Keycloak & ${providerName}`;
+        }
+        if (elements.sidebarDbSub) {
+          elements.sidebarDbSub.textContent = isHealthy ? `Online (${latency})` : 'Unreachable';
+        }
         if (elements.sidebarDbDot) {
           elements.sidebarDbDot.style.background = isHealthy ? '#10b981' : '#f43f5e';
-        }
-
-        if (elements.headerDbTitle) elements.headerDbTitle.textContent = `DB: ${providerName}`;
-        if (elements.headerDbStatusBadge) {
-          elements.headerDbStatusBadge.textContent = isHealthy ? 'Online' : 'Offline';
-          elements.headerDbStatusBadge.className = isHealthy ? 'badge badge-online' : 'badge';
-          if (!isHealthy) {
-            elements.headerDbStatusBadge.style.background = 'rgba(244,63,94,0.15)';
-            elements.headerDbStatusBadge.style.color = 'var(--danger)';
-          }
         }
 
         if (elements.modalDbProvider) elements.modalDbProvider.textContent = providerName;
@@ -419,7 +364,7 @@
       const matchSearch = !search ||
         (u.username && u.username.toLowerCase().includes(search)) ||
         (u.displayName && u.displayName.toLowerCase().includes(search)) ||
-        (u.attributes && Object.values(u.attributes).flat().some(v => v.toLowerCase().includes(search)));
+        (u.attributes && Object.values(u.attributes).flat().some(v => String(v).toLowerCase().includes(search)));
 
       let matchFilter = true;
       if (filter === 'online') matchFilter = !!u.isOnline;
@@ -437,12 +382,55 @@
       const isOnline = !!u.isOnline;
       const sessionCount = u.activeSessionsCount || (isOnline ? 1 : 0);
       const statusBadge = isOnline
-        ? `<span class="badge badge-online"><span class="badge-dot"></span> Online (${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'})</span>`
+        ? `<span class="badge badge-online"><span class="badge-dot"></span> Online (${sessionCount})</span>`
         : `<span class="badge badge-offline"><span class="badge-dot"></span> Offline</span>`;
 
-      // Business role & scope badges
-      const roles = (u.attributes && u.attributes['iam.business_role']) || [];
-      const rolesHtml = roles.map(r => `<span class="badge badge-role">${escapeHtml(r)}</span>`).join(' ');
+      // 1. Business role (from iam.business_role OR iam.scoped_access)
+      let roleName = '';
+      if (u.attributes && u.attributes['iam.business_role'] && u.attributes['iam.business_role'].length > 0) {
+        roleName = u.attributes['iam.business_role'][0];
+      }
+
+      // 2. Extract scopes
+      let scopesDisplay = [];
+      if (u.attributes && u.attributes['iam.scoped_access']) {
+        try {
+          const doc = JSON.parse(u.attributes['iam.scoped_access'][0]);
+          if (Array.isArray(doc)) {
+            doc.forEach(a => {
+              if (a.role && !roleName) roleName = a.role;
+              if (a.scopes) {
+                Object.entries(a.scopes).forEach(([k, vals]) => {
+                  const valStr = Array.isArray(vals) ? vals.join(', ') : vals;
+                  scopesDisplay.push(`<span class="scope-chip" title="Scope: ${escapeHtml(k)}">${escapeHtml(k)}: ${escapeHtml(valStr)}</span>`);
+                });
+              }
+            });
+          }
+        } catch {}
+      }
+
+      // Also check authz.scope.* attributes
+      if (u.attributes) {
+        Object.entries(u.attributes).forEach(([k, v]) => {
+          if (k.startsWith('authz.scope.')) {
+            const scopeKey = k.substring('authz.scope.'.length);
+            const valStr = Array.isArray(v) ? v.join(', ') : v;
+            const chip = `<span class="scope-chip" title="Scope: ${escapeHtml(scopeKey)}">${escapeHtml(scopeKey)}: ${escapeHtml(valStr)}</span>`;
+            if (!scopesDisplay.some(s => s.includes(`${escapeHtml(scopeKey)}:`))) {
+              scopesDisplay.push(chip);
+            }
+          }
+        });
+      }
+
+      const roleBadge = roleName
+        ? `<span class="role-badge">🛡️ ${escapeHtml(roleName)}</span>`
+        : `<span style="color: var(--text-faint); font-size: 0.78rem;">(بدون نقش)</span>`;
+
+      const scopesHtml = scopesDisplay.length > 0
+        ? `<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px;">${scopesDisplay.join('')}</div>`
+        : `<div style="color: var(--text-faint); font-size: 0.75rem; margin-top: 3px;">بدون محدودیت Scope</div>`;
 
       return `
         <tr data-user-id="${escapeHtml(u.id)}">
@@ -455,16 +443,25 @@
               </div>
             </div>
           </td>
-          <td>${escapeHtml(u.displayName || '-')}</td>
+          <td>
+            <div style="font-weight: 500;">${escapeHtml(u.displayName || '-')}</div>
+            ${u.attributes && u.attributes.email ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(u.attributes.email[0])}</div>` : ''}
+          </td>
           <td>${statusBadge}</td>
-          <td>${rolesHtml || '<span style="color: var(--text-faint); font-size: 0.8rem;">(No Role Assigned)</span>'}</td>
+          <td>
+            <div>${roleBadge}</div>
+            ${scopesHtml}
+          </td>
           <td style="text-align: right;">
-            <div style="display: flex; gap: 8px; justify-content: flex-end;">
-              <button class="btn btn-sm btn-secondary btn-edit-user" data-user='${JSON.stringify(u)}' title="Edit user profile">
-                Edit
+            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+              <button class="btn btn-sm btn-primary btn-manage-scopes" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="مدیریت نقش و محدودیت‌های Scope">
+                نقش و Scopeها
               </button>
-              <button class="btn btn-sm btn-outline-danger btn-revoke-tokens" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="Revoke all active tokens & sessions in Keycloak">
-                Revoke Tokens
+              <button class="btn btn-sm btn-secondary btn-edit-user" data-user='${JSON.stringify(u)}' title="ویرایش پروفایل">
+                ویرایش
+              </button>
+              <button class="btn btn-sm btn-ghost btn-revoke-tokens" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="ابطال نشست‌ها">
+                ابطال
               </button>
             </div>
           </td>
@@ -472,7 +469,15 @@
       `;
     }).join('');
 
-    // Attach Event Listeners to Action Buttons
+    // Attach Event Listeners
+    elements.usersTableBody.querySelectorAll('.btn-manage-scopes').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const username = btn.getAttribute('data-username');
+        openUserScopesModal(id, username);
+      });
+    });
+
     elements.usersTableBody.querySelectorAll('.btn-revoke-tokens').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
@@ -521,132 +526,338 @@
 
     elements.businessRolesGrid.innerHTML = state.roles.map(r => {
       const perms = r.permissions || [];
-      const permPills = perms.slice(0, 8).map(p => `<span class="perm-pill">${escapeHtml(p)}</span>`).join('');
-      const moreCount = perms.length > 8 ? `<span class="perm-pill">+${perms.length - 8} more</span>` : '';
+      const permsPreview = perms.slice(0, 4).map(p => `<span class="badge" style="background: rgba(148,163,184,0.1); color: var(--text-muted); font-size: 0.72rem;">${escapeHtml(p)}</span>`).join(' ');
+      const moreCount = perms.length > 4 ? `+${perms.length - 4} more` : '';
 
       return `
-        <div class="business-role-card">
+        <div class="role-card">
           <div class="role-card-header">
-            <div>
-              <div class="role-name">${escapeHtml(r.name)}</div>
-              <div class="role-desc">${escapeHtml(r.description || 'Custom composite business role')}</div>
-            </div>
+            <div class="role-card-title">${escapeHtml(r.name)}</div>
             <span class="badge badge-role">${perms.length} Permissions</span>
           </div>
-
-          <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-faint);">Effective Permissions:</div>
-          <div class="role-perms-list">
-            ${permPills || '<span style="color: var(--text-faint); font-size: 0.8rem;">(No permissions added yet)</span>'}
-            ${moreCount}
-          </div>
-
-          <div class="role-card-footer">
-            <button class="btn btn-sm btn-outline-danger btn-delete-role" data-role-name="${escapeHtml(r.name)}">
-              Delete
-            </button>
-            <span style="font-size: 0.75rem; color: var(--text-faint);">Keycloak Composite Group</span>
+          <p class="role-card-desc">${escapeHtml(r.description || 'No description provided')}</p>
+          <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+            ${permsPreview}
+            ${moreCount ? `<span style="font-size: 0.72rem; color: var(--text-faint);">${moreCount}</span>` : ''}
           </div>
         </div>
       `;
     }).join('');
+  }
 
-    elements.businessRolesGrid.querySelectorAll('.btn-delete-role').forEach(btn => {
+  function populateRoleSelectors() {
+    const options = [
+      '<option value="">(انتخاب نقش کاربری)</option>',
+      ...state.roles.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`)
+    ].join('');
+
+    if (elements.cuRoleSelect) elements.cuRoleSelect.innerHTML = options;
+    if (elements.usRoleSelect) elements.usRoleSelect.innerHTML = options;
+  }
+
+  // 3. Attribute Scopes Loader & Management
+  async function loadScopes() {
+    try {
+      const [resScopes, resResources] = await Promise.all([
+        apiFetch('/api/identity/scopes'),
+        apiFetch('/api/identity/scopes/resources/list')
+      ]);
+
+      if (resScopes.ok) {
+        state.scopes = await resScopes.json();
+      }
+      if (resResources.ok) {
+        state.resources = await resResources.json();
+      }
+
+      renderScopesTable();
+      renderScopeCheckboxes('cu-scopes-container', {});
+      updateMetrics();
+    } catch (err) {
+      if (elements.scopesTableBody) {
+        elements.scopesTableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--danger); padding: 24px;">Failed to load attribute scopes registry.</td></tr>`;
+      }
+    }
+  }
+
+  function renderScopesTable() {
+    if (!elements.scopesTableBody) return;
+    if (!state.scopes || state.scopes.length === 0) {
+      elements.scopesTableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-faint); padding: 32px;">هیچ اسکوپی در سیستم ثبت نشده است. از فرم بالا برای ساخت اسکوپ استفاده کنید.</td></tr>`;
+      return;
+    }
+
+    elements.scopesTableBody.innerHTML = state.scopes.map(s => {
+      const boundRes = (state.resources || [])
+        .filter(r => r.scopes && r.scopes.some(sc => sc.toLowerCase() === s.key.toLowerCase()))
+        .map(r => `<span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #a5b4fc; font-size: 0.72rem;">${escapeHtml(r.key)}</span>`)
+        .join(' ');
+
+      const statusBadge = s.isActive
+        ? `<span class="badge badge-online"><span class="badge-dot"></span> Active (فعال)</span>`
+        : `<span class="badge badge-offline"><span class="badge-dot"></span> Inactive (غیرفعال)</span>`;
+
+      return `
+        <tr>
+          <td><span class="scope-chip">${escapeHtml(s.key)}</span></td>
+          <td style="font-weight: 600; color: var(--text-main);">${escapeHtml(s.displayName || s.key)}</td>
+          <td style="color: var(--text-muted); font-size: 0.85rem;">${escapeHtml(s.description || '-')}</td>
+          <td>${boundRes || '<span style="color: var(--text-faint); font-size: 0.78rem;">(Unbound)</span>'}</td>
+          <td>${statusBadge}</td>
+          <td style="text-align: right;">
+            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+              <button class="btn btn-sm btn-secondary btn-edit-scope" data-scope='${JSON.stringify(s)}'>
+                ویرایش
+              </button>
+              <button class="btn btn-sm btn-ghost btn-toggle-scope" data-key="${escapeHtml(s.key)}" data-active="${!!s.isActive}">
+                ${s.isActive ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Attach listeners
+    elements.scopesTableBody.querySelectorAll('.btn-edit-scope').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const s = JSON.parse(btn.getAttribute('data-scope'));
+        document.getElementById('es-key').value = s.key;
+        document.getElementById('es-display').value = s.displayName || s.key;
+        document.getElementById('es-desc').value = s.description || '';
+        document.getElementById('es-active').checked = !!s.isActive;
+        openModal(elements.modalEditScope);
+      });
+    });
+
+    elements.scopesTableBody.querySelectorAll('.btn-toggle-scope').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const name = btn.getAttribute('data-role-name');
-        if (confirm(`Are you sure you want to delete business role '${name}'?`)) {
-          try {
-            const res = await apiFetch(`/api/identity/business-roles/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            if (res.ok) {
-              showToast(`Business role '${name}' deleted successfully.`, 'success');
-              await loadBusinessRoles();
-              updateMetrics();
-            } else {
-              showToast(`Failed to delete role '${name}'.`, 'error');
-            }
-          } catch {
-            showToast('Error deleting business role.', 'error');
+        const key = btn.getAttribute('data-key');
+        const currentActive = btn.getAttribute('data-active') === 'true';
+        const target = state.scopes.find(x => x.key === key);
+        if (!target) return;
+
+        try {
+          const res = await apiFetch(`/api/identity/scopes/${encodeURIComponent(key)}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              displayName: target.displayName,
+              description: target.description,
+              isActive: !currentActive
+            })
+          });
+          if (res.ok) {
+            showToast(`اسکوپ '${key}' ${!currentActive ? 'فعال' : 'غیرفعال'} شد.`, 'success');
+            await loadScopes();
+          } else {
+            showToast('خطا در تغییر وضعیت اسکوپ.', 'error');
           }
+        } catch {
+          showToast('خطای شبکه در تغییر وضعیت اسکوپ.', 'error');
         }
       });
     });
   }
 
-  function populateRoleSelectors() {
-    const cuRoleSelect = document.getElementById('cu-role-select');
-    if (!cuRoleSelect) return;
-    
-    let options = '<option value="">(None - Assign Later)</option>';
-    state.roles.forEach(r => {
-      options += `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`;
-    });
-    cuRoleSelect.innerHTML = options;
+  // Render Scope Checkboxes with Dynamic Value Inputs for Create/Edit User
+  function renderScopeCheckboxes(containerId, initialScopes = {}) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
 
-    // Populate permissions selector in create role modal
-    const permsSelector = document.getElementById('cr-perms-selector');
-    if (permsSelector && state.permissions.length > 0) {
-      permsSelector.innerHTML = state.permissions.map(p => `
-        <label class="checkbox-label" style="font-size: 0.82rem;">
-          <input type="checkbox" name="role_perms" value="${escapeHtml(p.name)}">
-          <span><strong>${escapeHtml(p.name)}</strong> - <small style="color: var(--text-faint);">${escapeHtml(p.description)}</small></span>
-        </label>
-      `).join('');
+    if (!state.scopes || state.scopes.length === 0) {
+      container.innerHTML = `
+        <div style="font-size: 0.85rem; color: var(--text-faint); padding: 12px; text-align: center;">
+          هنوز هیچ اسکوپی در سیستم تعریف نشده است. از بخش "ساخت Scope جدید" اسکوپ بسازید.
+        </div>`;
+      return;
     }
+
+    container.innerHTML = state.scopes.map(s => {
+      const isSelected = initialScopes && initialScopes[s.key] != null;
+      let initialValues = '';
+      if (isSelected) {
+        const raw = initialScopes[s.key];
+        initialValues = Array.isArray(raw) ? raw.join(', ') : String(raw);
+      }
+
+      return `
+        <div class="scope-select-card ${isSelected ? 'selected' : ''}" data-scope-key="${escapeHtml(s.key)}">
+          <div class="scope-header-row">
+            <label class="checkbox-label" style="margin: 0; cursor: pointer; display: flex; align-items: flex-start; gap: 8px;">
+              <input type="checkbox" class="scope-toggle-cb" data-target-key="${escapeHtml(s.key)}" ${isSelected ? 'checked' : ''} style="margin-top: 3px;">
+              <div>
+                <div class="scope-name-title">
+                  ${escapeHtml(s.displayName || s.key)}
+                  <span style="font-size: 0.75rem; color: var(--secondary); font-family: monospace;">(${escapeHtml(s.key)})</span>
+                </div>
+                ${s.description ? `<div class="scope-desc-text">${escapeHtml(s.description)}</div>` : ''}
+              </div>
+            </label>
+          </div>
+          <div class="scope-values-input-box" style="display: ${isSelected ? 'flex' : 'none'}; margin-top: 10px;">
+            <label style="font-size: 0.74rem; color: var(--secondary); font-weight: 600;">
+              مقدار / Value مجاز برای این کاربر:
+            </label>
+            <input type="text" class="form-control scope-values-input"
+              data-scope-input="${escapeHtml(s.key)}"
+              value="${escapeHtml(initialValues)}"
+              placeholder="مثال: tehran-1 یا مقادیر با کاما: tehran-1, tehran-2"
+              style="padding: 7px 12px; font-size: 0.85rem;">
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach checkbox toggle handlers
+    container.querySelectorAll('.scope-toggle-cb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const card = cb.closest('.scope-select-card');
+        const inputContainer = card.querySelector('.scope-values-input-box');
+        const input = card.querySelector('.scope-values-input');
+        if (cb.checked) {
+          card.classList.add('selected');
+          inputContainer.style.display = 'flex';
+          input.focus();
+        } else {
+          card.classList.remove('selected');
+          inputContainer.style.display = 'none';
+        }
+      });
+    });
   }
 
-  // 3. Permissions Loader
+  function getScopesFromContainer(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return { scopes: {}, missingValueKey: null };
+    const scopes = {};
+    let missingValueKey = null;
+
+    container.querySelectorAll('.scope-select-card').forEach(card => {
+      const cb = card.querySelector('.scope-toggle-cb');
+      if (cb && cb.checked) {
+        const key = card.getAttribute('data-scope-key');
+        const input = card.querySelector('.scope-values-input');
+        const rawVal = input ? input.value : '';
+        const values = rawVal.split(',').map(v => v.trim()).filter(Boolean);
+        if (values.length > 0) {
+          scopes[key] = values;
+        } else {
+          missingValueKey = key;
+        }
+      }
+    });
+
+    return { scopes, missingValueKey };
+  }
+
+  // Manage Role & Scopes Modal for Existing User
+  async function openUserScopesModal(userId, username) {
+    elements.usUserId.value = userId;
+    elements.usUsernameDisplay.textContent = username;
+    populateRoleSelectors();
+
+    let initialRole = '';
+    let initialScopes = {};
+
+    try {
+      const res = await apiFetch(`/api/identity/users/${encodeURIComponent(userId)}/scoped-access`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.assignments && data.assignments.length > 0) {
+          initialRole = data.assignments[0].role || '';
+          initialScopes = data.assignments[0].scopes || {};
+        }
+      }
+    } catch (err) {
+      console.warn('Could not load user scoped access:', err);
+    }
+
+    // Fallback: If user had no scoped-access entry but had a business_role attribute
+    if (!initialRole) {
+      const userObj = state.users.find(u => u.id === userId);
+      if (userObj && userObj.attributes && userObj.attributes['iam.business_role']) {
+        initialRole = userObj.attributes['iam.business_role'][0];
+      }
+    }
+
+    elements.usRoleSelect.value = initialRole;
+    renderScopeCheckboxes('us-scopes-container', initialScopes);
+    openModal(elements.modalUserScopes);
+  }
+
+  // 4. Permissions Loader
   async function loadPermissions() {
     try {
       const res = await apiFetch('/api/identity/permissions');
       if (res.ok) {
         state.permissions = await res.json();
         renderPermissionsTable();
-        populateRoleSelectors();
+        renderPermissionsSelector();
       }
-    } catch {
+    } catch (err) {
       elements.permissionsTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger); padding: 24px;">Failed to load permissions catalog.</td></tr>`;
     }
   }
 
   function renderPermissionsTable() {
     const search = (elements.permSearchInput.value || '').toLowerCase().trim();
-    let filtered = state.permissions.filter(p => !search || p.name.toLowerCase().includes(search) || p.description.toLowerCase().includes(search));
+    let filtered = state.permissions.filter(p => {
+      return !search ||
+        (p.name && p.name.toLowerCase().includes(search)) ||
+        (p.description && p.description.toLowerCase().includes(search)) ||
+        (p.declaringService && p.declaringService.toLowerCase().includes(search));
+    });
 
     if (filtered.length === 0) {
-      elements.permissionsTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-faint); padding: 32px;">No permissions found matching search.</td></tr>`;
+      elements.permissionsTableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-faint); padding: 32px;">No matching permissions found.</td></tr>`;
       return;
     }
 
     elements.permissionsTableBody.innerHTML = filtered.map(p => `
       <tr>
-        <td style="font-weight: 600; color: #a5b4fc;">${escapeHtml(p.name)}</td>
+        <td style="font-family: monospace; font-weight: 600; color: #38bdf8;">${escapeHtml(p.name)}</td>
         <td>${escapeHtml(p.description || '-')}</td>
-        <td><span class="badge badge-scope">${escapeHtml(p.serviceId || 'system')}</span></td>
-        <td style="color: var(--text-faint); font-family: monospace;">${escapeHtml(p.serviceVersion || '1.0')}</td>
-        <td>
-          ${p.deprecated 
-            ? '<span class="badge" style="background: rgba(244,63,94,0.12); color: var(--danger);">Deprecated</span>' 
-            : '<span class="badge badge-online"><span class="badge-dot"></span> Active</span>'}
-        </td>
+        <td><span class="badge" style="background: rgba(168,85,247,0.15); color: #c084fc;">${escapeHtml(p.declaringService)}</span></td>
+        <td>v${escapeHtml(p.version || '1')}</td>
+        <td><span class="badge badge-online"><span class="badge-dot"></span> Active</span></td>
       </tr>
     `).join('');
   }
 
-  // 4. Metrics Updater
+  function renderPermissionsSelector() {
+    const container = document.getElementById('cr-perms-selector');
+    if (!container) return;
+
+    if (state.permissions.length === 0) {
+      container.innerHTML = `<span style="font-size: 0.82rem; color: var(--text-faint);">No permissions available.</span>`;
+      return;
+    }
+
+    container.innerHTML = state.permissions.map(p => `
+      <label class="checkbox-label" style="font-size: 0.85rem;">
+        <input type="checkbox" name="role_perms" value="${escapeHtml(p.name)}">
+        <span style="font-family: monospace; color: #e2e8f0;">${escapeHtml(p.name)}</span>
+        <span style="color: var(--text-faint); font-size: 0.75rem;">(${escapeHtml(p.declaringService)})</span>
+      </label>
+    `).join('');
+  }
+
   function updateMetrics() {
-    const total = state.users.length;
-    const online = state.users.filter(u => !!u.isOnline).length;
-    elements.statTotalUsers.textContent = total;
-    elements.statOnlineUsers.textContent = online;
-    elements.statBusinessRoles.textContent = state.roles.length;
-    elements.statPermissions.textContent = state.permissions.length;
-    elements.onlineUsersBadge.textContent = `${online} Online`;
+    if (elements.statTotalUsers) elements.statTotalUsers.textContent = state.users.length;
+    const online = state.users.filter(u => u.isOnline).length;
+    if (elements.statOnlineUsers) elements.statOnlineUsers.textContent = online;
+    if (elements.onlineUsersBadge) elements.onlineUsersBadge.textContent = `${online} Online`;
+    if (elements.statBusinessRoles) elements.statBusinessRoles.textContent = state.roles.length;
+    if (elements.statScopes) elements.statScopes.textContent = state.scopes.length;
+    if (elements.scopesCountBadge) elements.scopesCountBadge.textContent = `${state.scopes.length} Scopes`;
+    if (elements.statPermissions) elements.statPermissions.textContent = state.permissions.length;
   }
 
   // ==========================================
-  // Form Submission Handlers
+  // Form Actions & Handlers
   // ==========================================
 
-  // 1. Create User
+  // 1. Create User with Business Role & Dynamic Scopes
   elements.formCreateUser.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('cu-username').value.trim();
@@ -655,15 +866,24 @@
     const lastName = document.getElementById('cu-lastname').value.trim() || null;
     const password = document.getElementById('cu-password').value;
     const temporary = document.getElementById('cu-temporary').checked;
-    const role = document.getElementById('cu-role-select').value;
-    const scopeCity = document.getElementById('cu-scope-city').value.trim();
+    const enabled = document.getElementById('cu-enabled').checked;
+    const role = elements.cuRoleSelect.value;
+
+    const { scopes, missingValueKey } = getScopesFromContainer('cu-scopes-container');
+    if (missingValueKey) {
+      showToast(`لطفاً برای اسکوپ تیک‌خورده '${missingValueKey}' مقدار (Value) وارد کنید.`, 'warning');
+      return;
+    }
+
+    const hasScopes = Object.keys(scopes).length > 0;
+    if (hasScopes && !role) {
+      showToast('برای تخصیص اسکوپ به کاربر، انتخاب "نقش سازمانی" الزامی است.', 'warning');
+      elements.cuRoleSelect.focus();
+      return;
+    }
 
     const assignments = [];
     if (role) {
-      const scopes = {};
-      if (scopeCity) {
-        scopes['city'] = [scopeCity];
-      }
       assignments.push({ role, scopes });
     }
 
@@ -672,7 +892,7 @@
       email,
       firstName,
       lastName,
-      enabled: true,
+      enabled,
       credentials: { password, temporary },
       assignments: assignments.length > 0 ? assignments : null
     };
@@ -684,21 +904,60 @@
       });
 
       if (res.ok) {
-        showToast(`User '${username}' created in Keycloak successfully!`, 'success');
+        showToast(`کاربر '${username}' با موفقیت در Keycloak ایجاد و اسکوپ‌ها ثبت شد!`, 'success');
         closeModal(elements.modalCreateUser);
         elements.formCreateUser.reset();
         await loadUsers();
         updateMetrics();
       } else {
         const err = await res.json();
-        showToast(`Creation failed: ${err.message || 'Validation error'}`, 'error');
+        showToast(`خطا در ایجاد کاربر: ${err.message || 'Validation error'}`, 'error');
       }
     } catch {
-      showToast('Error sending user creation request', 'error');
+      showToast('خطا در ارسال درخواست ایجاد کاربر.', 'error');
     }
   });
 
-  // 2. Edit User
+  // 2. Manage Existing User Role & Scopes
+  elements.formUserScopes.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = elements.usUserId.value;
+    const role = elements.usRoleSelect.value;
+    if (!role) {
+      showToast('لطفاً نقش سازمانی کاربر را انتخاب کنید.', 'warning');
+      return;
+    }
+
+    const { scopes, missingValueKey } = getScopesFromContainer('us-scopes-container');
+    if (missingValueKey) {
+      showToast(`لطفاً برای اسکوپ تیک‌خورده '${missingValueKey}' مقدار وارد کنید.`, 'warning');
+      return;
+    }
+
+    const payload = {
+      assignments: [{ role, scopes }]
+    };
+
+    try {
+      const res = await apiFetch(`/api/identity/users/${encodeURIComponent(userId)}/scoped-access`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        showToast('نقش و اسکوپ‌های کاربر با موفقیت در Keycloak ذخیره شد!', 'success');
+        closeModal(elements.modalUserScopes);
+        await loadUsers();
+      } else {
+        const err = await res.json();
+        showToast(`خطا در بروزرسانی اسکوپ‌ها: ${err.message || 'Validation error'}`, 'error');
+      }
+    } catch {
+      showToast('خطا در بروزرسانی اسکوپ‌های کاربر.', 'error');
+    }
+  });
+
+  // 3. Edit User Profile
   elements.formEditUser.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('eu-id').value;
@@ -716,43 +975,43 @@
       });
 
       if (res.ok) {
-        showToast('User profile updated successfully.', 'success');
+        showToast('مشخصات کاربر با موفقیت ذخیره شد!', 'success');
         closeModal(elements.modalEditUser);
         await loadUsers();
       } else {
-        showToast('Failed to update user profile.', 'error');
+        const err = await res.json();
+        showToast(`خطا: ${err.message || 'Update failed'}`, 'error');
       }
     } catch {
-      showToast('Error updating user', 'error');
+      showToast('خطا در ویرایش مشخصات کاربر.', 'error');
     }
   });
 
-  // 3. Revoke Tokens
+  // 4. Revoke User Tokens & Sessions
   elements.btnExecuteRevoke.addEventListener('click', async () => {
     const id = elements.revokeTargetId.value;
-    const username = elements.revokeTargetUsername.textContent;
+    if (!id) return;
 
     try {
       const res = await apiFetch(`/api/identity/users/${encodeURIComponent(id)}/revoke`, {
         method: 'POST',
-        body: JSON.stringify({ reason: 'Admin dashboard forced session logout & token revocation' })
+        body: JSON.stringify({ reason: 'Admin dashboard manual session revocation' })
       });
 
       if (res.ok) {
-        const result = await res.json();
-        showToast(`Tokens and sessions revoked for '${username}'. User must log in again.`, 'success');
+        showToast(`تمامی نشست‌ها و توکن‌های کاربر با موفقیت ابطال شد!`, 'success');
         closeModal(elements.modalConfirmRevoke);
         await loadUsers();
         updateMetrics();
       } else {
-        showToast('Failed to revoke user tokens.', 'error');
+        showToast('خطا در ابطال نشست‌های کاربر.', 'error');
       }
     } catch {
-      showToast('Error executing token revocation.', 'error');
+      showToast('خطا در ارسال درخواست ابطال.', 'error');
     }
   });
 
-  // 4. Create Business Role
+  // 5. Create Business Role
   elements.formCreateRole.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('cr-name').value.trim();
@@ -776,27 +1035,113 @@
       });
 
       if (res.ok) {
-        showToast(`Business role '${name}' created successfully!`, 'success');
+        showToast(`نقش '${name}' با موفقیت در Keycloak ایجاد شد!`, 'success');
         closeModal(elements.modalCreateRole);
         elements.formCreateRole.reset();
         await loadBusinessRoles();
         updateMetrics();
       } else {
         const err = await res.json();
-        showToast(`Role creation error: ${err.message || 'Already exists'}`, 'error');
+        showToast(`خطا در ایجاد نقش: ${err.message || 'Already exists'}`, 'error');
       }
     } catch {
-      showToast('Error creating business role.', 'error');
+      showToast('خطا در ارتباط با سرور.', 'error');
     }
   });
 
-  // 5. Token Playground
+  // 6. Create Attribute Scope (Inline Form directly on Scope page!)
+  if (elements.inlineFormCreateScope) {
+    elements.inlineFormCreateScope.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const key = document.getElementById('inline-cs-key').value.trim().toLowerCase();
+      const displayName = document.getElementById('inline-cs-display').value.trim();
+      const description = document.getElementById('inline-cs-desc').value.trim() || null;
+
+      try {
+        const res = await apiFetch('/api/identity/scopes', {
+          method: 'POST',
+          body: JSON.stringify({ key, displayName, description })
+        });
+
+        if (res.ok) {
+          showToast(`اسکوپ جدید '${displayName}' (${key}) با موفقیت ثبت شد!`, 'success');
+          elements.inlineFormCreateScope.reset();
+          await loadScopes();
+          updateMetrics();
+        } else {
+          const err = await res.json();
+          showToast(`خطا در ساخت اسکوپ: ${err.message || 'Already exists'}`, 'error');
+        }
+      } catch {
+        showToast('خطا در ثبت اسکوپ.', 'error');
+      }
+    });
+  }
+
+  // Fallback modal scope form
+  if (elements.formCreateScope) {
+    elements.formCreateScope.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const key = document.getElementById('cs-key').value.trim().toLowerCase();
+      const displayName = document.getElementById('cs-display').value.trim();
+      const description = document.getElementById('cs-desc').value.trim() || null;
+
+      try {
+        const res = await apiFetch('/api/identity/scopes', {
+          method: 'POST',
+          body: JSON.stringify({ key, displayName, description })
+        });
+
+        if (res.ok) {
+          showToast(`اسکوپ '${key}' با موفقیت ساخته شد!`, 'success');
+          closeModal(elements.modalCreateScope);
+          elements.formCreateScope.reset();
+          await loadScopes();
+          updateMetrics();
+        } else {
+          const err = await res.json();
+          showToast(`خطا: ${err.message || 'Already exists'}`, 'error');
+        }
+      } catch {
+        showToast('خطا در ایجاد اسکوپ.', 'error');
+      }
+    });
+  }
+
+  // 7. Edit Attribute Scope
+  elements.formEditScope.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const key = document.getElementById('es-key').value;
+    const displayName = document.getElementById('es-display').value.trim();
+    const description = document.getElementById('es-desc').value.trim() || null;
+    const isActive = document.getElementById('es-active').checked;
+
+    try {
+      const res = await apiFetch(`/api/identity/scopes/${encodeURIComponent(key)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ displayName, description, isActive })
+      });
+
+      if (res.ok) {
+        showToast(`اسکوپ '${key}' با موفقیت بروزرسانی شد!`, 'success');
+        closeModal(elements.modalEditScope);
+        await loadScopes();
+      } else {
+        const err = await res.json();
+        showToast(`خطا: ${err.message || 'Error'}`, 'error');
+      }
+    } catch {
+      showToast('خطا در بروزرسانی اسکوپ.', 'error');
+    }
+  });
+
+  // 8. Token Playground
   elements.tokenMintForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = elements.tokenTestUsername.value.trim();
     const password = elements.tokenTestPassword.value;
 
-    elements.tokenOutputConsole.textContent = 'Authenticating against Keycloak token proxy...';
+    elements.tokenOutputConsole.textContent = 'در حال ارسال درخواست به Keycloak...';
 
     try {
       const form = new URLSearchParams();
@@ -821,7 +1166,6 @@
       }
 
       const token = body.access_token || body.accessToken;
-      // Decode JWT payload
       let decodedPayload = {};
       try {
         const parts = token.split('.');
@@ -837,11 +1181,10 @@
         `// ================= Decoded JWT Claims & Scopes =================\n` +
         JSON.stringify(decodedPayload, null, 2);
 
-      // Store test token for live testing buttons
       window._lastMintedTestToken = token;
       elements.btnTestMe.disabled = false;
       elements.btnTestContext.disabled = false;
-      showToast(`Token generated for user '${username}'`, 'success');
+      showToast(`توکن برای کاربر '${username}' با موفقیت صادر شد.`, 'success');
     } catch (err) {
       elements.tokenOutputConsole.textContent = `// Network exception: ${err.message}`;
     }
@@ -889,7 +1232,7 @@
   document.getElementById('login-password')?.addEventListener('input', hideLoginAlert);
 
   // ==========================================
-  // Global Event Listeners & Initialization
+  // Global Event Listeners & Navigation
   // ==========================================
   document.querySelectorAll('.nav-item[data-view]').forEach(item => {
     item.addEventListener('click', () => {
@@ -900,8 +1243,15 @@
 
   document.getElementById('btn-global-refresh').addEventListener('click', async () => {
     await refreshAllData();
-    showToast('Data refreshed from Keycloak.', 'info');
+    showToast('اطلاعات با موفقیت از Keycloak بروزرسانی شد.', 'info');
   });
+
+  if (elements.btnRefreshScopes) {
+    elements.btnRefreshScopes.addEventListener('click', async () => {
+      await loadScopes();
+      showToast('لیست اسکوپ‌ها بروزرسانی شد.', 'info');
+    });
+  }
 
   document.getElementById('btn-logout').addEventListener('click', () => {
     promptLogin();
@@ -912,17 +1262,29 @@
   elements.permSearchInput.addEventListener('input', () => renderPermissionsTable());
 
   // Quick Action Buttons
-  document.getElementById('btn-quick-create-user').addEventListener('click', () => {
+  const openCreateUserHandler = () => {
+    populateRoleSelectors();
+    renderScopeCheckboxes('cu-scopes-container', {});
     openModal(elements.modalCreateUser);
-  });
-  document.getElementById('btn-open-create-user').addEventListener('click', () => {
-    openModal(elements.modalCreateUser);
-  });
+  };
+  document.getElementById('btn-quick-create-user').addEventListener('click', openCreateUserHandler);
+  document.getElementById('btn-open-create-user').addEventListener('click', openCreateUserHandler);
+
+  if (elements.btnModalAddScope) {
+    elements.btnModalAddScope.addEventListener('click', () => {
+      openModal(elements.modalCreateScope);
+    });
+  }
+
   document.getElementById('btn-quick-create-role').addEventListener('click', () => {
     openModal(elements.modalCreateRole);
   });
   document.getElementById('btn-open-create-role').addEventListener('click', () => {
     openModal(elements.modalCreateRole);
+  });
+  document.getElementById('btn-quick-create-scope')?.addEventListener('click', () => {
+    switchView('view-scopes');
+    document.getElementById('inline-cs-key')?.focus();
   });
   document.getElementById('btn-quick-test-token').addEventListener('click', () => {
     switchView('view-token-test');
@@ -939,13 +1301,13 @@
     elements.cardDbMetric.addEventListener('click', () => openModal(elements.modalDbInfo));
   }
 
-  // Auto-refresh online statuses every 15 seconds
+  // Auto-refresh online statuses every 20 seconds
   state.refreshInterval = setInterval(() => {
     if (state.token && state.currentView === 'view-users') {
       loadUsers();
       updateMetrics();
     }
-  }, 15000);
+  }, 20000);
 
   // App Startup
   window.addEventListener('DOMContentLoaded', async () => {

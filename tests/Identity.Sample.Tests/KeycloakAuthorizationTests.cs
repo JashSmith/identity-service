@@ -372,4 +372,32 @@ public sealed class KeycloakAuthorizationTests
         Assert.True(result.Success);
         Assert.Equal("u-1", result.UserId);
     }
+
+    [Fact]
+    public async Task EnsureRegistryAsync_WhenRegistryLacksScopes_SeedsDefaultScope()
+    {
+        var putCalled = false;
+        var handler = new StubHandler(req =>
+        {
+            if (req.RequestUri!.ToString().Contains("/protocol/openid-connect/token"))
+                return TokenOk();
+            if (req.Method == HttpMethod.Get && req.RequestUri.ToString().Contains("/groups?search=iam-scope-registry"))
+                return Json(new[] { new { id = "g-reg", name = "iam-scope-registry" } });
+            if (req.Method == HttpMethod.Get && req.RequestUri.ToString().Contains("/groups/g-reg"))
+                return Json(new { id = "g-reg", name = "iam-scope-registry", attributes = new Dictionary<string, string[]>() });
+            if (req.Method == HttpMethod.Put && req.RequestUri.ToString().Contains("/groups/g-reg"))
+            {
+                putCalled = true;
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            return Json(new object());
+        });
+
+        var tokenProv = new KeycloakAdminTokenProvider(Client(handler), Options.Create(KcOpts()));
+        var store = new KeycloakScopeRegistryStore(Client(handler), Options.Create(KcOpts()), tokenProv, new MemoryCache(new MemoryCacheOptions()), NullLogger<KeycloakScopeRegistryStore>.Instance);
+
+        await store.EnsureRegistryAsync(CancellationToken.None);
+
+        Assert.True(putCalled);
+    }
 }

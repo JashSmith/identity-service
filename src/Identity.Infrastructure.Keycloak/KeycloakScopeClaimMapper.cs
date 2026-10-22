@@ -140,7 +140,7 @@ public sealed class KeycloakScopeClaimMapper(
 
     private async Task<IReadOnlyCollection<string>> ResolveScopeKeysAsync(string token, CancellationToken ct)
     {
-        var defaults = new[] { "region","branch","department","organization","warehouse","customer","project","test-key" };
+        var defaults = new[] { "region" };
         try
         {
             // Read iam-scope-registry group attributes for scope.<key>

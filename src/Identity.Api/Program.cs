@@ -252,6 +252,19 @@ catch
 
 try
 {
+    using var scopeReg = app.Services.CreateScope();
+    var registryStore = scopeReg.ServiceProvider
+        .GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>();
+    using var ctsReg = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    await registryStore.EnsureRegistryAsync(ctsReg.Token);
+}
+catch
+{
+    /* best-effort */
+}
+
+try
+{
     using var scope4 = app.Services.CreateScope();
     var scopeMapper = scope4.ServiceProvider
         .GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();

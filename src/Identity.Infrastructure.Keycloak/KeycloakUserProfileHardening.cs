@@ -113,7 +113,7 @@ public sealed class KeycloakUserProfileHardening(
     /// <summary>Scope keys from the iam-scope-registry group, falling back to the well-known defaults.</summary>
     private async Task<IReadOnlyCollection<string>> ResolveScopeKeysAsync(string token, CancellationToken ct)
     {
-        var defaults = new[] { "region", "branch", "department", "organization", "warehouse", "customer", "project", "test-key" };
+        var defaults = new[] { "region" };
         try
         {
             var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search=iam-scope-registry");

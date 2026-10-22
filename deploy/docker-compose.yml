@@ -29,6 +29,8 @@ services:
       Database__ConnectionStrings__mssql: "Server=mssql-db,1433;Database=keycloak;User Id=sa;Password=${MSSQL_SA_PASSWORD:-${DB_PASSWORD:-KeycloakDev#2026!}};TrustServerCertificate=True"
       Database__ConnectionStrings__oracle: "User Id=keycloak;Password=${DB_PASSWORD:-KeycloakDev#2026!};Data Source=oracle-db:1521/XEPDB1"
     ports: [ "${FACADE_HTTP_PORT:-5080}:5080" ]
+    volumes:
+      - ../src/Identity.Api/wwwroot:/app/wwwroot:ro
     healthcheck:
       # aspnet image ships no curl — probe over /dev/tcp.
       test: [ "CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/5080 && printf \"GET /health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && timeout 3 head -1 <&3 | grep -q 200'" ]

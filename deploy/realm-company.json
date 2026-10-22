@@ -80,55 +80,10 @@
       "name": "iam-scope-registry",
       "attributes": {
         "scope.region": [
-          "{\"displayName\":\"Region\",\"description\":\"Geographic region\",\"isActive\":true,\"valueType\":\"String\"}"
-        ],
-        "scope.branch": [
-          "{\"displayName\":\"Branch\",\"description\":\"Branch identifier\",\"isActive\":true,\"valueType\":\"String\"}"
-        ],
-        "scope.department": [
-          "{\"displayName\":\"Department\",\"isActive\":true,\"valueType\":\"String\"}"
-        ],
-        "scope.organization": [
-          "{\"displayName\":\"Organization\",\"isActive\":true,\"valueType\":\"String\"}"
-        ],
-        "scope.warehouse": [
-          "{\"displayName\":\"Warehouse\",\"isActive\":true,\"valueType\":\"String\"}"
-        ],
-        "scope.customer": [
-          "{\"displayName\":\"Customer\",\"isActive\":true,\"valueType\":\"String\"}"
-        ],
-        "scope.project": [
-          "{\"displayName\":\"Project\",\"isActive\":true,\"valueType\":\"String\"}"
-        ],
-        "scope.test-key": [
-          "{\"displayName\":\"Test Key\",\"description\":\"Test scope for integration tests\",\"isActive\":true,\"valueType\":\"String\"}"
+          "{\"displayName\":\"Region\",\"description\":\"Geographic region / منطقه جغرافیایی\",\"isActive\":true,\"valueType\":\"String\"}"
         ],
         "resource.Orders": [
-          "region",
-          "branch",
-          "warehouse",
-          "customer"
-        ],
-        "resource.Branches": [
           "region"
-        ],
-        "resource.Employees": [
-          "region",
-          "branch",
-          "department",
-          "organization"
-        ],
-        "resource.ProjectTasks": [
-          "project"
-        ],
-        "resource.ProjectDocuments": [
-          "project"
-        ],
-        "resource.CustomerOrders": [
-          "customer"
-        ],
-        "resource.ResourceA": [
-          "test-key"
         ]
       }
     }

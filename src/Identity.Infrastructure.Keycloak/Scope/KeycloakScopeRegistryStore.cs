@@ -481,4 +481,37 @@ public sealed class KeycloakScopeRegistryStore(
             return false;
         }
     }
+
+    /// <summary>
+    /// Idempotently ensures the <c>iam-scope-registry</c> group exists in Keycloak on first startup,
+    /// and seeds the single default scope (<c>region</c>) if no scopes exist yet.
+    /// </summary>
+    public async Task EnsureRegistryAsync(CancellationToken ct)
+    {
+        var token = await tokenProvider.GetTokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) return;
+        try
+        {
+            var attrs = await GetRegistryAttributesAsync(ct);
+            var hasScope = attrs.Keys.Any(k => k.StartsWith("scope.", StringComparison.Ordinal));
+            if (!hasScope)
+            {
+                var defaultScope = JsonSerializer.Serialize(new
+                {
+                    displayName = "Region",
+                    description = "Geographic region / منطقه جغرافیایی",
+                    isActive = true,
+                    valueType = "String"
+                }, CompactJson);
+                await UpsertRegistryAttributeAsync("scope.region", defaultScope, ct);
+                Invalidate();
+                logger.LogInformation("Seeded single default scope 'region' into {Group}", RegistryGroupName);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to ensure registry group on startup");
+        }
+    }
 }
+
