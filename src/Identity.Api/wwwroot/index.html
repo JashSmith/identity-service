@@ -94,6 +94,13 @@
             <span class="keycloak-realm">Realm: company</span>
           </div>
         </div>
+        <div class="db-status-card" id="btn-sidebar-db" title="View Database Engine Details">
+          <div class="status-dot" id="sidebar-db-dot" style="background: #10b981;"></div>
+          <div class="keycloak-info">
+            <span class="keycloak-label" id="sidebar-db-label">Database: PostgreSQL</span>
+            <span class="keycloak-realm" id="sidebar-db-sub">Online (5432)</span>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -105,6 +112,16 @@
           <h1 class="page-title" id="page-heading">Dashboard Overview</h1>
         </div>
         <div class="header-actions">
+          <button class="db-badge-btn" id="btn-header-db" title="Active Database Engine Configuration">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+            <span id="header-db-title">DB: PostgreSQL</span>
+            <span class="badge badge-online" id="header-db-status-badge" style="padding: 2px 6px; font-size: 0.68rem;">Online</span>
+          </button>
+
           <button class="btn btn-secondary btn-sm" id="btn-global-refresh" title="Refresh Users & Status">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="23 4 23 10 17 10"/>
@@ -190,6 +207,21 @@
                 <span class="metric-label">Service Permissions</span>
                 <span class="metric-value" id="stat-permissions">-</span>
                 <span class="metric-trend">Registered platform actions</span>
+              </div>
+            </div>
+
+            <div class="metric-card" id="card-db-metric" style="cursor: pointer;" title="Click to view Database engine details">
+              <div class="metric-icon-box amber">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                </svg>
+              </div>
+              <div class="metric-details">
+                <span class="metric-label">Active Database</span>
+                <span class="metric-value" id="stat-db-provider">PostgreSQL</span>
+                <span class="metric-trend online" id="stat-db-sub">Online (5432)</span>
               </div>
             </div>
           </div>
@@ -557,6 +589,80 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-close-modal="modal-confirm-revoke">Cancel</button>
         <button type="button" class="btn btn-danger" id="btn-execute-revoke">Revoke Now</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- MODAL: DATABASE INFORMATION & SWITCHER -->
+  <dialog id="modal-db-info" class="app-dialog" closedby="any" style="max-width: 680px;">
+    <div class="modal-content" style="max-width: 680px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div class="metric-icon-box amber" style="width: 44px; height: 44px;">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="modal-title">Database Engine & Infrastructure</h3>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">Multi-Database setup for Keycloak & Identity Service (PostgreSQL, MSSQL, Oracle)</p>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-close-modal="modal-db-info" style="background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer;">×</button>
+      </div>
+
+      <div style="padding: 24px; display: flex; flex-direction: column; gap: 18px;">
+        <!-- Live Status Metrics -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px;">
+          <div style="background: rgba(15, 23, 42, 0.7); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+            <div style="font-size: 0.72rem; color: var(--text-faint); text-transform: uppercase;">Active Engine</div>
+            <div style="font-size: 1.05rem; font-weight: 700; color: #f59e0b;" id="modal-db-provider">PostgreSQL</div>
+          </div>
+          <div style="background: rgba(15, 23, 42, 0.7); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+            <div style="font-size: 0.72rem; color: var(--text-faint); text-transform: uppercase;">Health Status</div>
+            <div style="font-size: 1.05rem; font-weight: 700; color: var(--success);" id="modal-db-health">Online (0.0 ms)</div>
+          </div>
+          <div style="background: rgba(15, 23, 42, 0.7); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+            <div style="font-size: 0.72rem; color: var(--text-faint); text-transform: uppercase;">Target Host & Port</div>
+            <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-main);" id="modal-db-host">postgres-db:5432</div>
+          </div>
+          <div style="background: rgba(15, 23, 42, 0.7); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+            <div style="font-size: 0.72rem; color: var(--text-faint); text-transform: uppercase;">Target Database</div>
+            <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-main);" id="modal-db-name">keycloak</div>
+          </div>
+        </div>
+
+        <div style="background: rgba(15, 23, 42, 0.5); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+          <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px;">
+            مدیریت و سوئیچ بین دیتابیس‌ها (Docker Compose Switch)
+          </div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.6;">
+            شما می‌توانید به راحتی بین ۳ دیتابیس سوئیچ کنید. نیازی به بیلد مجدد ایمیج Keycloak نیست؛ هر ۳ درایور به صورت یکپارچه پشتیبانی می‌شوند. کافیست متغیر <code>DB_PROVIDER</code> را در فایل <code>deploy/.env</code> تغییر دهید یا از پروفایل‌های داکر استفاده کنید:
+          </div>
+
+          <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div>
+              <div style="font-size: 0.75rem; font-weight: 600; color: #10b981;">۱. اجرای با PostgreSQL (پیش‌فرض سبک و سریع):</div>
+              <div class="code-snippet-box">docker compose -f deploy/docker-compose.yml --profile postgres up -d</div>
+            </div>
+
+            <div>
+              <div style="font-size: 0.75rem; font-weight: 600; color: #38bdf8;">۲. اجرای با Microsoft SQL Server 2022:</div>
+              <div class="code-snippet-box">docker compose -f deploy/docker-compose.yml --profile mssql up -d</div>
+            </div>
+
+            <div>
+              <div style="font-size: 0.75rem; font-weight: 600; color: #f43f5e;">۳. اجرای با Oracle Database 21c XE:</div>
+              <div class="code-snippet-box">docker compose -f deploy/docker-compose.yml --profile oracle up -d</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end;">
+        <button type="button" class="btn btn-secondary" data-close-modal="modal-db-info">Close</button>
       </div>
     </div>
   </dialog>

@@ -33,6 +33,7 @@ builder.Services.Configure<Identity.Infrastructure.Keycloak.KeycloakOptions>(
     builder.Configuration.GetSection("Identity:KeycloakAdmin"));
 builder.Services.AddSingleton<IAuditSink>(sp => new Identity.Infrastructure.NoopAuditSink());
 builder.Services.AddSingleton<ICacheInvalidationService, Identity.Infrastructure.Redis.RedisCacheInvalidator>();
+builder.Services.AddSingleton<IDatabaseDiagnosticsService, Identity.Infrastructure.Database.DatabaseDiagnosticsService>();
 
 // Directory, user sessions, roles & permissions — Keycloak is source of truth
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>();
@@ -200,6 +201,11 @@ app.MapBusinessRoles();
 app.MapScopeAdmin();
 app.MapAccessContext();
 app.MapPermissions();
+app.MapGet("/api/system/database-info", async (IDatabaseDiagnosticsService dbService, CancellationToken ct) =>
+    Results.Ok(await dbService.CheckStatusAsync(ct)))
+    .WithName("GetDatabaseInfo")
+    .WithTags("System")
+    .Produces<Identity.Contracts.Diagnostics.DatabaseStatusDto>(200);
 app.MapGrpcService<Company.Identity.Grpc.IdentityGrpcService>();
 // Seed facade-owned permissions through the existing registry so they are mirrored to Keycloak.
 try

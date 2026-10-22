@@ -32,6 +32,21 @@
     statOnlineUsers: document.getElementById('stat-online-users'),
     statBusinessRoles: document.getElementById('stat-business-roles'),
     statPermissions: document.getElementById('stat-permissions'),
+    statDbProvider: document.getElementById('stat-db-provider'),
+    statDbSub: document.getElementById('stat-db-sub'),
+    cardDbMetric: document.getElementById('card-db-metric'),
+    btnHeaderDb: document.getElementById('btn-header-db'),
+    headerDbTitle: document.getElementById('header-db-title'),
+    headerDbStatusBadge: document.getElementById('header-db-status-badge'),
+    btnSidebarDb: document.getElementById('btn-sidebar-db'),
+    sidebarDbLabel: document.getElementById('sidebar-db-label'),
+    sidebarDbSub: document.getElementById('sidebar-db-sub'),
+    sidebarDbDot: document.getElementById('sidebar-db-dot'),
+    modalDbInfo: document.getElementById('modal-db-info'),
+    modalDbProvider: document.getElementById('modal-db-provider'),
+    modalDbHealth: document.getElementById('modal-db-health'),
+    modalDbHost: document.getElementById('modal-db-host'),
+    modalDbName: document.getElementById('modal-db-name'),
 
     // Users View
     usersTableBody: document.getElementById('users-table-body'),
@@ -265,9 +280,57 @@
     await Promise.all([
       loadUsers(),
       loadBusinessRoles(),
-      loadPermissions()
+      loadPermissions(),
+      loadDatabaseInfo()
     ]);
     updateMetrics();
+  }
+
+  // 0. Database Diagnostics Loader
+  async function loadDatabaseInfo() {
+    try {
+      const res = await fetch('/api/system/database-info');
+      if (res.ok) {
+        const db = await res.json();
+        const rawProvider = db.provider || 'postgres';
+        const providerName = rawProvider === 'mssql' ? 'SQL Server' : (rawProvider === 'oracle' ? 'Oracle' : 'PostgreSQL');
+        const isHealthy = !!db.isHealthy;
+        const latency = db.latencyMs != null ? `${db.latencyMs} ms` : 'N/A';
+        const statusText = isHealthy ? `Online (${latency})` : 'Unreachable';
+
+        if (elements.statDbProvider) elements.statDbProvider.textContent = providerName;
+        if (elements.statDbSub) {
+          elements.statDbSub.textContent = statusText;
+          elements.statDbSub.className = isHealthy ? 'metric-trend online' : 'metric-trend';
+        }
+
+        if (elements.sidebarDbLabel) elements.sidebarDbLabel.textContent = `Database: ${providerName}`;
+        if (elements.sidebarDbSub) elements.sidebarDbSub.textContent = statusText;
+        if (elements.sidebarDbDot) {
+          elements.sidebarDbDot.style.background = isHealthy ? '#10b981' : '#f43f5e';
+        }
+
+        if (elements.headerDbTitle) elements.headerDbTitle.textContent = `DB: ${providerName}`;
+        if (elements.headerDbStatusBadge) {
+          elements.headerDbStatusBadge.textContent = isHealthy ? 'Online' : 'Offline';
+          elements.headerDbStatusBadge.className = isHealthy ? 'badge badge-online' : 'badge';
+          if (!isHealthy) {
+            elements.headerDbStatusBadge.style.background = 'rgba(244,63,94,0.15)';
+            elements.headerDbStatusBadge.style.color = 'var(--danger)';
+          }
+        }
+
+        if (elements.modalDbProvider) elements.modalDbProvider.textContent = providerName;
+        if (elements.modalDbHealth) {
+          elements.modalDbHealth.textContent = `${db.status || 'Unknown'} (${latency})`;
+          elements.modalDbHealth.style.color = isHealthy ? 'var(--success)' : 'var(--danger)';
+        }
+        if (elements.modalDbHost) elements.modalDbHost.textContent = `${db.host || '-'}:${db.port || '-'}`;
+        if (elements.modalDbName) elements.modalDbName.textContent = db.databaseName || 'keycloak';
+      }
+    } catch (err) {
+      console.warn('Failed to load database diagnostics:', err);
+    }
   }
 
   // 1. Users Loader
@@ -797,6 +860,17 @@
     switchView('view-token-test');
   });
 
+  // Database Engine Info Modal
+  if (elements.btnHeaderDb) {
+    elements.btnHeaderDb.addEventListener('click', () => openModal(elements.modalDbInfo));
+  }
+  if (elements.btnSidebarDb) {
+    elements.btnSidebarDb.addEventListener('click', () => openModal(elements.modalDbInfo));
+  }
+  if (elements.cardDbMetric) {
+    elements.cardDbMetric.addEventListener('click', () => openModal(elements.modalDbInfo));
+  }
+
   // Auto-refresh online statuses every 15 seconds
   state.refreshInterval = setInterval(() => {
     if (state.token && state.currentView === 'view-users') {
@@ -807,6 +881,7 @@
 
   // App Startup
   window.addEventListener('DOMContentLoaded', async () => {
+    await loadDatabaseInfo();
     if (!state.token) {
       promptLogin();
     } else {
