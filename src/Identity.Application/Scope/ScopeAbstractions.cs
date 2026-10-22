@@ -53,6 +53,7 @@ public interface IScopeRegistryAdmin
     Task<IReadOnlyCollection<string>> GetResourcesForScopeAsync(string key, CancellationToken ct);
     Task<ScopeDefinitionDto?> CreateScopeAsync(string key, string? displayName, string? description, CancellationToken ct);
     Task<ScopeDefinitionDto?> UpdateScopeAsync(string key, string? displayName, string? description, bool? isActive, CancellationToken ct);
+    Task<bool> DeleteScopeAsync(string key, CancellationToken ct);
 }
 
 public interface IScopeCacheInvalidator { void Invalidate(); }

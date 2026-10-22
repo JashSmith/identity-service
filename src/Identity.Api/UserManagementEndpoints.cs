@@ -43,6 +43,43 @@ public static class UserManagementEndpoints
             .WithName("UpdateUserWithAccess")
             .Produces<UserDto>(200);
 
+        g.MapDelete("/{id}", async (string id, IUserProvisioningService svc, IUserDirectory dir, CancellationToken ct) =>
+            {
+                var user = await dir.GetUserAsync(id, ct);
+                if (user is null)
+                    return Results.NotFound(new ProblemResponse("not_found", $"user '{id}' not found", Guid.NewGuid().ToString("N")));
+                var ok = await svc.DeleteUserAsync(id, ct);
+                return ok ? Results.NoContent() : Results.Problem("Failed to delete user", statusCode: 500);
+            }).RequireAuthorization(IamPermissions.UsersManage)
+            .WithName("DeleteUser")
+            .Produces(204).Produces<ProblemResponse>(404);
+
+        g.MapPut("/{id}/reset-password", async (string id, ResetPasswordRequest req, IUserProvisioningService svc, IUserDirectory dir, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(req.Password))
+                    return Results.BadRequest(new ProblemResponse("validation_error", "password is required", Guid.NewGuid().ToString("N")));
+                var user = await dir.GetUserAsync(id, ct);
+                if (user is null)
+                    return Results.NotFound(new ProblemResponse("not_found", $"user '{id}' not found", Guid.NewGuid().ToString("N")));
+                var ok = await svc.ResetPasswordAsync(id, req.Password, req.Temporary, ct);
+                return ok ? Results.NoContent() : Results.Problem("Failed to reset password", statusCode: 500);
+            }).RequireAuthorization(IamPermissions.UsersManage)
+            .WithName("ResetUserPassword")
+            .Produces(204).Produces<ProblemResponse>(400).Produces<ProblemResponse>(404);
+
+        g.MapPost("/{id}/reset-password", async (string id, ResetPasswordRequest req, IUserProvisioningService svc, IUserDirectory dir, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(req.Password))
+                    return Results.BadRequest(new ProblemResponse("validation_error", "password is required", Guid.NewGuid().ToString("N")));
+                var user = await dir.GetUserAsync(id, ct);
+                if (user is null)
+                    return Results.NotFound(new ProblemResponse("not_found", $"user '{id}' not found", Guid.NewGuid().ToString("N")));
+                var ok = await svc.ResetPasswordAsync(id, req.Password, req.Temporary, ct);
+                return ok ? Results.NoContent() : Results.Problem("Failed to reset password", statusCode: 500);
+            }).RequireAuthorization(IamPermissions.UsersManage)
+            .WithName("ResetUserPasswordPost")
+            .Produces(204).Produces<ProblemResponse>(400).Produces<ProblemResponse>(404);
+
         g.MapGet("/{id}/sessions", async (string id, IUserSessionService sessionService, IUserDirectory dir, CancellationToken ct) =>
             {
                 var user = await dir.GetUserAsync(id, ct);

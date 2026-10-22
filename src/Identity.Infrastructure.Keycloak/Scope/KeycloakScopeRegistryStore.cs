@@ -397,6 +397,80 @@ public sealed class KeycloakScopeRegistryStore(
         return await GetScopeAsync(key, ct);
     }
 
+    public async Task<bool> DeleteScopeAsync(string key, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        var attrName = $"scope.{key}";
+        var ok = await DeleteRegistryAttributeAsync(attrName, ct);
+        if (ok) Invalidate();
+        return ok;
+    }
+
+    private async Task<bool> DeleteRegistryAttributeAsync(string attrName, CancellationToken ct)
+    {
+        var token = await tokenProvider.GetTokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
+        try
+        {
+            string? groupId = null;
+            var searchReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(RegistryGroupName)}");
+            searchReq.Headers.Add("Authorization", $"Bearer {token}");
+            var searchRes = await http.SendAsync(searchReq, ct);
+            if (!searchRes.IsSuccessStatusCode) return false;
+            var searchDoc = JsonDocument.Parse(await searchRes.Content.ReadAsStringAsync(ct));
+            if (searchDoc.RootElement.ValueKind == JsonValueKind.Array)
+                foreach (var el in searchDoc.RootElement.EnumerateArray())
+                    if (el.TryGetProperty("name", out var n) && n.GetString() == RegistryGroupName &&
+                        el.TryGetProperty("id", out var gid)) { groupId = gid.GetString(); break; }
+            if (string.IsNullOrEmpty(groupId)) return false;
+
+            var getReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}");
+            getReq.Headers.Add("Authorization", $"Bearer {token}");
+            var getRes = await http.SendAsync(getReq, ct);
+            if (!getRes.IsSuccessStatusCode) return false;
+            var groupJson = JsonDocument.Parse(await getRes.Content.ReadAsStringAsync(ct)).RootElement;
+
+            var attributes = new Dictionary<string, string[]>(StringComparer.Ordinal);
+            bool existed = false;
+            if (groupJson.TryGetProperty("attributes", out var a) && a.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in a.EnumerateObject())
+                {
+                    if (string.Equals(prop.Name, attrName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        existed = true;
+                        continue;
+                    }
+                    attributes[prop.Name] = prop.Value.ValueKind == JsonValueKind.Array
+                        ? prop.Value.EnumerateArray().Select(v => v.GetString() ?? "").ToArray()
+                        : [prop.Value.GetString() ?? ""];
+                }
+            }
+
+            if (!existed) return false;
+
+            var name = groupJson.TryGetProperty("name", out var nm) ? nm.GetString() ?? RegistryGroupName : RegistryGroupName;
+            var body = new Dictionary<string, object>
+            {
+                ["name"] = name,
+                ["attributes"] = attributes,
+            };
+            if (groupJson.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String)
+                body["path"] = path.GetString()!;
+
+            var putReq = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}")
+            { Content = JsonContent.Create(body) };
+            putReq.Headers.Add("Authorization", $"Bearer {token}");
+            var putRes = await http.SendAsync(putReq, ct);
+            return putRes.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to delete registry attribute {Attr}", attrName);
+            return false;
+        }
+    }
+
     /// <summary>
     /// Read-modify-write of a single registry group attribute via GET group + PUT group.
     /// Long values are split across the multivalued attribute so no single value exceeds
@@ -499,7 +573,7 @@ public sealed class KeycloakScopeRegistryStore(
                 var defaultScope = JsonSerializer.Serialize(new
                 {
                     displayName = "Region",
-                    description = "Geographic region / منطقه جغرافیایی",
+                    description = "Geographic region",
                     isActive = true,
                     valueType = "String"
                 }, CompactJson);

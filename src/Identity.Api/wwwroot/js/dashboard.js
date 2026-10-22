@@ -93,6 +93,23 @@
     usScopesContainer: document.getElementById('us-scopes-container'),
     modalEditUser: document.getElementById('modal-edit-user'),
     formEditUser: document.getElementById('form-edit-user'),
+    euUsernameDisplay: document.getElementById('eu-username-display'),
+    euUsername: document.getElementById('eu-username'),
+    euEmailVerified: document.getElementById('eu-email-verified'),
+    euBtnResetPwShortcut: document.getElementById('eu-btn-reset-pw-shortcut'),
+    euBtnDeleteShortcut: document.getElementById('eu-btn-delete-shortcut'),
+    modalResetPassword: document.getElementById('modal-reset-password'),
+    formResetPassword: document.getElementById('form-reset-password'),
+    rpUserId: document.getElementById('rp-user-id'),
+    rpUsername: document.getElementById('rp-username'),
+    rpUsernameLabel: document.getElementById('rp-username-label'),
+    rpPassword: document.getElementById('rp-password'),
+    rpPasswordConfirm: document.getElementById('rp-password-confirm'),
+    rpTemporary: document.getElementById('rp-temporary'),
+    modalConfirmDeleteUser: document.getElementById('modal-confirm-delete-user'),
+    deleteUserId: document.getElementById('delete-user-id'),
+    deleteUserUsername: document.getElementById('delete-user-username'),
+    btnExecuteDeleteUser: document.getElementById('btn-execute-delete-user'),
     modalCreateRole: document.getElementById('modal-create-role'),
     formCreateRole: document.getElementById('form-create-role'),
     modalCreateScope: document.getElementById('modal-create-scope'),
@@ -103,6 +120,25 @@
     revokeTargetId: document.getElementById('revoke-target-id'),
     revokeTargetUsername: document.getElementById('revoke-target-username'),
     btnExecuteRevoke: document.getElementById('btn-execute-revoke'),
+    modalConfirmDeleteScope: document.getElementById('modal-confirm-delete-scope'),
+    deleteScopeKey: document.getElementById('delete-scope-key'),
+    deleteScopeTargetKey: document.getElementById('delete-scope-target-key'),
+    btnExecuteDeleteScope: document.getElementById('btn-execute-delete-scope'),
+    modalEditRole: document.getElementById('modal-edit-role'),
+    formEditRole: document.getElementById('form-edit-role'),
+    erName: document.getElementById('er-name'),
+    erDesc: document.getElementById('er-desc'),
+    erPermsSelector: document.getElementById('er-perms-selector'),
+    modalConfirmDeleteRole: document.getElementById('modal-confirm-delete-role'),
+    deleteRoleName: document.getElementById('delete-role-name'),
+    deleteRoleNameDisplay: document.getElementById('delete-role-name-display'),
+    btnExecuteDeleteRole: document.getElementById('btn-execute-delete-role'),
+    btnOpenCreatePermission: document.getElementById('btn-open-create-permission'),
+    modalCreatePermission: document.getElementById('modal-create-permission'),
+    formCreatePermission: document.getElementById('form-create-permission'),
+    cpName: document.getElementById('cp-name'),
+    cpDesc: document.getElementById('cp-desc'),
+    cpService: document.getElementById('cp-service'),
     toastContainer: document.getElementById('toast-container'),
     loginAlert: document.getElementById('login-alert'),
     loginAlertMsg: document.getElementById('login-alert-msg')
@@ -277,11 +313,11 @@
     if (activeNav) activeNav.classList.add('active');
 
     const titles = {
-      'view-overview': 'Overview (داشبورد مدیریت)',
-      'view-users': 'Users & Scoped Access (مدیریت کاربران و اسکوپ‌ها)',
-      'view-roles': 'Business Roles (نقش‌های کسب‌وکاری)',
-      'view-scopes': 'Attribute Scope Registry (ساخت و مدیریت Scopeها)',
-      'view-permissions': 'Platform Permissions Catalog (دسترسی‌ها)',
+      'view-overview': 'Dashboard Overview',
+      'view-users': 'Users & Scoped Access Management',
+      'view-roles': 'Business Roles',
+      'view-scopes': 'Attribute Scope Registry',
+      'view-permissions': 'Platform Permissions Catalog',
       'view-token-test': 'Token Playground & Access Verification'
     };
     elements.pageHeading.textContent = titles[viewId] || 'Identity Management';
@@ -426,11 +462,11 @@
 
       const roleBadge = roleName
         ? `<span class="role-badge">🛡️ ${escapeHtml(roleName)}</span>`
-        : `<span style="color: var(--text-faint); font-size: 0.78rem;">(بدون نقش)</span>`;
+        : `<span style="color: var(--text-faint); font-size: 0.78rem;">(No Role)</span>`;
 
       const scopesHtml = scopesDisplay.length > 0
         ? `<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px;">${scopesDisplay.join('')}</div>`
-        : `<div style="color: var(--text-faint); font-size: 0.75rem; margin-top: 3px;">بدون محدودیت Scope</div>`;
+        : `<div style="color: var(--text-faint); font-size: 0.75rem; margin-top: 3px;">No Scopes Assigned</div>`;
 
       return `
         <tr data-user-id="${escapeHtml(u.id)}">
@@ -453,15 +489,21 @@
             ${scopesHtml}
           </td>
           <td style="text-align: right;">
-            <div style="display: flex; gap: 6px; justify-content: flex-end;">
-              <button class="btn btn-sm btn-primary btn-manage-scopes" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="مدیریت نقش و محدودیت‌های Scope">
-                نقش و Scopeها
+            <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+              <button class="btn btn-sm btn-primary btn-manage-scopes" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="Manage Role & Scopes">
+                Role & Scopes
               </button>
-              <button class="btn btn-sm btn-secondary btn-edit-user" data-user='${JSON.stringify(u)}' title="ویرایش پروفایل">
-                ویرایش
+              <button class="btn btn-sm btn-secondary btn-edit-user" data-user='${JSON.stringify(u).replace(/'/g, "&apos;")}' title="Edit User Profile">
+                Edit
               </button>
-              <button class="btn btn-sm btn-ghost btn-revoke-tokens" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="ابطال نشست‌ها">
-                ابطال
+              <button class="btn btn-sm btn-secondary btn-reset-password" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="Reset Password">
+                🔑 Reset Password
+              </button>
+              <button class="btn btn-sm btn-ghost btn-revoke-tokens" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="Revoke Sessions">
+                Revoke
+              </button>
+              <button class="btn btn-sm btn-outline-danger btn-delete-user" data-id="${escapeHtml(u.id)}" data-username="${escapeHtml(u.username)}" title="Delete User">
+                🗑️ Delete
               </button>
             </div>
           </td>
@@ -478,6 +520,21 @@
       });
     });
 
+    elements.usersTableBody.querySelectorAll('.btn-edit-user').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const user = JSON.parse(btn.getAttribute('data-user'));
+        openEditUserModal(user);
+      });
+    });
+
+    elements.usersTableBody.querySelectorAll('.btn-reset-password').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const username = btn.getAttribute('data-username');
+        openResetPasswordModal(id, username);
+      });
+    });
+
     elements.usersTableBody.querySelectorAll('.btn-revoke-tokens').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
@@ -488,17 +545,43 @@
       });
     });
 
-    elements.usersTableBody.querySelectorAll('.btn-edit-user').forEach(btn => {
+    elements.usersTableBody.querySelectorAll('.btn-delete-user').forEach(btn => {
       btn.addEventListener('click', () => {
-        const user = JSON.parse(btn.getAttribute('data-user'));
-        document.getElementById('eu-id').value = user.id;
-        document.getElementById('eu-email').value = (user.attributes && user.attributes.email ? user.attributes.email[0] : '') || '';
-        document.getElementById('eu-firstname').value = (user.attributes && user.attributes.firstName ? user.attributes.firstName[0] : '') || '';
-        document.getElementById('eu-lastname').value = (user.attributes && user.attributes.lastName ? user.attributes.lastName[0] : '') || '';
-        document.getElementById('eu-enabled').checked = !!user.enabled;
-        openModal(elements.modalEditUser);
+        const id = btn.getAttribute('data-id');
+        const username = btn.getAttribute('data-username');
+        openDeleteUserModal(id, username);
       });
     });
+  }
+
+  function openEditUserModal(user) {
+    document.getElementById('eu-id').value = user.id;
+    if (elements.euUsernameDisplay) elements.euUsernameDisplay.textContent = user.username;
+    if (elements.euUsername) elements.euUsername.value = user.username;
+    document.getElementById('eu-email').value = (user.attributes && user.attributes.email ? user.attributes.email[0] : '') || '';
+    document.getElementById('eu-firstname').value = (user.attributes && user.attributes.firstName ? user.attributes.firstName[0] : '') || '';
+    document.getElementById('eu-lastname').value = (user.attributes && user.attributes.lastName ? user.attributes.lastName[0] : '') || '';
+    document.getElementById('eu-enabled').checked = !!user.enabled;
+    if (elements.euEmailVerified) {
+      elements.euEmailVerified.checked = user.attributes && user.attributes.emailVerified && user.attributes.emailVerified[0] === 'true';
+    }
+    openModal(elements.modalEditUser);
+  }
+
+  function openResetPasswordModal(id, username) {
+    elements.rpUserId.value = id;
+    elements.rpUsername.value = username;
+    elements.rpUsernameLabel.textContent = username;
+    elements.rpPassword.value = '';
+    elements.rpPasswordConfirm.value = '';
+    elements.rpTemporary.checked = false;
+    openModal(elements.modalResetPassword);
+  }
+
+  function openDeleteUserModal(id, username) {
+    elements.deleteUserId.value = id;
+    elements.deleteUserUsername.textContent = username;
+    openModal(elements.modalConfirmDeleteUser);
   }
 
   // 2. Business Roles Loader
@@ -519,7 +602,7 @@
     if (state.roles.length === 0) {
       elements.businessRolesGrid.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; color: var(--text-faint); padding: 32px;">
-          No business roles registered yet. Create one like 'Manager' (مدیر) or 'Accountant' (حسابدار).
+          No business roles registered yet. Create one like 'Manager' or 'Accountant'.
         </div>`;
       return;
     }
@@ -540,14 +623,49 @@
             ${permsPreview}
             ${moreCount ? `<span style="font-size: 0.72rem; color: var(--text-faint);">${moreCount}</span>` : ''}
           </div>
+          <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.07); display: flex; justify-content: flex-end; gap: 8px;">
+            <button class="btn btn-sm btn-secondary btn-edit-role" data-role='${JSON.stringify(r)}'>
+              Edit Role
+            </button>
+            <button class="btn btn-sm btn-ghost btn-delete-role" data-name="${escapeHtml(r.name)}" style="color: var(--danger);">
+              🗑️ Delete
+            </button>
+          </div>
         </div>
       `;
     }).join('');
+
+    // Attach role card action listeners
+    elements.businessRolesGrid.querySelectorAll('.btn-edit-role').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const r = JSON.parse(btn.getAttribute('data-role'));
+        elements.erName.value = r.name;
+        elements.erDesc.value = r.description || '';
+        const currentPerms = new Set(r.permissions || []);
+        elements.erPermsSelector.innerHTML = state.permissions.map(p => `
+          <label class="checkbox-label" style="font-size: 0.85rem;">
+            <input type="checkbox" name="edit_role_perms" value="${escapeHtml(p.name)}" ${currentPerms.has(p.name) ? 'checked' : ''}>
+            <span style="font-family: monospace; color: #e2e8f0;">${escapeHtml(p.name)}</span>
+            <span style="color: var(--text-faint); font-size: 0.75rem;">(${escapeHtml(p.declaringService)})</span>
+          </label>
+        `).join('');
+        openModal(elements.modalEditRole);
+      });
+    });
+
+    elements.businessRolesGrid.querySelectorAll('.btn-delete-role').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const name = btn.getAttribute('data-name');
+        elements.deleteRoleName.value = name;
+        elements.deleteRoleNameDisplay.textContent = name;
+        openModal(elements.modalConfirmDeleteRole);
+      });
+    });
   }
 
   function populateRoleSelectors() {
     const options = [
-      '<option value="">(انتخاب نقش کاربری)</option>',
+      '<option value="">(Select a Business Role)</option>',
       ...state.roles.map(r => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`)
     ].join('');
 
@@ -583,7 +701,7 @@
   function renderScopesTable() {
     if (!elements.scopesTableBody) return;
     if (!state.scopes || state.scopes.length === 0) {
-      elements.scopesTableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-faint); padding: 32px;">هیچ اسکوپی در سیستم ثبت نشده است. از فرم بالا برای ساخت اسکوپ استفاده کنید.</td></tr>`;
+      elements.scopesTableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-faint); padding: 32px;">No attribute scopes registered yet. Use the form above to register a new scope.</td></tr>`;
       return;
     }
 
@@ -594,8 +712,8 @@
         .join(' ');
 
       const statusBadge = s.isActive
-        ? `<span class="badge badge-online"><span class="badge-dot"></span> Active (فعال)</span>`
-        : `<span class="badge badge-offline"><span class="badge-dot"></span> Inactive (غیرفعال)</span>`;
+        ? `<span class="badge badge-online"><span class="badge-dot"></span> Active</span>`
+        : `<span class="badge badge-offline"><span class="badge-dot"></span> Inactive</span>`;
 
       return `
         <tr>
@@ -607,10 +725,13 @@
           <td style="text-align: right;">
             <div style="display: flex; gap: 6px; justify-content: flex-end;">
               <button class="btn btn-sm btn-secondary btn-edit-scope" data-scope='${JSON.stringify(s)}'>
-                ویرایش
+                Edit
               </button>
               <button class="btn btn-sm btn-ghost btn-toggle-scope" data-key="${escapeHtml(s.key)}" data-active="${!!s.isActive}">
-                ${s.isActive ? 'غیرفعال‌سازی' : 'فعال‌سازی'}
+                ${s.isActive ? 'Deactivate' : 'Activate'}
+              </button>
+              <button class="btn btn-sm btn-ghost btn-delete-scope" data-key="${escapeHtml(s.key)}" style="color: var(--danger);">
+                🗑️ Delete
               </button>
             </div>
           </td>
@@ -627,6 +748,15 @@
         document.getElementById('es-desc').value = s.description || '';
         document.getElementById('es-active').checked = !!s.isActive;
         openModal(elements.modalEditScope);
+      });
+    });
+
+    elements.scopesTableBody.querySelectorAll('.btn-delete-scope').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-key');
+        elements.deleteScopeTargetKey.value = key;
+        elements.deleteScopeKey.textContent = key;
+        openModal(elements.modalConfirmDeleteScope);
       });
     });
 
@@ -647,13 +777,13 @@
             })
           });
           if (res.ok) {
-            showToast(`اسکوپ '${key}' ${!currentActive ? 'فعال' : 'غیرفعال'} شد.`, 'success');
+            showToast(`Scope '${key}' ${!currentActive ? 'activated' : 'deactivated'} successfully.`, 'success');
             await loadScopes();
           } else {
-            showToast('خطا در تغییر وضعیت اسکوپ.', 'error');
+            showToast('Failed to toggle scope status.', 'error');
           }
         } catch {
-          showToast('خطای شبکه در تغییر وضعیت اسکوپ.', 'error');
+          showToast('Network error while toggling scope status.', 'error');
         }
       });
     });
@@ -667,7 +797,7 @@
     if (!state.scopes || state.scopes.length === 0) {
       container.innerHTML = `
         <div style="font-size: 0.85rem; color: var(--text-faint); padding: 12px; text-align: center;">
-          هنوز هیچ اسکوپی در سیستم تعریف نشده است. از بخش "ساخت Scope جدید" اسکوپ بسازید.
+          No attribute scopes defined yet. Register a new scope from the Attribute Scopes tab.
         </div>`;
       return;
     }
@@ -696,12 +826,12 @@
           </div>
           <div class="scope-values-input-box" style="display: ${isSelected ? 'flex' : 'none'}; margin-top: 10px;">
             <label style="font-size: 0.74rem; color: var(--secondary); font-weight: 600;">
-              مقدار / Value مجاز برای این کاربر:
+              Authorized value(s) for this user:
             </label>
             <input type="text" class="form-control scope-values-input"
               data-scope-input="${escapeHtml(s.key)}"
               value="${escapeHtml(initialValues)}"
-              placeholder="مثال: tehran-1 یا مقادیر با کاما: tehran-1, tehran-2"
+              placeholder="e.g. tehran-north or comma-separated: tehran-1, tehran-2"
               style="padding: 7px 12px; font-size: 0.85rem;">
           </div>
         </div>
@@ -871,13 +1001,13 @@
 
     const { scopes, missingValueKey } = getScopesFromContainer('cu-scopes-container');
     if (missingValueKey) {
-      showToast(`لطفاً برای اسکوپ تیک‌خورده '${missingValueKey}' مقدار (Value) وارد کنید.`, 'warning');
+      showToast(`Please enter at least one value for checked scope '${missingValueKey}'.`, 'warning');
       return;
     }
 
     const hasScopes = Object.keys(scopes).length > 0;
     if (hasScopes && !role) {
-      showToast('برای تخصیص اسکوپ به کاربر، انتخاب "نقش سازمانی" الزامی است.', 'warning');
+      showToast('Selecting a Business Role is required when assigning scopes.', 'warning');
       elements.cuRoleSelect.focus();
       return;
     }
@@ -904,17 +1034,17 @@
       });
 
       if (res.ok) {
-        showToast(`کاربر '${username}' با موفقیت در Keycloak ایجاد و اسکوپ‌ها ثبت شد!`, 'success');
+        showToast(`User '${username}' created successfully in Keycloak with assigned scopes!`, 'success');
         closeModal(elements.modalCreateUser);
         elements.formCreateUser.reset();
         await loadUsers();
         updateMetrics();
       } else {
-        const err = await res.json();
-        showToast(`خطا در ایجاد کاربر: ${err.message || 'Validation error'}`, 'error');
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to create user: ${err.message || 'Validation error'}`, 'error');
       }
     } catch {
-      showToast('خطا در ارسال درخواست ایجاد کاربر.', 'error');
+      showToast('Error sending create user request.', 'error');
     }
   });
 
@@ -924,13 +1054,13 @@
     const userId = elements.usUserId.value;
     const role = elements.usRoleSelect.value;
     if (!role) {
-      showToast('لطفاً نقش سازمانی کاربر را انتخاب کنید.', 'warning');
+      showToast('Please select a business role for the user.', 'warning');
       return;
     }
 
     const { scopes, missingValueKey } = getScopesFromContainer('us-scopes-container');
     if (missingValueKey) {
-      showToast(`لطفاً برای اسکوپ تیک‌خورده '${missingValueKey}' مقدار وارد کنید.`, 'warning');
+      showToast(`Please enter a value for checked scope '${missingValueKey}'.`, 'warning');
       return;
     }
 
@@ -945,15 +1075,15 @@
       });
 
       if (res.ok) {
-        showToast('نقش و اسکوپ‌های کاربر با موفقیت در Keycloak ذخیره شد!', 'success');
+        showToast('User role and scopes saved successfully in Keycloak!', 'success');
         closeModal(elements.modalUserScopes);
         await loadUsers();
       } else {
-        const err = await res.json();
-        showToast(`خطا در بروزرسانی اسکوپ‌ها: ${err.message || 'Validation error'}`, 'error');
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to update scopes: ${err.message || 'Validation error'}`, 'error');
       }
     } catch {
-      showToast('خطا در بروزرسانی اسکوپ‌های کاربر.', 'error');
+      showToast('Error updating user scopes.', 'error');
     }
   });
 
@@ -961,12 +1091,14 @@
   elements.formEditUser.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('eu-id').value;
+    const username = elements.euUsername ? elements.euUsername.value.trim() : null;
     const email = document.getElementById('eu-email').value.trim() || null;
     const firstName = document.getElementById('eu-firstname').value.trim() || null;
     const lastName = document.getElementById('eu-lastname').value.trim() || null;
     const enabled = document.getElementById('eu-enabled').checked;
+    const emailVerified = elements.euEmailVerified ? elements.euEmailVerified.checked : null;
 
-    const payload = { email, firstName, lastName, enabled };
+    const payload = { username, email, firstName, lastName, enabled, emailVerified };
 
     try {
       const res = await apiFetch(`/api/identity/users/${encodeURIComponent(id)}`, {
@@ -975,15 +1107,88 @@
       });
 
       if (res.ok) {
-        showToast('مشخصات کاربر با موفقیت ذخیره شد!', 'success');
+        showToast('User profile updated successfully in Keycloak!', 'success');
         closeModal(elements.modalEditUser);
         await loadUsers();
       } else {
-        const err = await res.json();
-        showToast(`خطا: ${err.message || 'Update failed'}`, 'error');
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to update user: ${err.message || 'Update failed'}`, 'error');
       }
     } catch {
-      showToast('خطا در ویرایش مشخصات کاربر.', 'error');
+      showToast('Error updating user profile.', 'error');
+    }
+  });
+
+  if (elements.euBtnResetPwShortcut) {
+    elements.euBtnResetPwShortcut.addEventListener('click', () => {
+      const id = document.getElementById('eu-id').value;
+      const username = elements.euUsernameDisplay ? elements.euUsernameDisplay.textContent : '';
+      closeModal(elements.modalEditUser);
+      openResetPasswordModal(id, username);
+    });
+  }
+
+  if (elements.euBtnDeleteShortcut) {
+    elements.euBtnDeleteShortcut.addEventListener('click', () => {
+      const id = document.getElementById('eu-id').value;
+      const username = elements.euUsernameDisplay ? elements.euUsernameDisplay.textContent : '';
+      closeModal(elements.modalEditUser);
+      openDeleteUserModal(id, username);
+    });
+  }
+
+  // 3.1 Reset User Password
+  elements.formResetPassword.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = elements.rpUserId.value;
+    const password = elements.rpPassword.value;
+    const confirm = elements.rpPasswordConfirm.value;
+    const temporary = elements.rpTemporary.checked;
+
+    if (password !== confirm) {
+      showToast('Passwords do not match.', 'warning');
+      return;
+    }
+
+    try {
+      const res = await apiFetch(`/api/identity/users/${encodeURIComponent(id)}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ password, temporary })
+      });
+
+      if (res.ok) {
+        showToast('User password reset successfully in Keycloak!', 'success');
+        closeModal(elements.modalResetPassword);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to reset password: ${err.detail || err.message || 'Server error'}`, 'error');
+      }
+    } catch {
+      showToast('Error sending password reset request.', 'error');
+    }
+  });
+
+  // 3.2 Delete User
+  elements.btnExecuteDeleteUser.addEventListener('click', async () => {
+    const id = elements.deleteUserId.value;
+    if (!id) return;
+
+    try {
+      const res = await apiFetch(`/api/identity/users/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        showToast('User deleted successfully from Keycloak!', 'success');
+        closeModal(elements.modalConfirmDeleteUser);
+        await loadUsers();
+        updateMetrics();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to delete user: ${err.detail || err.message || res.statusText}`, 'error');
+      }
+    } catch {
+      showToast('Error sending delete user request.', 'error');
     }
   });
 
@@ -999,15 +1204,15 @@
       });
 
       if (res.ok) {
-        showToast(`تمامی نشست‌ها و توکن‌های کاربر با موفقیت ابطال شد!`, 'success');
+        showToast('All active user sessions revoked successfully!', 'success');
         closeModal(elements.modalConfirmRevoke);
         await loadUsers();
         updateMetrics();
       } else {
-        showToast('خطا در ابطال نشست‌های کاربر.', 'error');
+        showToast('Failed to revoke user sessions.', 'error');
       }
     } catch {
-      showToast('خطا در ارسال درخواست ابطال.', 'error');
+      showToast('Error sending session revocation request.', 'error');
     }
   });
 
@@ -1035,17 +1240,17 @@
       });
 
       if (res.ok) {
-        showToast(`نقش '${name}' با موفقیت در Keycloak ایجاد شد!`, 'success');
+        showToast(`Business role '${name}' created successfully in Keycloak!`, 'success');
         closeModal(elements.modalCreateRole);
         elements.formCreateRole.reset();
         await loadBusinessRoles();
         updateMetrics();
       } else {
-        const err = await res.json();
-        showToast(`خطا در ایجاد نقش: ${err.message || 'Already exists'}`, 'error');
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to create role: ${err.message || 'Already exists'}`, 'error');
       }
     } catch {
-      showToast('خطا در ارتباط با سرور.', 'error');
+      showToast('Error creating business role.', 'error');
     }
   });
 
@@ -1064,16 +1269,16 @@
         });
 
         if (res.ok) {
-          showToast(`اسکوپ جدید '${displayName}' (${key}) با موفقیت ثبت شد!`, 'success');
+          showToast(`Scope '${displayName}' (${key}) registered successfully!`, 'success');
           elements.inlineFormCreateScope.reset();
           await loadScopes();
           updateMetrics();
         } else {
-          const err = await res.json();
-          showToast(`خطا در ساخت اسکوپ: ${err.message || 'Already exists'}`, 'error');
+          const err = await res.json().catch(() => ({}));
+          showToast(`Failed to register scope: ${err.message || 'Already exists'}`, 'error');
         }
       } catch {
-        showToast('خطا در ثبت اسکوپ.', 'error');
+        showToast('Error registering scope.', 'error');
       }
     });
   }
@@ -1093,17 +1298,17 @@
         });
 
         if (res.ok) {
-          showToast(`اسکوپ '${key}' با موفقیت ساخته شد!`, 'success');
+          showToast(`Scope '${key}' registered successfully!`, 'success');
           closeModal(elements.modalCreateScope);
           elements.formCreateScope.reset();
           await loadScopes();
           updateMetrics();
         } else {
-          const err = await res.json();
-          showToast(`خطا: ${err.message || 'Already exists'}`, 'error');
+          const err = await res.json().catch(() => ({}));
+          showToast(`Failed to register scope: ${err.message || 'Already exists'}`, 'error');
         }
       } catch {
-        showToast('خطا در ایجاد اسکوپ.', 'error');
+        showToast('Error registering scope.', 'error');
       }
     });
   }
@@ -1123,17 +1328,128 @@
       });
 
       if (res.ok) {
-        showToast(`اسکوپ '${key}' با موفقیت بروزرسانی شد!`, 'success');
+        showToast(`Scope '${key}' updated successfully!`, 'success');
         closeModal(elements.modalEditScope);
         await loadScopes();
       } else {
-        const err = await res.json();
-        showToast(`خطا: ${err.message || 'Error'}`, 'error');
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to update scope: ${err.message || 'Error'}`, 'error');
       }
     } catch {
-      showToast('خطا در بروزرسانی اسکوپ.', 'error');
+      showToast('Error updating scope.', 'error');
     }
   });
+
+  // 7.1 Delete Attribute Scope
+  if (elements.btnExecuteDeleteScope) {
+    elements.btnExecuteDeleteScope.addEventListener('click', async () => {
+      const key = elements.deleteScopeTargetKey.value;
+      if (!key) return;
+
+      try {
+        const res = await apiFetch(`/api/identity/scopes/${encodeURIComponent(key)}`, {
+          method: 'DELETE'
+        });
+
+        if (res.ok) {
+          showToast(`Attribute scope '${key}' deleted successfully from registry.`, 'success');
+          closeModal(elements.modalConfirmDeleteScope);
+          await loadScopes();
+          updateMetrics();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(`Failed to delete scope: ${err.message || 'Deletion error'}`, 'error');
+        }
+      } catch {
+        showToast('Error sending delete scope request.', 'error');
+      }
+    });
+  }
+
+  // 7.2 Edit Business Role
+  if (elements.formEditRole) {
+    elements.formEditRole.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = elements.erName.value.trim();
+      const description = elements.erDesc.value.trim() || null;
+      const checkedBoxes = elements.erPermsSelector.querySelectorAll('input[name="edit_role_perms"]:checked');
+      const permissions = Array.from(checkedBoxes).map(cb => cb.value);
+
+      try {
+        const res = await apiFetch(`/api/identity/business-roles/${encodeURIComponent(name)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ description, permissions })
+        });
+
+        if (res.ok) {
+          showToast(`Business role '${name}' updated successfully in Keycloak!`, 'success');
+          closeModal(elements.modalEditRole);
+          await loadBusinessRoles();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(`Failed to update role: ${err.message || 'Validation error'}`, 'error');
+        }
+      } catch {
+        showToast('Error updating business role.', 'error');
+      }
+    });
+  }
+
+  // 7.3 Delete Business Role
+  if (elements.btnExecuteDeleteRole) {
+    elements.btnExecuteDeleteRole.addEventListener('click', async () => {
+      const name = elements.deleteRoleName.value;
+      if (!name) return;
+
+      try {
+        const res = await apiFetch(`/api/identity/business-roles/${encodeURIComponent(name)}`, {
+          method: 'DELETE'
+        });
+
+        if (res.ok) {
+          showToast(`Business role '${name}' deleted successfully from Keycloak!`, 'success');
+          closeModal(elements.modalConfirmDeleteRole);
+          await loadBusinessRoles();
+          updateMetrics();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(`Failed to delete role: ${err.detail || err.message || 'Role cannot be deleted while assigned to users.'}`, 'error');
+        }
+      } catch {
+        showToast('Error deleting business role.', 'error');
+      }
+    });
+  }
+
+  // 7.4 Create Permission Manually
+  if (elements.formCreatePermission) {
+    elements.formCreatePermission.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = elements.cpName.value.trim();
+      const description = elements.cpDesc.value.trim() || null;
+      const serviceId = elements.cpService.value.trim() || null;
+
+      try {
+        const res = await apiFetch('/api/identity/permissions', {
+          method: 'POST',
+          body: JSON.stringify({ name, description, serviceId })
+        });
+
+        if (res.ok) {
+          showToast(`Permission '${name}' registered successfully in Keycloak!`, 'success');
+          closeModal(elements.modalCreatePermission);
+          elements.formCreatePermission.reset();
+          await loadPermissions();
+          updateMetrics();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(`Failed to register permission: ${err.detail || err.message || 'Validation error'}`, 'error');
+        }
+      } catch {
+        showToast('Error registering permission.', 'error');
+      }
+    });
+  }
 
   // 8. Token Playground
   elements.tokenMintForm.addEventListener('submit', async (e) => {
@@ -1141,7 +1457,7 @@
     const username = elements.tokenTestUsername.value.trim();
     const password = elements.tokenTestPassword.value;
 
-    elements.tokenOutputConsole.textContent = 'در حال ارسال درخواست به Keycloak...';
+    elements.tokenOutputConsole.textContent = 'Sending authentication request to Keycloak...';
 
     try {
       const form = new URLSearchParams();
@@ -1184,7 +1500,7 @@
       window._lastMintedTestToken = token;
       elements.btnTestMe.disabled = false;
       elements.btnTestContext.disabled = false;
-      showToast(`توکن برای کاربر '${username}' با موفقیت صادر شد.`, 'success');
+      showToast(`Token minted successfully for user '${username}'.`, 'success');
     } catch (err) {
       elements.tokenOutputConsole.textContent = `// Network exception: ${err.message}`;
     }
@@ -1243,13 +1559,13 @@
 
   document.getElementById('btn-global-refresh').addEventListener('click', async () => {
     await refreshAllData();
-    showToast('اطلاعات با موفقیت از Keycloak بروزرسانی شد.', 'info');
+    showToast('Data refreshed successfully from Keycloak.', 'info');
   });
 
   if (elements.btnRefreshScopes) {
     elements.btnRefreshScopes.addEventListener('click', async () => {
       await loadScopes();
-      showToast('لیست اسکوپ‌ها بروزرسانی شد.', 'info');
+      showToast('Scopes list refreshed.', 'info');
     });
   }
 
@@ -1289,6 +1605,11 @@
   document.getElementById('btn-quick-test-token').addEventListener('click', () => {
     switchView('view-token-test');
   });
+  if (elements.btnOpenCreatePermission) {
+    elements.btnOpenCreatePermission.addEventListener('click', () => {
+      openModal(elements.modalCreatePermission);
+    });
+  }
 
   // Database Engine Info Modal
   if (elements.btnHeaderDb) {

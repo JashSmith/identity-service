@@ -80,7 +80,7 @@
       "name": "iam-scope-registry",
       "attributes": {
         "scope.region": [
-          "{\"displayName\":\"Region\",\"description\":\"Geographic region / منطقه جغرافیایی\",\"isActive\":true,\"valueType\":\"String\"}"
+          "{\"displayName\":\"Region\",\"description\":\"Geographic region\",\"isActive\":true,\"valueType\":\"String\"}"
         ],
         "resource.Orders": [
           "region"

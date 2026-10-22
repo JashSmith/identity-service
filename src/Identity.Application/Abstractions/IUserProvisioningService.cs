@@ -31,4 +31,14 @@ public interface IUserProvisioningService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>True if deleted or already absent; false on failure.</returns>
     Task<bool> DeleteUserAsync(string userId, CancellationToken ct);
+
+    /// <summary>
+    /// Resets a user's password in Keycloak.
+    /// </summary>
+    /// <param name="userId">The Keycloak user ID.</param>
+    /// <param name="newPassword">The new password.</param>
+    /// <param name="temporary">Whether the password is temporary and must be changed on next login.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if reset succeeded; false otherwise.</returns>
+    Task<bool> ResetPasswordAsync(string userId, string newPassword, bool temporary, CancellationToken ct);
 }

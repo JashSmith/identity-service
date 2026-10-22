@@ -107,13 +107,28 @@ public sealed class KeycloakUserProvisioner(
             if (kv.Key == "firstName" && request.FirstName is not null) continue;
             if (kv.Key == "lastName" && request.LastName is not null) continue;
             if (kv.Key == "enabled" && request.Enabled.HasValue) continue;
+            if (kv.Key == "username" && !string.IsNullOrWhiteSpace(request.Username)) continue;
+            if (kv.Key == "emailVerified" && request.EmailVerified.HasValue) continue;
             mutable[kv.Key] = kv.Value;
         }
         // Apply updates
-        if (request.Email is not null) mutable["email"] = request.Email;
-        if (request.FirstName is not null) mutable["firstName"] = request.FirstName;
-        if (request.LastName is not null) mutable["lastName"] = request.LastName;
+        if (request.Email is not null) mutable["email"] = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
+        if (request.FirstName is not null) mutable["firstName"] = string.IsNullOrWhiteSpace(request.FirstName) ? null : request.FirstName.Trim();
+        if (request.LastName is not null) mutable["lastName"] = string.IsNullOrWhiteSpace(request.LastName) ? null : request.LastName.Trim();
         if (request.Enabled.HasValue) mutable["enabled"] = request.Enabled.Value;
+        if (!string.IsNullOrWhiteSpace(request.Username)) mutable["username"] = request.Username.Trim();
+        if (request.EmailVerified.HasValue) mutable["emailVerified"] = request.EmailVerified.Value;
+        if (request.Attributes is not null)
+        {
+            var existingAttrs = mutable.TryGetValue("attributes", out var aObj) && aObj is JsonElement je && je.ValueKind == JsonValueKind.Object
+                ? JsonSerializer.Deserialize<Dictionary<string, object?>>(je.GetRawText()) ?? new()
+                : new Dictionary<string, object?>();
+            foreach (var kv in request.Attributes)
+            {
+                existingAttrs[kv.Key] = kv.Value;
+            }
+            mutable["attributes"] = existingAttrs;
+        }
 
         // Re-serialize via JsonElement round-trip to keep other fields
         var updatedJson = JsonSerializer.Serialize(mutable);
@@ -147,6 +162,29 @@ public sealed class KeycloakUserProvisioner(
         catch { return false; }
     }
 
+    public async Task<bool> ResetPasswordAsync(string userId, string newPassword, bool temporary, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
+        var token = await tokenProvider.GetTokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
+
+        var body = new Dictionary<string, object?>
+        {
+            ["type"] = "password",
+            ["value"] = newPassword,
+            ["temporary"] = temporary
+        };
+
+        var req = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{_o.Realm}/users/{Uri.EscapeDataString(userId)}/reset-password")
+        {
+            Content = JsonContent.Create(body)
+        };
+        req.Headers.Add("Authorization", $"Bearer {token}");
+        var res = await http.SendAsync(req, ct);
+        return res.IsSuccessStatusCode;
+    }
+
     private static UserDto MapUser(JsonElement e)
     {
         var id = e.TryGetProperty("id", out var pid) ? pid.GetString() ?? "" : "";
@@ -164,6 +202,14 @@ public sealed class KeycloakUserProvisioner(
                 attrs[prop.Name] = prop.Value.ValueKind == JsonValueKind.Array
                     ? prop.Value.EnumerateArray().Select(v => v.GetString() ?? "").ToArray()
                     : [prop.Value.GetString() ?? ""];
+        if (e.TryGetProperty("email", out var em) && em.ValueKind == JsonValueKind.String)
+            attrs["email"] = [em.GetString() ?? ""];
+        if (e.TryGetProperty("emailVerified", out var ev))
+            attrs["emailVerified"] = [ev.GetBoolean().ToString().ToLowerInvariant()];
+        if (e.TryGetProperty("firstName", out var fnp) && fnp.ValueKind == JsonValueKind.String)
+            attrs["firstName"] = [fnp.GetString() ?? ""];
+        if (e.TryGetProperty("lastName", out var lnp) && lnp.ValueKind == JsonValueKind.String)
+            attrs["lastName"] = [lnp.GetString() ?? ""];
         return new UserDto(id, username, displayName, enabled, attrs);
     }
 }

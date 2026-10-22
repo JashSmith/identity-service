@@ -15,8 +15,10 @@ public sealed record CreateBusinessRoleRequest(
 /// Request payload to update an existing business role.
 /// </summary>
 /// <param name="Description">The updated description for the business role.</param>
+/// <param name="Permissions">Optional updated collection of permission names to assign to this role.</param>
 public sealed record UpdateBusinessRoleRequest(
-    string? Description);
+    string? Description,
+    IReadOnlyCollection<string>? Permissions = null);
 
 /// <summary>
 /// Request payload to assign permissions to a business role.

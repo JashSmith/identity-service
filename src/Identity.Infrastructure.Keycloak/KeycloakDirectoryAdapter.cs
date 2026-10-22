@@ -50,6 +50,14 @@ public sealed class KeycloakDirectoryAdapter(
                     ? prop.Value.EnumerateArray().Select(v => v.GetString() ?? string.Empty).ToArray()
                     : [prop.Value.GetString() ?? string.Empty];
         }
+        if (e.TryGetProperty("email", out var em) && em.ValueKind == JsonValueKind.String)
+            attrs["email"] = [em.GetString() ?? string.Empty];
+        if (e.TryGetProperty("emailVerified", out var ev))
+            attrs["emailVerified"] = [ev.GetBoolean().ToString().ToLowerInvariant()];
+        if (e.TryGetProperty("firstName", out var fnp) && fnp.ValueKind == JsonValueKind.String)
+            attrs["firstName"] = [fnp.GetString() ?? string.Empty];
+        if (e.TryGetProperty("lastName", out var lnp) && lnp.ValueKind == JsonValueKind.String)
+            attrs["lastName"] = [lnp.GetString() ?? string.Empty];
 
         return new UserDto(id, username, displayName, enabled, attrs);
     }

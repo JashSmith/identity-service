@@ -95,6 +95,24 @@ public static class ScopeAdminEndpoints
             .WithName("UpdateScope")
             .Produces<ScopeDefinitionDto>(200);
 
+        g.MapDelete("/{key}", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
+            {
+                try
+                {
+                    var ok = await registry.DeleteScopeAsync(key, ct);
+                    return ok
+                        ? Results.NoContent()
+                        : Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                }
+            })
+            .RequireAuthorization(IamPermissions.ScopesManage)
+            .WithName("DeleteScope")
+            .Produces(204).Produces<ProblemResponse>(400);
+
         return g;
     }
 }

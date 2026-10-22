@@ -66,10 +66,29 @@ public static class BusinessRolesEndpoints
                 Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 var dto = await store.UpdateAsync(name, req.Description, ct);
-                if (dto is not null) scopeCache.Invalidate();
-                return dto is null
-                    ? Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")))
-                    : Results.Ok(dto);
+                if (dto is null)
+                    return Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")));
+
+                if (req.Permissions is not null)
+                {
+                    var currentPerms = await store.GetEffectivePermissionsAsync(name, ct);
+                    var incoming = req.Permissions.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    var toRemove = currentPerms.Where(p => !incoming.Contains(p)).ToList();
+                    var toAdd = req.Permissions.Where(p => !currentPerms.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                    foreach (var p in toRemove)
+                    {
+                        try { await store.RemovePermissionAsync(name, p, ct); } catch { /* ignore if not mapped */ }
+                    }
+                    if (toAdd.Count > 0)
+                    {
+                        try { await store.AddPermissionsAsync(name, toAdd, ct); } catch { /* best effort */ }
+                    }
+                    dto = await store.GetAsync(name, ct) ?? dto;
+                }
+
+                scopeCache.Invalidate();
+                return Results.Ok(dto);
             }).RequireAuthorization(IamPermissions.RolesManage)
             .WithName("UpdateBusinessRole")
             .Produces<BusinessRoleDto>(200);
