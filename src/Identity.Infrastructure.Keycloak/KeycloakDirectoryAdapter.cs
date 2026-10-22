@@ -2,18 +2,23 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Identity.Application;
 using Identity.Contracts;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Identity.Infrastructure.Keycloak;
 
 /// <summary>
-/// Keycloak Admin REST adapter that implements <see cref="IUserDirectory"/> and
-/// <see cref="IRoleDirectory"/> against a single realm. The facade never invents
-/// users locally — Keycloak is the only user store.
+/// Keycloak Admin REST adapter that implements <see cref="IUserDirectory"/>,
+/// <see cref="IRoleDirectory"/>, and <see cref="IUserSessionService"/> against a single realm.
+/// Provides user listing, online status detection, and token/session revocation.
 /// </summary>
-public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakOptions> opts,
-    KeycloakAdminTokenProvider tokenProvider)
-    : IUserDirectory, IRoleDirectory
+public sealed class KeycloakDirectoryAdapter(
+    HttpClient http,
+    IOptions<KeycloakOptions> opts,
+    KeycloakAdminTokenProvider tokenProvider,
+    ICacheInvalidationService? cacheInvalidator = null,
+    ILogger<KeycloakDirectoryAdapter>? logger = null)
+    : IUserDirectory, IRoleDirectory, IUserSessionService
 {
     private readonly KeycloakOptions _o = opts.Value;
     private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
@@ -59,6 +64,14 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
         return new RoleDto(id, name, desc, clientId, composite);
     }
 
+    /// <summary>
+    /// Retrieves a paginated list of users from Keycloak, enriched with real-time online status and active session count.
+    /// </summary>
+    /// <param name="search">Optional username, email, or name filter.</param>
+    /// <param name="page">1-based page index.</param>
+    /// <param name="pageSize">Maximum users per page.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A paged response with enriched user DTOs.</returns>
     public async Task<PagedResponse<UserDto>> GetUsersAsync(string? search, int page, int pageSize,
         CancellationToken ct)
     {
@@ -75,17 +88,40 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
             var res = await http.SendAsync(req, ct);
             if (!res.IsSuccessStatusCode) return new PagedResponse<UserDto>([], page, pageSize, 0);
             var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            var items = doc.RootElement.ValueKind == JsonValueKind.Array
+            var rawUsers = doc.RootElement.ValueKind == JsonValueKind.Array
                 ? doc.RootElement.EnumerateArray().Select(MapUser).ToList()
                 : new List<UserDto>();
+
+            // Enrich users with active session information to report online / offline status
+            var enrichedTasks = rawUsers.Select(async u =>
+            {
+                try
+                {
+                    var sessions = await GetUserSessionsAsync(u.Id, ct);
+                    return u with { IsOnline = sessions.Count > 0, ActiveSessionsCount = sessions.Count };
+                }
+                catch
+                {
+                    return u with { IsOnline = false, ActiveSessionsCount = 0 };
+                }
+            });
+
+            var items = await Task.WhenAll(enrichedTasks);
             return new PagedResponse<UserDto>(items, page, pageSize, null);
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogWarning(ex, "Failed to get users from Keycloak.");
             return new PagedResponse<UserDto>([], page, pageSize, 0);
         }
     }
 
+    /// <summary>
+    /// Retrieves a single user by Keycloak ID and attaches real-time online status.
+    /// </summary>
+    /// <param name="id">Keycloak user ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The UserDto or null if not found.</returns>
     public async Task<UserDto?> GetUserAsync(string id, CancellationToken ct)
     {
         var token = await GetAdminTokenAsync(ct);
@@ -96,14 +132,23 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
             var res = await http.SendAsync(req, ct);
             if (!res.IsSuccessStatusCode) return null;
             var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            return MapUser(doc.RootElement);
+            var u = MapUser(doc.RootElement);
+            var sessions = await GetUserSessionsAsync(u.Id, ct);
+            return u with { IsOnline = sessions.Count > 0, ActiveSessionsCount = sessions.Count };
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogWarning(ex, "Failed to get user '{Id}' from Keycloak.", id);
             return null;
         }
     }
 
+    /// <summary>
+    /// Retrieves all realm and client roles mapped to a user in Keycloak.
+    /// </summary>
+    /// <param name="id">Keycloak user ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Collection of RoleDto records.</returns>
     public async Task<IReadOnlyCollection<RoleDto>> GetUserRolesAsync(string id, CancellationToken ct)
     {
         var token = await GetAdminTokenAsync(ct);
@@ -124,81 +169,70 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
                         result.AddRange(m.EnumerateArray().Select(MapRole));
             return result;
         }
-        catch
-        {
-            return [];
-        }
+        catch { return []; }
     }
 
+    /// <summary>
+    /// Resolves all effective permissions for a user from composite realm and client roles.
+    /// </summary>
+    /// <param name="id">Keycloak user ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Collection of effective permission DTOs.</returns>
     public async Task<IReadOnlyCollection<PermissionDto>> GetUserPermissionsAsync(string id, CancellationToken ct)
     {
-        // Permissions are modelled as roles in Keycloak for this facade; map them to PermissionDto by convention.
-        // A user normally gets them through business-role GROUP membership rather than direct
-        // mappings, so group-inherited realm and client roles must be unioned in — Keycloak's
-        // /users/{id}/role-mappings only reports direct assignments and returns [] otherwise.
         var token = await GetAdminTokenAsync(ct);
         if (string.IsNullOrEmpty(token)) return [];
-        var names = new Dictionary<string, string?>(StringComparer.Ordinal);
-        foreach (var r in await GetUserRolesAsync(id, ct)) names[r.Name] = r.Description;
+        var result = new Dictionary<string, PermissionDto>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var groupId in await GetUserGroupIdsAsync(id, token, ct))
-        {
-            foreach (var r in await GetGroupRealmRolesAsync(groupId, token, ct)) names[r.Name] = r.Description;
-            foreach (var clientUuid in await ListClientUuidsAsync(token, ct))
-                foreach (var r in await GetGroupClientRolesAsync(groupId, clientUuid, token, ct))
-                    names[r.Name] = r.Description;
-        }
-
-        return names
-            .Select(kv => new PermissionDto(kv.Key, kv.Value ?? kv.Key, _o.Realm, string.Empty, false, null))
-            .ToList();
-    }
-
-    private async Task<IReadOnlyCollection<string>> GetUserGroupIdsAsync(string userId, string token, CancellationToken ct)
-    {
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/users/{Uri.EscapeDataString(userId)}/groups");
-        AttachAuth(req, token);
+        var realmReq = new HttpRequestMessage(HttpMethod.Get,
+            $"{AdminBase}/{_o.Realm}/users/{Uri.EscapeDataString(id)}/role-mappings/realm/composite");
+        AttachAuth(realmReq, token);
         try
         {
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return [];
-            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            return doc.RootElement.ValueKind == JsonValueKind.Array
-                ? doc.RootElement.EnumerateArray()
-                    .Select(e => e.TryGetProperty("id", out var i) ? i.GetString() ?? "" : "")
-                    .Where(x => !string.IsNullOrEmpty(x)).ToArray()
-                : [];
+            var res = await http.SendAsync(realmReq, ct);
+            if (res.IsSuccessStatusCode)
+            {
+                var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var e in doc.RootElement.EnumerateArray())
+                    {
+                        var name = e.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                        var desc = e.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+                        var roleId = e.TryGetProperty("id", out var rid) ? rid.GetString() : null;
+                        if (!string.IsNullOrEmpty(name))
+                            result[name] = new PermissionDto(name, desc, "realm", "1.0", false, roleId);
+                    }
+                }
+            }
         }
-        catch { return []; }
-    }
+        catch { /* best-effort */ }
 
-    private async Task<IReadOnlyCollection<RoleDto>> GetGroupRealmRolesAsync(string groupId, string token, CancellationToken ct)
-    {
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/realm");
-        AttachAuth(req, token);
-        return await ReadRoleArrayAsync(req, ct);
-    }
-
-    private async Task<IReadOnlyCollection<RoleDto>> GetGroupClientRolesAsync(string groupId, string clientUuid, string token, CancellationToken ct)
-    {
-        var req = new HttpRequestMessage(HttpMethod.Get,
-            $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}/role-mappings/clients/{Uri.EscapeDataString(clientUuid)}");
-        AttachAuth(req, token);
-        return await ReadRoleArrayAsync(req, ct);
-    }
-
-    private async Task<IReadOnlyCollection<RoleDto>> ReadRoleArrayAsync(HttpRequestMessage req, CancellationToken ct)
-    {
-        try
+        var clients = await ListClientUuidsAsync(token, ct);
+        foreach (var clientUuid in clients)
         {
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return [];
-            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            return doc.RootElement.ValueKind == JsonValueKind.Array
-                ? doc.RootElement.EnumerateArray().Select(MapRole).ToArray()
-                : [];
+            var clientReq = new HttpRequestMessage(HttpMethod.Get,
+                $"{AdminBase}/{_o.Realm}/users/{Uri.EscapeDataString(id)}/role-mappings/clients/{clientUuid}/composite");
+            AttachAuth(clientReq, token);
+            try
+            {
+                var res = await http.SendAsync(clientReq, ct);
+                if (!res.IsSuccessStatusCode) continue;
+                var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) continue;
+                foreach (var e in doc.RootElement.EnumerateArray())
+                {
+                    var name = e.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    var desc = e.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+                    var roleId = e.TryGetProperty("id", out var rid) ? rid.GetString() : null;
+                    if (!string.IsNullOrEmpty(name))
+                        result[name] = new PermissionDto(name, desc, clientUuid, "1.0", false, roleId);
+                }
+            }
+            catch { /* best-effort */ }
         }
-        catch { return []; }
+
+        return result.Values.ToList();
     }
 
     private async Task<IReadOnlyCollection<string>> ListClientUuidsAsync(string token, CancellationToken ct)
@@ -219,6 +253,121 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
         catch { return []; }
     }
 
+    /// <summary>
+    /// Checks whether the user currently has at least one active Keycloak session.
+    /// </summary>
+    /// <param name="userId">Keycloak user ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>True if online; false if offline.</returns>
+    public async Task<bool> IsUserOnlineAsync(string userId, CancellationToken ct)
+    {
+        var sessions = await GetUserSessionsAsync(userId, ct);
+        return sessions.Count > 0;
+    }
+
+    /// <summary>
+    /// Retrieves all active Keycloak sessions for the user.
+    /// </summary>
+    /// <param name="userId">Keycloak user ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A collection of active session DTOs.</returns>
+    public async Task<IReadOnlyCollection<UserSessionDto>> GetUserSessionsAsync(string userId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        var token = await GetAdminTokenAsync(ct);
+        if (string.IsNullOrEmpty(token)) return [];
+
+        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/users/{Uri.EscapeDataString(userId)}/sessions");
+        AttachAuth(req, token);
+        try
+        {
+            var res = await http.SendAsync(req, ct);
+            if (!res.IsSuccessStatusCode) return [];
+            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return [];
+            var list = new List<UserSessionDto>();
+            foreach (var s in doc.RootElement.EnumerateArray())
+            {
+                var id = s.TryGetProperty("id", out var sid) ? sid.GetString() ?? string.Empty : string.Empty;
+                var uname = s.TryGetProperty("username", out var su) ? su.GetString() ?? string.Empty : string.Empty;
+                var uid = s.TryGetProperty("userId", out var suid) ? suid.GetString() ?? userId : userId;
+                var ip = s.TryGetProperty("ipAddress", out var sip) ? sip.GetString() : null;
+                var startMs = s.TryGetProperty("start", out var st) ? st.GetInt64() : 0;
+                var lastMs = s.TryGetProperty("lastAccess", out var la) ? la.GetInt64() : 0;
+                var clients = new Dictionary<string, string>();
+                if (s.TryGetProperty("clients", out var cl) && cl.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var c in cl.EnumerateObject())
+                    {
+                        clients[c.Name] = c.Value.GetString() ?? string.Empty;
+                    }
+                }
+                list.Add(new UserSessionDto(
+                    id, uname, uid, ip,
+                    DateTimeOffset.FromUnixTimeMilliseconds(startMs),
+                    DateTimeOffset.FromUnixTimeMilliseconds(lastMs),
+                    clients));
+            }
+            return list;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Failed to query sessions for user '{UserId}'.", userId);
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Revokes all active sessions for the user in Keycloak and clears user cache in Redis.
+    /// </summary>
+    /// <param name="userId">Keycloak user ID.</param>
+    /// <param name="reason">Administrative reason for revocation.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>A RevokeUserTokensResponse.</returns>
+    public async Task<RevokeUserTokensResponse> RevokeUserTokensAsync(string userId, string? reason, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        var token = await GetAdminTokenAsync(ct);
+        bool success = false;
+        string message;
+
+        if (string.IsNullOrEmpty(token))
+        {
+            return new RevokeUserTokensResponse(userId, false, "Keycloak admin token unavailable.", DateTimeOffset.UtcNow);
+        }
+
+        try
+        {
+            // 1. Terminate all active sessions in Keycloak
+            var logoutReq = new HttpRequestMessage(HttpMethod.Post, $"{AdminBase}/{_o.Realm}/users/{Uri.EscapeDataString(userId)}/logout");
+            AttachAuth(logoutReq, token);
+            var logoutRes = await http.SendAsync(logoutReq, ct);
+            success = logoutRes.IsSuccessStatusCode;
+            message = success ? "User sessions logged out successfully in Keycloak." : $"Keycloak logout returned {(int)logoutRes.StatusCode}";
+
+            // 2. Clear authorization cache in Redis/distributed cache
+            if (cacheInvalidator is not null)
+            {
+                await cacheInvalidator.InvalidateUserAsync(userId, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"Revocation encountered error: {ex.Message}";
+            logger?.LogError(ex, "Error revoking user tokens for '{UserId}'.", userId);
+        }
+
+        return new RevokeUserTokensResponse(userId, success, message, DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// Retrieves roles from Keycloak, optionally filtered by client.
+    /// </summary>
+    /// <param name="clientId">Client ID or null for realm roles.</param>
+    /// <param name="page">1-based page index.</param>
+    /// <param name="pageSize">Page size limit.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Paged response containing RoleDto records.</returns>
     public async Task<PagedResponse<RoleDto>> GetRolesAsync(string? clientId, int page, int pageSize,
         CancellationToken ct)
     {
@@ -247,9 +396,14 @@ public sealed class KeycloakDirectoryAdapter(HttpClient http, IOptions<KeycloakO
         }
     }
 
+    /// <summary>
+    /// Retrieves a realm role by ID.
+    /// </summary>
+    /// <param name="id">The role ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The RoleDto or null.</returns>
     public async Task<RoleDto?> GetRoleAsync(string id, CancellationToken ct)
     {
-        // Keycloak has no direct GetRole by id without knowing client; search realm roles only.
         var token = await GetAdminTokenAsync(ct);
         var req = new HttpRequestMessage(HttpMethod.Get,
             $"{AdminBase}/{_o.Realm}/roles-by-id/{Uri.EscapeDataString(id)}");

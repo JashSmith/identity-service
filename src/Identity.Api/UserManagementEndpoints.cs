@@ -43,6 +43,28 @@ public static class UserManagementEndpoints
             .WithName("UpdateUserWithAccess")
             .Produces<UserDto>(200);
 
+        g.MapGet("/{id}/sessions", async (string id, IUserSessionService sessionService, IUserDirectory dir, CancellationToken ct) =>
+            {
+                var user = await dir.GetUserAsync(id, ct);
+                if (user is null)
+                    return Results.NotFound(new ProblemResponse("not_found", $"user '{id}' not found", Guid.NewGuid().ToString("N")));
+                var sessions = await sessionService.GetUserSessionsAsync(id, ct);
+                return Results.Ok(sessions);
+            }).RequireAuthorization(IamPermissions.UsersManage)
+            .WithName("GetUserSessions")
+            .Produces<IReadOnlyCollection<UserSessionDto>>(200);
+
+        g.MapPost("/{id}/revoke", async (string id, RevokeUserTokensRequest? req, IUserSessionService sessionService, IUserDirectory dir, CancellationToken ct) =>
+            {
+                var user = await dir.GetUserAsync(id, ct);
+                if (user is null)
+                    return Results.NotFound(new ProblemResponse("not_found", $"user '{id}' not found", Guid.NewGuid().ToString("N")));
+                var res = await sessionService.RevokeUserTokensAsync(id, req?.Reason, ct);
+                return Results.Ok(res);
+            }).RequireAuthorization(IamPermissions.UsersManage)
+            .WithName("RevokeUserTokens")
+            .Produces<RevokeUserTokensResponse>(200);
+
         g.MapGet("/{id}/scoped-access", async (string id, IScopedAccessStore store, IUserDirectory dir, CancellationToken ct) =>
             {
                 var user = await dir.GetUserAsync(id, ct);

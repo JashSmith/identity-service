@@ -302,4 +302,74 @@ public sealed class KeycloakAuthorizationTests
         Assert.Equal(2, back.Assignments.First().Scopes["test-key"].Count);
         Assert.Contains("tehran-1", back.Assignments.First().Scopes["region"]);
     }
+
+    // ---------- 9. Online/Offline tracking and Token Revocation ----------
+
+    [Fact]
+    public async Task DirectoryAdapter_TracksOnlineUser_WhenActiveSessionsExist()
+    {
+        var handler = new StubHandler(req =>
+        {
+            if (req.RequestUri!.ToString().Contains("/users/u-1/sessions"))
+            {
+                return Json(new[]
+                {
+                    new
+                    {
+                        id = "sess-1",
+                        username = "alice",
+                        userId = "u-1",
+                        ipAddress = "192.168.1.1",
+                        start = 1700000000000,
+                        lastAccess = 1700000000000,
+                        clients = new Dictionary<string, string> { ["c-1"] = "client-app" }
+                    }
+                });
+            }
+            if (req.RequestUri.ToString().Contains("/protocol/openid-connect/token"))
+            {
+                return Json(new { access_token = "admin-tok" });
+            }
+            return Json(new object());
+        });
+
+        var tokenProv = new KeycloakAdminTokenProvider(Client(handler), Options.Create(KcOpts()));
+        var adapter = new KeycloakDirectoryAdapter(Client(handler), Options.Create(KcOpts()), tokenProv);
+        
+        var isOnline = await adapter.IsUserOnlineAsync("u-1", CancellationToken.None);
+        var sessions = await adapter.GetUserSessionsAsync("u-1", CancellationToken.None);
+
+        Assert.True(isOnline);
+        Assert.Single(sessions);
+        Assert.Equal("sess-1", sessions.First().Id);
+        Assert.Equal("192.168.1.1", sessions.First().IpAddress);
+    }
+
+    [Fact]
+    public async Task DirectoryAdapter_RevokeUserTokens_CallsKeycloakLogout()
+    {
+        var logoutCalled = false;
+        var handler = new StubHandler(req =>
+        {
+            if (req.RequestUri!.ToString().Contains("/users/u-1/logout"))
+            {
+                logoutCalled = true;
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            if (req.RequestUri.ToString().Contains("/protocol/openid-connect/token"))
+            {
+                return Json(new { access_token = "admin-tok" });
+            }
+            return Json(new object());
+        });
+
+        var tokenProv = new KeycloakAdminTokenProvider(Client(handler), Options.Create(KcOpts()));
+        var adapter = new KeycloakDirectoryAdapter(Client(handler), Options.Create(KcOpts()), tokenProv);
+
+        var result = await adapter.RevokeUserTokensAsync("u-1", "Admin revocation", CancellationToken.None);
+
+        Assert.True(logoutCalled);
+        Assert.True(result.Success);
+        Assert.Equal("u-1", result.UserId);
+    }
 }

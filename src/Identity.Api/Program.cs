@@ -29,28 +29,16 @@ builder.Services.AddCompanyAuthentication(options =>
 builder.Services.AddCompanyAuthorization();
 builder.Services.AddGrpc();
 
-// Key management
-builder.Services.Configure<KeyManagementOptions>(builder.Configuration.GetSection("Identity:KeyManagement"));
-builder.Services.Configure<Identity.Infrastructure.Vault.VaultOptions>(
-    builder.Configuration.GetSection("Identity:Vault"));
 builder.Services.Configure<Identity.Infrastructure.Keycloak.KeycloakOptions>(
     builder.Configuration.GetSection("Identity:KeycloakAdmin"));
-builder.Services.AddSingleton(sp =>
-    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<KeyManagementOptions>>().Value);
-builder.Services.AddSingleton<IKeyGenerationService, Identity.Infrastructure.RsaKeyGenerationService>();
-builder.Services.AddScoped<IKeyRetirementSafety, Identity.Infrastructure.KeyRetirementSafety>();
-builder.Services.AddSingleton<IKeyRotationLock, Identity.Infrastructure.Redis.InMemoryKeyRotationLock>();
 builder.Services.AddSingleton<IAuditSink>(sp => new Identity.Infrastructure.NoopAuditSink());
-builder.Services.AddHttpClient<Identity.Infrastructure.Vault.VaultSigningKeyStore>();
-builder.Services.AddSingleton<ISigningKeyVault>(sp =>
-    sp.GetRequiredService<Identity.Infrastructure.Vault.VaultSigningKeyStore>());
-builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakKeyManager>();
-builder.Services.AddSingleton<IKeycloakKeyManager>(sp =>
-    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakKeyManager>());
+builder.Services.AddSingleton<ICacheInvalidationService, Identity.Infrastructure.Redis.RedisCacheInvalidator>();
 
-// Directory + permissions — Keycloak is source of truth; facade registry is in-memory so failure never blocks start.
+// Directory, user sessions, roles & permissions — Keycloak is source of truth
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>();
 builder.Services.AddSingleton<IUserDirectory>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
+builder.Services.AddSingleton<IUserSessionService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
 builder.Services.AddSingleton<IRoleDirectory>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
@@ -142,15 +130,6 @@ builder.Services.AddSingleton<IUserProfileRequirements>(sp =>
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.FacadePermissionRegistrar>();
 
 
-builder.Services.AddDbContext<Identity.Persistence.KeyManagement.KeyMetadataDbContext>((sp, o) =>
-{
-    var cfg = sp.GetRequiredService<IConfiguration>();
-    var cs = cfg.GetConnectionString("KeyMetadata") ?? "Data Source=identity_keys.db";
-    var provider = cfg["Identity:KeyMetadata:Provider"] ?? "sqlite";
-    Identity.Persistence.KeyManagement.KeyMetadataDbContext.ConfigureProvider(o, provider, cs);
-});
-builder.Services.AddScoped<IKeyLifecycleRepository, Identity.Persistence.KeyManagement.EfKeyLifecycleRepository>();
-builder.Services.AddScoped<KeyRotationService>();
 builder.Services.AddHealthChecks();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -199,6 +178,8 @@ if (app.Environment.IsDevelopment())
 app.MapOpenApi();
 // No HTTPS endpoint exists in Development/compose (plain HTTP on 5080), so a redirect here would 307 every request.
 if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");
@@ -219,9 +200,7 @@ app.MapBusinessRoles();
 app.MapScopeAdmin();
 app.MapAccessContext();
 app.MapPermissions();
-app.MapAdminKeys();
 app.MapGrpcService<Company.Identity.Grpc.IdentityGrpcService>();
-app.MapGrpcService<Company.Identity.Grpc.KeyAdminGrpcService>();
 // Seed facade-owned permissions through the existing registry so they are mirrored to Keycloak.
 try
 {
@@ -291,9 +270,8 @@ catch
     /* best-effort */
 }
 
-app.MapPost("/api/identity/external/organization-token",
-        (OrganizationTokenRequest request) => Results.StatusCode(StatusCodes.Status501NotImplemented))
-    .WithTags("Auth").WithName("ExchangeOrganizationToken");
+app.MapGet("/dashboard", () => Results.Redirect("/"));
+app.MapFallbackToFile("index.html");
 app.Run();
 
 public partial class Program;

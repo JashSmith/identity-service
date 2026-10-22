@@ -33,9 +33,7 @@
     <Folder Name="/src/Infrastructure/">
         <Project Path="src/Identity.Infrastructure.Keycloak/Identity.Infrastructure.Keycloak.csproj"/>
         <Project Path="src/Identity.Infrastructure.Redis/Identity.Infrastructure.Redis.csproj"/>
-        <Project Path="src/Identity.Infrastructure.Vault/Identity.Infrastructure.Vault.csproj"/>
         <Project Path="src/Identity.Infrastructure/Identity.Infrastructure.csproj"/>
-        <Project Path="src/Identity.Persistence.KeyManagement/Identity.Persistence.KeyManagement.csproj"/>
     </Folder>
     <Folder Name="/src/Packages/"/>
     <Folder Name="/src/Packages/Authentication/">

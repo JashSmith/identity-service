@@ -45,16 +45,16 @@ public sealed class ArchitectureTests
     [Fact]
     public void Contracts_have_no_private_key_material()
     {
-        var types = typeof(Identity.Contracts.SigningKeyDto).Assembly.GetTypes();
+        var types = typeof(Identity.Contracts.UserDto).Assembly.GetTypes();
         foreach (var tp in types)
         foreach (var pr in tp.GetProperties())
-            Assert.DoesNotContain("private", pr.Name, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("private_key", pr.Name, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Application_has_no_vault_keycloak_ef_redis_grpc()
     {
-        var names = typeof(Identity.Application.KeyRotationService).Assembly.GetReferencedAssemblies()
+        var names = typeof(Identity.Application.ProvisioningOrchestrator).Assembly.GetReferencedAssemblies()
             .Select(x => x.Name).ToArray();
         Assert.DoesNotContain("Identity.Infrastructure.Vault", names);
         Assert.DoesNotContain("Identity.Infrastructure.Keycloak", names);

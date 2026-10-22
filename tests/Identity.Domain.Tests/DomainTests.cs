@@ -30,4 +30,34 @@ public sealed class DomainTests
         Assert.DoesNotContain(evt.Details.Keys, k => k.Equals("access_token", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(evt.Details.Keys, k => k.Equals("private_key", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void BusinessRole_initializes_with_permissions()
+    {
+        var role = new Identity.Domain.Entities.BusinessRole("Accountant", "Finance role", ["Orders.Read", "Orders.Create"]);
+        Assert.Equal("Accountant", role.Name);
+        Assert.Equal("Finance role", role.Description);
+        Assert.Contains("Orders.Read", role.Permissions);
+        Assert.Contains("Orders.Create", role.Permissions);
+    }
+
+    [Fact]
+    public void UserSession_holds_session_data()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var session = new Identity.Domain.Entities.UserSession
+        {
+            Id = "session-123",
+            Username = "jash",
+            UserId = "user-abc",
+            IpAddress = "127.0.0.1",
+            StartTime = now,
+            LastAccessTime = now
+        };
+
+        Assert.Equal("session-123", session.Id);
+        Assert.Equal("jash", session.Username);
+        Assert.Equal("user-abc", session.UserId);
+        Assert.Equal("127.0.0.1", session.IpAddress);
+    }
 }
