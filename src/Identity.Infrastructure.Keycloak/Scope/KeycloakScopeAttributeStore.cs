@@ -1,352 +1,183 @@
 using System.Text.Json;
 using Identity.Application;
-using Identity.Contracts;
 using Identity.Application.Scope;
+using Identity.Contracts;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Identity.Infrastructure.Keycloak.Scope;
 
 /// <summary>
-/// User + Group scope attribute store using namespaced multivalued attributes:
-///   user/group attribute authz.scope.&lt;key&gt; — each value is one collection entry.
-/// Effective merge: Group scopes ∪ User scopes (union, unique, ordered), gated by
-/// authz.allowed-scopes on the business-role Groups at write time.
-/// Single source of truth for user scope state: writes both the flat
-/// <c>authz.scope.*</c> attributes and the legacy <c>iam.scoped_access</c> blob in
-/// ONE PUT, and implements IScopedAccessStore so callers never dual-write.
+/// Scope values stored on Keycloak users and groups as multivalued attributes <c>authz.scope.&lt;key&gt;</c>.
+/// <list type="bullet">
+/// <item><see cref="IScopedAccessStore"/> reads and writes only the user's own assignments: the per-role
+/// document in <c>iam.scoped_access</c> plus the flat <c>authz.scope.*</c> union, written in one PUT.</item>
+/// <item><see cref="IUserScopeReader"/> is the read-only merged view (user ∪ groups) that tokens carry.</item>
+/// </list>
+/// The two must never be mixed: writing the merged view back would copy group scopes onto the user.
 /// </summary>
 public sealed class KeycloakScopeAttributeStore(
     HttpClient http,
-    Microsoft.Extensions.Options.IOptions<Identity.Infrastructure.Keycloak.KeycloakOptions> options,
+    IOptions<KeycloakOptions> options,
     KeycloakAdminTokenProvider tokenProvider,
-    IScopedAccessSerializer serializer)
-    : IUserScopeReader, IUserScopeWriter, IScopedAccessStore
+    IScopedAccessSerializer serializer,
+    ILogger<KeycloakScopeAttributeStore>? logger = null)
+    : IUserScopeReader, IScopedAccessStore
 {
-    private readonly Identity.Infrastructure.Keycloak.KeycloakOptions opts = options.Value;
-    private string AdminBase => $"{opts.BaseUrl.TrimEnd('/')}/admin/realms";
     private const string ScopeAttrPrefix = "authz.scope.";
+    private const string Resource = "user";
 
-    private async Task<JsonElement?> GetUserJsonAsync(string userId, string token, CancellationToken ct)
+    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
+    private readonly KeycloakAdminApi _api = new(http, options.Value, tokenProvider, (ILogger?)logger ?? NullLogger.Instance);
+
+    private static string UserPath(string id) => $"users/{Uri.EscapeDataString(id)}";
+
+    // ---------- IScopedAccessStore: the user's own document ----------
+
+    async Task<Result<ScopedAccessDocument>> IScopedAccessStore.GetAsync(string userId, CancellationToken ct)
     {
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{opts.Realm}/users/{Uri.EscapeDataString(userId)}");
-        req.Headers.Add("Authorization", $"Bearer {token}");
-        try
-        {
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return null;
-            return JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct)).RootElement.Clone();
-        }
-        catch { return null; }
+        var user = await GetUserAsync(userId, ct);
+        return user.IsSuccess ? OwnDocument(user.Value, userId) : user.Error!;
     }
 
-    private async Task<bool> PutUserAsync(JsonElement userJson, string token, CancellationToken ct)
+    async Task<Result> IScopedAccessStore.SetAsync(string userId, ScopedAccessDocument document, CancellationToken ct)
     {
-        var uid = userJson.TryGetProperty("id", out var p) ? p.GetString() ?? "" : "";
-        if (string.IsNullOrEmpty(uid)) return false;
-        var req = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{opts.Realm}/users/{Uri.EscapeDataString(uid)}")
-        { Content = new StringContent(userJson.GetRawText(), System.Text.Encoding.UTF8, "application/json") };
-        req.Headers.Add("Authorization", $"Bearer {token}");
-        try { var r = await http.SendAsync(req, ct); return r.IsSuccessStatusCode; } catch { return false; }
+        ArgumentNullException.ThrowIfNull(document);
+        var user = await GetUserAsync(userId, ct);
+        if (!user.IsSuccess) return user.Error!;
+
+        var flat = Union(document.Assignments.Select(a => a.Scopes));
+        var assignments = document.Assignments
+            .Select(a => new ScopedRoleAssignment(a.Role, a.Scopes.Where(kv => kv.Value.Count > 0)
+                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal)))
+            .ToArray();
+        var serialized = assignments.Length == 0 ? null : serializer.Serialize(new ScopedAccessDocument(assignments));
+
+        var updated = WithAttributes(user.Value, flat, serialized);
+        var written = await _api.SendWithoutResultAsync(HttpMethod.Put, UserPath(userId), updated, Resource, ct);
+        return written.IsSuccess ? written : NamedNotFound(written.Error!, userId);
     }
 
-    private async Task<IReadOnlyCollection<string>> GetUserGroupsAsync(string userId, string token, CancellationToken ct)
+    // ---------- IUserScopeReader: merged view (user ∪ groups) ----------
+
+    public async Task<Result<ScopedAccessDocument>> GetAsync(string userId, CancellationToken ct)
     {
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{opts.Realm}/users/{Uri.EscapeDataString(userId)}/groups");
-        req.Headers.Add("Authorization", $"Bearer {token}");
-        try
+        var user = await GetUserAsync(userId, ct);
+        if (!user.IsSuccess) return user.Error!;
+        var groups = await _api.GetAllAsync($"{UserPath(userId)}/groups?briefRepresentation=true", Resource, ct);
+        if (!groups.IsSuccess) return groups.Error!;
+
+        var sources = new List<IReadOnlyDictionary<string, IReadOnlyCollection<string>>> { ScopeAttributes(user.Value) };
+        sources.AddRange(OwnDocument(user.Value, userId).Assignments.Select(a => a.Scopes));
+        var groupNames = new List<string>();
+        foreach (var group in groups.Value)
         {
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return Array.Empty<string>();
-            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return Array.Empty<string>();
-            return doc.RootElement.EnumerateArray().Select(e => e.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "").Where(s => s.Length>0).ToArray();
+            if (KeycloakAdminApi.GetString(group, "id") is not { Length: > 0 } groupId) continue;
+            groupNames.Add(KeycloakAdminApi.GetString(group, "name") ?? groupId);
+            // The brief group representation omits attributes, so each group is read once.
+            var full = await _api.GetAsync($"groups/{Uri.EscapeDataString(groupId)}", "role", ct);
+            if (!full.IsSuccess) return full.Error!;
+            sources.Add(ScopeAttributes(full.Value));
         }
-        catch { return Array.Empty<string>(); }
+
+        var merged = Union(sources);
+        if (merged.Count == 0) return ScopedAccessDocument.Empty;
+        var roles = groupNames.Count > 0 ? groupNames : ["_user"];
+        return new ScopedAccessDocument(roles.Select(r => new ScopedRoleAssignment(r, merged)).ToArray());
     }
 
-    private static Dictionary<string, string[]> ExtractScopeAttrs(JsonElement el)
+    public async Task<Result<IReadOnlyDictionary<string, IReadOnlyCollection<string>>>> GetEffectiveAsync(string userId, CancellationToken ct)
     {
-        var d = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        if (!el.TryGetProperty("attributes", out var attrs) || attrs.ValueKind != JsonValueKind.Object) return d;
-        foreach (var p in attrs.EnumerateObject())
-            if (p.Name.StartsWith(ScopeAttrPrefix, StringComparison.Ordinal))
-            {
-                var k = p.Name.Substring(ScopeAttrPrefix.Length);
-                d[k] = p.Value.ValueKind == JsonValueKind.Array ? p.Value.EnumerateArray().Select(v=>v.GetString()??"").Where(s=>s.Length>0).ToArray()
-                    : p.Value.ValueKind == JsonValueKind.String ? new[] { p.Value.GetString()??"" } : Array.Empty<string>();
-            }
-        return d;
+        var merged = await GetAsync(userId, ct);
+        if (!merged.IsSuccess) return merged.Error!;
+        return Result<IReadOnlyDictionary<string, IReadOnlyCollection<string>>>.Success(
+            Union(merged.Value.Assignments.Select(a => a.Scopes)));
     }
 
-    private static JsonElement SetScopeAttrs(JsonElement userJson, IReadOnlyDictionary<string, IReadOnlyCollection<string>> merged, CancellationToken _)
+    // ---------- helpers ----------
+
+    private async Task<Result<JsonElement>> GetUserAsync(string userId, CancellationToken ct)
     {
-        // Build new attributes: keep non-scope attrs, replace authz.scope.* from merged
-        var doc = JsonDocument.Parse(userJson.GetRawText());
-        using var ms = new System.IO.MemoryStream();
-        using var w = new System.Text.Json.Utf8JsonWriter(ms);
-        w.WriteStartObject();
-        bool hasAttrs = doc.RootElement.TryGetProperty("attributes", out var existingAttrs);
-        // Write non-attributes props
-        foreach (var prop in doc.RootElement.EnumerateObject())
-        {
-            if (prop.NameEquals("attributes")) continue;
-            prop.WriteTo(w);
-        }
-        w.WritePropertyName("attributes");
-        w.WriteStartObject();
-        if (hasAttrs && existingAttrs.ValueKind == JsonValueKind.Object)
-            foreach (var a in existingAttrs.EnumerateObject())
-                if (!a.Name.StartsWith(ScopeAttrPrefix, StringComparison.Ordinal))
-                    a.WriteTo(w);
-        foreach (var kv in merged.OrderBy(k=>k.Key, StringComparer.Ordinal))
-        {
-            if (kv.Value.Count==0) continue;
-            w.WritePropertyName(ScopeAttrPrefix + kv.Key);
-            w.WriteStartArray();
-            foreach (var v in kv.Value.OrderBy(x=>x, StringComparer.Ordinal)) w.WriteStringValue(v);
-            w.WriteEndArray();
-        }
-        w.WriteEndObject();
-        w.WriteEndObject();
-        w.Flush();
-        return JsonDocument.Parse(System.Text.Encoding.UTF8.GetString(ms.ToArray())).RootElement.Clone();
+        var user = await _api.GetAsync(UserPath(userId), Resource, ct);
+        return user.IsSuccess ? user.Value : NamedNotFound(user.Error!, userId);
     }
 
-    private async Task<Dictionary<string,string[]>> GetGroupScopeAttrsAsync(string groupId, string token, CancellationToken ct)
+    private ScopedAccessDocument OwnDocument(JsonElement user, string userId)
     {
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{opts.Realm}/groups/{Uri.EscapeDataString(groupId)}");
-        req.Headers.Add("Authorization", $"Bearer {token}");
-        try
-        {
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return new(StringComparer.Ordinal);
-            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            return ExtractScopeAttrs(doc.RootElement);
-        } catch { return new(StringComparer.Ordinal); }
-    }
+        var raw = SingleAttribute(user, ScopedAccessConstants.AttributeName);
+        if (serializer.TryDeserialize(raw, out var document)) return document;
 
-    private async Task<IReadOnlyCollection<(string name,string id)>> GetUserGroupsWithIdsAsync(string userId, string token, CancellationToken ct)
-    {
-        var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{opts.Realm}/users/{Uri.EscapeDataString(userId)}/groups");
-        req.Headers.Add("Authorization", $"Bearer {token}");
-        try
-        {
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return Array.Empty<(string,string)>();
-            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return Array.Empty<(string,string)>();
-            return doc.RootElement.EnumerateArray().Select(e => (e.TryGetProperty("name", out var n)?n.GetString()??"":"", e.TryGetProperty("id", out var i)?i.GetString()??"":"")).Where(x=>x.Item1.Length>0).ToArray();
-        } catch { return Array.Empty<(string,string)>(); }
-    }
-
-    public async Task<ScopedAccessDocument> GetAsync(string userId, CancellationToken ct)
-    {
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) return ScopedAccessDocument.Empty;
-        var uj = await GetUserJsonAsync(userId, token, ct);
-        if (uj is null) return ScopedAccessDocument.Empty;
-        var scopeAttrs = ExtractScopeAttrs(uj.Value);
-        var groups = await GetUserGroupsWithIdsAsync(userId, token, ct);
-        // Union group scopes + user scopes per key
-        var mergedByKey = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (var v in scopeAttrs) { if (!mergedByKey.TryGetValue(v.Key, out var s)) { s=new HashSet<string>(StringComparer.Ordinal); mergedByKey[v.Key]=s; } foreach (var x in v.Value) s.Add(x); }
-        foreach (var g in groups)
-        {
-            var gAttrs = await GetGroupScopeAttrsAsync(g.id, token, ct);
-            foreach (var kv in gAttrs) { if (!mergedByKey.TryGetValue(kv.Key, out var s)) { s=new HashSet<string>(StringComparer.Ordinal); mergedByKey[kv.Key]=s; } foreach (var x in kv.Value) s.Add(x); }
-        }
-        var raw = ExtractSingleAttr(uj.Value, ScopedAccessConstants.AttributeName);
-        if (!string.IsNullOrWhiteSpace(raw))
-        {
-            try
-            {
-                var legacyDoc = serializer.Deserialize(raw);
-                foreach (var a in legacyDoc.Assignments)
-                foreach (var kv in a.Scopes)
-                {
-                    if (!mergedByKey.TryGetValue(kv.Key, out var s))
-                    {
-                        s = new HashSet<string>(StringComparer.Ordinal);
-                        mergedByKey[kv.Key] = s;
-                    }
-                    foreach (var x in kv.Value) s.Add(x);
-                }
-            }
-            catch { }
-        }
-        if (mergedByKey.Count > 0)
-        {
-            var flat = mergedByKey.ToDictionary(k=>k.Key, v=>(IReadOnlyCollection<string>)v.Value.OrderBy(x=>x,StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
-            var byRole = new List<ScopedRoleAssignment>();
-            if (groups.Count > 0)
-            {
-                foreach (var g in groups) byRole.Add(new ScopedRoleAssignment(g.name, flat));
-            }
-            else
-            {
-                byRole.Add(new ScopedRoleAssignment("_user", flat));
-            }
-            return new ScopedAccessDocument(byRole);
-        }
-        if (!string.IsNullOrWhiteSpace(raw)) return serializer.Deserialize(raw);
+        // A corrupt document cannot be trusted; it is reported and replaced by the next write.
+        _logger.LogWarning("User {UserId} has an unreadable {Attribute} attribute; treating it as empty",
+            userId, ScopedAccessConstants.AttributeName);
         return ScopedAccessDocument.Empty;
     }
 
-    public async Task<IReadOnlyDictionary<string, IReadOnlyCollection<string>>> GetEffectiveAsync(string userId, CancellationToken ct)
+    private static Error NamedNotFound(Error error, string userId) =>
+        error.Kind == ErrorKind.NotFound ? Error.NotFound("user.not_found", $"User '{userId}' was not found.") : error;
+
+    private static IReadOnlyDictionary<string, IReadOnlyCollection<string>> ScopeAttributes(JsonElement element)
     {
-        var doc = await GetAsync(userId, ct);
-        var merged = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (var a in doc.Assignments) foreach (var kv in a.Scopes)
+        var scopes = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
+        if (!element.TryGetProperty("attributes", out var attrs) || attrs.ValueKind != JsonValueKind.Object) return scopes;
+        foreach (var p in attrs.EnumerateObject().Where(p => p.Name.StartsWith(ScopeAttrPrefix, StringComparison.Ordinal)))
         {
-            if (!merged.TryGetValue(kv.Key, out var set)) { set = new HashSet<string>(StringComparer.Ordinal); merged[kv.Key]=set; }
-            foreach (var v in kv.Value) set.Add(v);
+            scopes[p.Name[ScopeAttrPrefix.Length..]] = p.Value.ValueKind switch
+            {
+                JsonValueKind.Array => p.Value.EnumerateArray().Select(v => v.GetString() ?? "").Where(s => s.Length > 0).ToArray(),
+                JsonValueKind.String => [p.Value.GetString() ?? ""],
+                _ => [],
+            };
         }
-        return merged.ToDictionary(k=>k.Key, v=>(IReadOnlyCollection<string>)v.Value.OrderBy(x=>x, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+        return scopes;
     }
 
-    public async Task SetAsync(string userId, IReadOnlyCollection<ScopedRoleAssignmentDto> assignments, CancellationToken ct)
+    private static IReadOnlyDictionary<string, IReadOnlyCollection<string>> Union(
+        IEnumerable<IReadOnlyDictionary<string, IReadOnlyCollection<string>>> sources)
     {
-        // Validate via existing validator semantics (ExistsActive, allowed, value)
-        // Caller (ProvisioningOrchestrator) already validated; we re-enforce allow-list here for safety
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
-        var uj = await GetUserJsonAsync(userId, token, ct);
-        if (uj is null) throw new InvalidOperationException($"User '{userId}' not found.");
-        // Merge all assignments' scopes into flat authz.scope.<key> union
-        var merged = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (var a in assignments) foreach (var kv in a.Scopes)
+        var merged = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        foreach (var source in sources)
+        foreach (var (key, values) in source)
         {
-            if (!merged.TryGetValue(kv.Key, out var set)) { set = new HashSet<string>(StringComparer.Ordinal); merged[kv.Key]=set; }
-            foreach (var v in kv.Value.Where(s=>!string.IsNullOrWhiteSpace(s)).Select(s=>s.Trim())) set.Add(v);
+            if (!merged.TryGetValue(key, out var set)) merged[key] = set = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (var v in values.Where(v => !string.IsNullOrWhiteSpace(v))) set.Add(v.Trim());
         }
-        var flat = merged.ToDictionary(k=>k.Key, v=>(IReadOnlyCollection<string>)v.Value.OrderBy(x=>x, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
-        // Also persist legacy attribute for claim-mapper compat during migration
-        var doc = new ScopedAccessDocument(assignments.Select(a => new ScopedRoleAssignment(a.Role, a.Scopes.Where(kv=>kv.Value.Count>0).ToDictionary(k=>k.Key, v=>v.Value, StringComparer.Ordinal))).ToArray());
-        var withNew = SetScopeAttrs(uj.Value, flat, ct);
-        var withBoth = SetSingleAttr(withNew, ScopedAccessConstants.AttributeName, doc.Assignments.Count==0?null:serializer.Serialize(doc));
-        var ok = await PutUserAsync(withBoth, token, ct);
-        if (!ok) throw new InvalidOperationException($"Failed to update scopes for user '{userId}'.");
+        return merged.Where(kv => kv.Value.Count > 0)
+            .ToDictionary(kv => kv.Key, kv => (IReadOnlyCollection<string>)kv.Value.ToArray(), StringComparer.Ordinal);
     }
 
-    // ---------- IScopedAccessStore — document-level API over the same single-PUT write ----------
+    private static string? SingleAttribute(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty("attributes", out var attrs) || attrs.ValueKind != JsonValueKind.Object) return null;
+        if (!attrs.TryGetProperty(name, out var value)) return null;
+        return value.ValueKind switch
+        {
+            JsonValueKind.Array when value.GetArrayLength() > 0 => value[0].GetString(),
+            JsonValueKind.String => value.GetString(),
+            _ => null,
+        };
+    }
 
     /// <summary>
-    /// The user-owned document: read-modify-write must NOT go through <see cref="GetAsync"/>
-    /// because that merges group attributes — persisting them here would copy group scopes
-    /// onto the user (escalation after leaving the group).
+    /// The user representation with every non-scope attribute kept, the authz.scope.* attributes replaced
+    /// by <paramref name="scopes"/> and the per-role document set (or removed when null).
     /// </summary>
-    private async Task<ScopedAccessDocument> GetUserDocumentAsync(string userId, string token, CancellationToken ct)
+    private static Dictionary<string, object?> WithAttributes(
+        JsonElement user, IReadOnlyDictionary<string, IReadOnlyCollection<string>> scopes, string? document)
     {
-        var uj = await GetUserJsonAsync(userId, token, ct);
-        if (uj is null) throw new InvalidOperationException($"User '{userId}' not found.");
-        var raw = ExtractSingleAttr(uj.Value, ScopedAccessConstants.AttributeName);
-        return string.IsNullOrWhiteSpace(raw) ? ScopedAccessDocument.Empty : serializer.Deserialize(raw);
-    }
+        var representation = JsonSerializer.Deserialize<Dictionary<string, object?>>(user.GetRawText())!;
+        var attributes = new Dictionary<string, object?>(StringComparer.Ordinal);
+        if (user.TryGetProperty("attributes", out var existing) && existing.ValueKind == JsonValueKind.Object)
+            foreach (var a in existing.EnumerateObject())
+                if (!a.Name.StartsWith(ScopeAttrPrefix, StringComparison.Ordinal) &&
+                    !string.Equals(a.Name, ScopedAccessConstants.AttributeName, StringComparison.Ordinal))
+                    attributes[a.Name] = a.Value;
 
-    async Task IScopedAccessStore.SetAsync(string userId, ScopedAccessDocument document, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        var dtos = document.Assignments
-            .Select(a => new ScopedRoleAssignmentDto(a.Role, a.Scopes))
-            .ToArray();
-        await SetAsync(userId, dtos, ct);
-    }
+        foreach (var (key, values) in scopes) attributes[ScopeAttrPrefix + key] = values;
+        if (document is not null) attributes[ScopedAccessConstants.AttributeName] = new[] { document };
 
-    public async Task AddAssignmentAsync(string userId, ScopedRoleAssignmentDto assignment, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(assignment);
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
-        var doc = await GetUserDocumentAsync(userId, token, ct);
-        var existing = doc.Assignments.FirstOrDefault(a => string.Equals(a.Role, assignment.Role.Trim(), StringComparison.Ordinal));
-        var next = existing is null
-            ? doc.Assignments.Append(new ScopedRoleAssignment(assignment.Role.Trim(), NormalizeDict(assignment.Scopes))).ToArray()
-            : doc.Assignments.Select(a => string.Equals(a.Role, assignment.Role.Trim(), StringComparison.Ordinal)
-                ? new ScopedRoleAssignment(a.Role, MergeDicts(a.Scopes, NormalizeDict(assignment.Scopes)))
-                : a).ToArray();
-        await ((IScopedAccessStore)this).SetAsync(userId, new ScopedAccessDocument(next), ct);
-    }
-
-    public async Task UpdateAssignmentAsync(string userId, string role, IReadOnlyDictionary<string, IReadOnlyCollection<string>> scopes, CancellationToken ct)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(role);
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
-        var doc = await GetUserDocumentAsync(userId, token, ct);
-        if (!doc.Assignments.Any(a => string.Equals(a.Role, role.Trim(), StringComparison.Ordinal)))
-            throw new InvalidOperationException($"Assignment for role '{role}' not found.");
-        var next = doc.Assignments.Select(a => string.Equals(a.Role, role.Trim(), StringComparison.Ordinal)
-            ? new ScopedRoleAssignment(a.Role, NormalizeDict(scopes))
-            : a).ToArray();
-        await ((IScopedAccessStore)this).SetAsync(userId, new ScopedAccessDocument(next), ct);
-    }
-
-    public async Task RemoveAssignmentAsync(string userId, string role, CancellationToken ct)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(role);
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
-        var doc = await GetUserDocumentAsync(userId, token, ct);
-        var next = doc.Assignments.Where(a => !string.Equals(a.Role, role.Trim(), StringComparison.Ordinal)).ToArray();
-        await ((IScopedAccessStore)this).SetAsync(userId, new ScopedAccessDocument(next), ct);
-    }
-
-    private static IReadOnlyDictionary<string, IReadOnlyCollection<string>> NormalizeDict(
-        IReadOnlyDictionary<string, IReadOnlyCollection<string>>? scopes)
-    {
-        var result = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal);
-        if (scopes is null) return result;
-        foreach (var kv in scopes)
-        {
-            var key = kv.Key?.Trim() ?? "";
-            if (key.Length == 0) continue;
-            var values = kv.Value?.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v.Trim())
-                .Distinct(StringComparer.Ordinal).OrderBy(v => v, StringComparer.Ordinal).ToArray()
-                ?? Array.Empty<string>();
-            result[key] = values;
-        }
-        return result;
-    }
-
-    private static IReadOnlyDictionary<string, IReadOnlyCollection<string>> MergeDicts(
-        IReadOnlyDictionary<string, IReadOnlyCollection<string>> a,
-        IReadOnlyDictionary<string, IReadOnlyCollection<string>> b)
-    {
-        var merged = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (var src in new[] { a, b })
-        foreach (var kv in src)
-        {
-            if (!merged.TryGetValue(kv.Key, out var set)) merged[kv.Key] = set = new(StringComparer.Ordinal);
-            foreach (var v in kv.Value) set.Add(v);
-        }
-        return merged.ToDictionary(kv => kv.Key,
-            kv => (IReadOnlyCollection<string>)kv.Value.OrderBy(x => x, StringComparer.Ordinal).ToArray(),
-            StringComparer.Ordinal);
-    }
-
-    private static string? ExtractSingleAttr(JsonElement el, string name)
-    {
-        if (!el.TryGetProperty("attributes", out var attrs) || attrs.ValueKind!=JsonValueKind.Object) return null;
-        if (!attrs.TryGetProperty(name, out var arr)) return null;
-        if (arr.ValueKind==JsonValueKind.Array && arr.GetArrayLength()>0) return arr[0].GetString();
-        if (arr.ValueKind==JsonValueKind.String) return arr.GetString();
-        return null;
-    }
-    private static JsonElement SetSingleAttr(JsonElement el, string name, string? value)
-    {
-        var doc = JsonDocument.Parse(el.GetRawText());
-        using var ms = new System.IO.MemoryStream();
-        using var w = new System.Text.Json.Utf8JsonWriter(ms);
-        w.WriteStartObject();
-        bool hasAttrs = doc.RootElement.TryGetProperty("attributes", out var existing);
-        foreach (var p in doc.RootElement.EnumerateObject()) if (!p.NameEquals("attributes")) p.WriteTo(w);
-        w.WritePropertyName("attributes");
-        w.WriteStartObject();
-        if (hasAttrs && existing.ValueKind==JsonValueKind.Object)
-            foreach (var a in existing.EnumerateObject()) if (!a.NameEquals(name)) a.WriteTo(w);
-        if (value is not null) { w.WritePropertyName(name); w.WriteStartArray(); w.WriteStringValue(value); w.WriteEndArray(); }
-        w.WriteEndObject();
-        w.WriteEndObject();
-        w.Flush();
-        return JsonDocument.Parse(System.Text.Encoding.UTF8.GetString(ms.ToArray())).RootElement.Clone();
+        representation["attributes"] = attributes;
+        return representation;
     }
 }

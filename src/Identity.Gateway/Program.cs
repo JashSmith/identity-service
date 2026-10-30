@@ -98,14 +98,12 @@ builder.Services.AddScoped<Identity.Application.Scope.IScopeRegistryAdmin>(sp =>
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>();
 builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
-builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter>(sp =>
-    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
 builder.Services.AddSingleton<Identity.Infrastructure.Keycloak.KeycloakAdminTokenCache>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>();
 builder.Services.AddSingleton<IBusinessRoleStore>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>());
-// Single scope store — implements IScopedAccessStore + IUserScopeReader/Writer over one PUT.
+// One scope store: IScopedAccessStore (the user's own assignments) and IUserScopeReader (merged view).
 builder.Services.AddSingleton<IScopedAccessStore>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();

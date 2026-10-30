@@ -3,50 +3,18 @@ using Identity.Contracts;
 namespace Identity.Application;
 
 /// <summary>
-/// Persistence abstraction for storing and managing runtime scoped assignments on Keycloak user profiles.
+/// The user's own scoped role assignments, exactly as the gateway wrote them. Scopes a user inherits
+/// from its groups are never part of this document: reading the merged view and writing it back would
+/// copy group scopes onto the user, who would keep them after leaving the group. Use
+/// <see cref="Scope.IUserScopeReader"/> for the merged view tokens see.
 /// </summary>
 public interface IScopedAccessStore
 {
-    /// <summary>
-    /// Retrieves the current scoped access document for the specified user.
-    /// </summary>
-    /// <param name="userId">The unique user ID.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>A ScopedAccessDocument containing the user's scoped roles.</returns>
-    Task<ScopedAccessDocument> GetAsync(string userId, CancellationToken ct);
+    /// <summary>The user's own assignments; user.not_found when the user does not exist.</summary>
+    Task<Result<ScopedAccessDocument>> GetAsync(string userId, CancellationToken ct);
 
-    /// <summary>
-    /// Replaces the full scoped access document for a user.
-    /// </summary>
-    /// <param name="userId">The unique user ID.</param>
-    /// <param name="document">The replacement scoped access document.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task SetAsync(string userId, ScopedAccessDocument document, CancellationToken ct);
-
-    /// <summary>
-    /// Adds a single scoped role assignment to a user.
-    /// </summary>
-    /// <param name="userId">The unique user ID.</param>
-    /// <param name="assignment">The assignment details.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task AddAssignmentAsync(string userId, ScopedRoleAssignmentDto assignment, CancellationToken ct);
-
-    /// <summary>
-    /// Updates the scope dimension values for a role already assigned to a user.
-    /// </summary>
-    /// <param name="userId">The unique user ID.</param>
-    /// <param name="role">The target role name.</param>
-    /// <param name="scopes">The updated dictionary of scope values.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task UpdateAssignmentAsync(string userId, string role, IReadOnlyDictionary<string, IReadOnlyCollection<string>> scopes, CancellationToken ct);
-
-    /// <summary>
-    /// Removes a scoped role assignment from a user.
-    /// </summary>
-    /// <param name="userId">The unique user ID.</param>
-    /// <param name="role">The role name to unassign.</param>
-    /// <param name="ct">Cancellation token.</param>
-    Task RemoveAssignmentAsync(string userId, string role, CancellationToken ct);
+    /// <summary>Replaces the user's own assignments (the flat authz.scope.* attributes and the per-role document).</summary>
+    Task<Result> SetAsync(string userId, ScopedAccessDocument document, CancellationToken ct);
 }
 
 /// <summary>

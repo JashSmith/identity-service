@@ -56,7 +56,8 @@ public sealed class CurrentAccessContext : IApplicationAccessContext
         if (!perms.IsSuccess) throw new ErrorException(perms.Error!);
         var permNames = perms.Value.Select(p => p.Name).ToArray();
         var doc = await store.GetAsync(userId, ct);
-        return new CurrentAccessContext(permNames, doc.Assignments.ToArray());
+        if (!doc.IsSuccess) throw new ErrorException(doc.Error!);
+        return new CurrentAccessContext(permNames, doc.Value.Assignments.ToArray());
     }
 
     public IReadOnlyCollection<ScopedRoleAssignment> GetAssignments() => _assignments;

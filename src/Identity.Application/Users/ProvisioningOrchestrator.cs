@@ -82,8 +82,18 @@ public sealed class ProvisioningOrchestrator(
         var invalid = await ValidateAssignmentsAsync([new ScopedRoleAssignmentDto(role, scopes)], ct);
         if (invalid is not null) return invalid;
 
-        var updated = await CallScopeStoreAsync(() => scopedStore.UpdateAssignmentAsync(userId, role, scopes, ct));
-        return updated.IsSuccess ? await ReadScopesAsync(userId, ct) : updated.Error!;
+        var current = await ReadScopesAsync(userId, ct);
+        if (!current.IsSuccess) return current.Error!;
+        if (!current.Value.Assignments.Any(a => string.Equals(a.Role, role.Trim(), StringComparison.Ordinal)))
+            return Error.NotFound("assignment.not_found", $"User '{userId}' has no assignment for role '{role}'.");
+
+        var next = new ScopedAccessDocument(current.Value.Assignments
+            .Select(a => string.Equals(a.Role, role.Trim(), StringComparison.Ordinal)
+                ? ToDocument([new ScopedRoleAssignmentDto(a.Role, scopes)]).Assignments.Single()
+                : a)
+            .ToArray());
+        var applied = await ApplyAsync(userId, current.Value, next, ct);
+        return applied.IsSuccess ? next : applied.Error!;
     }
 
     public async Task<Result> RemoveScopedAssignmentAsync(string userId, string role, CancellationToken ct)
@@ -121,7 +131,7 @@ public sealed class ProvisioningOrchestrator(
         var currentRoles = current.Assignments.Select(a => a.Role).ToHashSet(StringComparer.Ordinal);
         var nextRoles = next.Assignments.Select(a => a.Role).ToHashSet(StringComparer.Ordinal);
 
-        var written = await CallScopeStoreAsync(() => scopedStore.SetAsync(userId, next, ct));
+        var written = await scopedStore.SetAsync(userId, next, ct);
         if (!written.IsSuccess) return written;
 
         var done = new List<(string Role, bool Added)>();
@@ -157,36 +167,13 @@ public sealed class ProvisioningOrchestrator(
                 : await roleMapping.AssignRoleAsync(userId, role, ct);
             ok &= reverted.IsSuccess;
         }
-        ok &= (await CallScopeStoreAsync(() => scopedStore.SetAsync(userId, previous, ct))).IsSuccess;
+        ok &= (await scopedStore.SetAsync(userId, previous, ct)).IsSuccess;
         return ok;
     }
 
-    private async Task<Result<ScopedAccessDocument>> ReadScopesAsync(string userId, CancellationToken ct)
-    {
-        ScopedAccessDocument document = ScopedAccessDocument.Empty;
-        var read = await CallScopeStoreAsync(async () => document = await scopedStore.GetAsync(userId, ct));
-        return read.IsSuccess ? document : read.Error!;
-    }
-
-    /// <summary>
-    /// The scope store still reports problems as exceptions; turn the expected ones into errors.
-    /// </summary>
-    private static async Task<Result> CallScopeStoreAsync(Func<Task> call)
-    {
-        try
-        {
-            await call();
-            return Result.Success();
-        }
-        catch (ScopedValidationException ex)
-        {
-            return Error.Validation("scope.invalid", "One or more scope values are invalid.", ex.Errors);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Error.Validation("scope.rejected", ex.Message);
-        }
-    }
+    /// <summary>The user's own assignments; never the merged view that includes group scopes.</summary>
+    private Task<Result<ScopedAccessDocument>> ReadScopesAsync(string userId, CancellationToken ct) =>
+        scopedStore.GetAsync(userId, ct);
 
     private async Task<Error?> ValidateAssignmentsAsync(IReadOnlyCollection<ScopedRoleAssignmentDto> assignments, CancellationToken ct)
     {

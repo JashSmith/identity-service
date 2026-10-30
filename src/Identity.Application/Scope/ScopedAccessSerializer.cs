@@ -7,7 +7,11 @@ namespace Identity.Application;
 public interface IScopedAccessSerializer
 {
     string Serialize(ScopedAccessDocument document);
+    /// <summary>Parses a stored document; malformed JSON yields an empty document.</summary>
     ScopedAccessDocument Deserialize(string? json);
+
+    /// <summary>Parses a stored document and reports malformed JSON instead of hiding it.</summary>
+    bool TryDeserialize(string? json, out ScopedAccessDocument document);
     IReadOnlyCollection<ScopedRoleAssignment> ParseClaim(string? claimValue);
 }
 
@@ -34,27 +38,30 @@ public sealed class ScopedAccessSerializer : IScopedAccessSerializer
         return JsonSerializer.Serialize(normalized, Options);
     }
 
-    public ScopedAccessDocument Deserialize(string? json)
+    public ScopedAccessDocument Deserialize(string? json) =>
+        TryDeserialize(json, out var document) ? document : ScopedAccessDocument.Empty;
+
+    public bool TryDeserialize(string? json, out ScopedAccessDocument document)
     {
-        if (string.IsNullOrWhiteSpace(json)) return ScopedAccessDocument.Empty;
+        document = ScopedAccessDocument.Empty;
+        if (string.IsNullOrWhiteSpace(json)) return true;
+        RawAssignment[]? raw;
         try
         {
-            var raw = JsonSerializer.Deserialize<RawAssignment[]>(json, Options);
-            if (raw is null || raw.Length == 0) return ScopedAccessDocument.Empty;
-            var assignments = raw
-                .Where(r => !string.IsNullOrWhiteSpace(r.Role))
-                .Select(r => new ScopedRoleAssignment(
-                    r.Role.Trim(),
-                    NormalizeScopes(r.Scopes)))
-                .Where(a => a.Scopes.Count > 0 || true)
-                .OrderBy(a => a.Role, StringComparer.Ordinal)
-                .ToArray();
-            return new ScopedAccessDocument(assignments);
+            raw = JsonSerializer.Deserialize<RawAssignment[]>(json, Options);
         }
         catch (JsonException)
         {
-            return ScopedAccessDocument.Empty;
+            return false;
         }
+        if (raw is null || raw.Length == 0) return true;
+
+        document = new ScopedAccessDocument(raw
+            .Where(r => !string.IsNullOrWhiteSpace(r.Role))
+            .Select(r => new ScopedRoleAssignment(r.Role.Trim(), NormalizeScopes(r.Scopes)))
+            .OrderBy(a => a.Role, StringComparer.Ordinal)
+            .ToArray());
+        return true;
     }
 
     public IReadOnlyCollection<ScopedRoleAssignment> ParseClaim(string? claimValue)

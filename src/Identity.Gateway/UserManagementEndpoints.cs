@@ -58,13 +58,9 @@ public static class UserManagementEndpoints
             .WithName("RevokeUserTokens")
             .Produces<RevokeUserTokensResponse>(200).ProducesProblem(404);
 
-        g.MapGet("/{id}/scoped-access", async (string id, IScopedAccessStore store, IUserProvisioningService users, CancellationToken ct) =>
-            {
-                var user = await users.GetAsync(id, ct);
-                if (!user.IsSuccess) return user.Error!.ToProblem();
-                var doc = await store.GetAsync(id, ct);
-                return Results.Ok(new ScopedAccessResponse(id, doc.Assignments.ToArray()));
-            }).RequireAuthorization(IamPermissions.ScopesRead)
+        g.MapGet("/{id}/scoped-access", async (string id, IScopedAccessStore store, CancellationToken ct) =>
+                (await store.GetAsync(id, ct))
+                .ToHttpResult(doc => Results.Ok(new ScopedAccessResponse(id, doc.Assignments.ToArray())))).RequireAuthorization(IamPermissions.ScopesRead)
             .WithName("GetScopedAccess")
             .Produces<ScopedAccessResponse>(200);
 
