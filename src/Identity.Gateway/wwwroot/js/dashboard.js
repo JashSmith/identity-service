@@ -831,7 +831,6 @@
       const form = new URLSearchParams();
       form.append('grant_type', 'password');
       form.append('client_id', 'identity-gateway');
-      form.append('client_secret', 'gateway-development-only');
       form.append('username', username);
       form.append('password', password);
 
@@ -2053,7 +2052,6 @@
       const form = new URLSearchParams();
       form.append('grant_type', 'password');
       form.append('client_id', 'identity-gateway');
-      form.append('client_secret', 'gateway-development-only');
       form.append('username', username);
       form.append('password', password);
 
