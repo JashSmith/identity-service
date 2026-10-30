@@ -90,6 +90,10 @@ public sealed class KeycloakUserProvisioner(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
         ArgumentNullException.ThrowIfNull(request);
+        // Defense in depth: authorization attributes are never written through a generic update.
+        var protectedKeys = ProtectedUserAttributes.FindIn(request.Attributes);
+        if (protectedKeys.Count > 0)
+            throw new InvalidOperationException($"Attributes {string.Join(", ", protectedKeys)} cannot be set through a user update.");
         var token = await tokenProvider.GetTokenAsync(ct);
         if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
 

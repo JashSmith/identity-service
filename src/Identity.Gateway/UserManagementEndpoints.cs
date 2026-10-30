@@ -35,6 +35,12 @@ public static class UserManagementEndpoints
 
         g.MapPut("/{id}", async (string id, UpdateUserRequest req, IUserProvisioningService svc, CancellationToken ct) =>
             {
+                var protectedKeys = ProtectedUserAttributes.FindIn(req.Attributes);
+                if (protectedKeys.Count > 0)
+                    return Results.BadRequest(new ProblemResponse("validation_error",
+                        $"Attributes {string.Join(", ", protectedKeys)} are managed by the gateway; use the scoped-access APIs instead.",
+                        Guid.NewGuid().ToString("N")));
+
                 var updated = await svc.UpdateUserAsync(id, req, ct);
                 return updated is null
                     ? Results.NotFound(new ProblemResponse("not_found", $"user '{id}' not found", Guid.NewGuid().ToString("N")))
