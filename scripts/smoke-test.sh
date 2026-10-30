@@ -56,10 +56,10 @@ pass "login OK, Keycloak token issued"
 step "2/7 — Verify super-admin management permissions in token"
 PAYLOAD=$(decode_jwt "$ADMIN_TOKEN")
 PERMS=$(json_field "$PAYLOAD" "','.join(d.get('permissions',[]))")
-for need in identity.roles.manage identity.users.manage identity.scopes.manage; do
+for need in identity-gateway:Roles:Role:Manage identity-gateway:Users:User:Manage identity-gateway:Scopes:Scope:Manage; do
   case ",$PERMS," in *",$need,"*) ;; *) fail "super-admin perms" "missing $need — super-admins group not effective" ;; esac
 done
-pass "admin token carries identity.{roles,users,scopes}.manage"
+pass "admin token carries identity-gateway:{Roles,Users,Scopes} Manage permissions"
 
 step "3/7 — Create business role '$ROLE_NAME' (auto-created as Keycloak group)"
 CREATE_ROLE=$(curl -fsS -X POST "$GATEWAY/api/identity/business-roles" \
@@ -72,9 +72,9 @@ GET_ROLE=$(curl -fsS "$GATEWAY/api/identity/business-roles/$ROLE_NAME" -H "Autho
 pass "business role created and readable"
 
 step "4/7 — Assign a registered permission to the role"
-PERM=$(curl -fsS "$GATEWAY/api/identity/permissions?serviceId=order-service" -H "Authorization: Bearer $ADMIN_TOKEN" \
+PERM=$(curl -fsS "$GATEWAY/api/identity/permissions?application=order-service" -H "Authorization: Bearer $ADMIN_TOKEN" \
   | pyj "import sys,json; d=json.load(sys.stdin); print(d[0]['name'] if d else '')")
-[ -n "$PERM" ] || PERM="identity.users.read"
+[ -n "$PERM" ] || PERM="identity-gateway:Users:User:Read"
 ASSIGN=$(curl -fsS -X POST "$GATEWAY/api/identity/business-roles/$ROLE_NAME/permissions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"permissions\":[\"$PERM\"]}")

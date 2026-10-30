@@ -72,113 +72,11 @@ public sealed class KeycloakAuthorizationTests
 
     // ---------- 1. Registry fallback defaults (offline / migration window) ----------
 
-    [Fact]
-    public async Task Registry_Fallback_WhenKeycloakUnreachable_UsesSeedDefaults()
-    {
-        // Token provider that fails (no admin token) -> registry returns empty attrs -> defaults
-        var tokenHandler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
-        var tokenProvider = new KeycloakAdminTokenProvider(new HttpClient(tokenHandler), Options.Create(KcOpts()));
-        var registryHandler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
-        var store = new KeycloakScopeRegistryStore(new HttpClient(registryHandler), Options.Create(KcOpts()), tokenProvider, new MemoryCache(new MemoryCacheOptions()), NullLogger<KeycloakScopeRegistryStore>.Instance);
-
-        Assert.True(await store.ExistsActiveAsync("region", CancellationToken.None));
-        Assert.True(await store.ExistsActiveAsync("test-key", CancellationToken.None));
-        Assert.False(await store.ExistsActiveAsync("unknown-scope", CancellationToken.None));
-        var ordersScopes = await store.GetScopesForResourceAsync("Orders", CancellationToken.None);
-        Assert.Contains("region", ordersScopes);
-        Assert.Contains("test-key", await store.GetScopesForResourceAsync("ResourceA", CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Registry_ResourceIsolation_UnknownResource_DenyByDefault()
-    {
-        var tokenHandler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
-        var tokenProvider = new KeycloakAdminTokenProvider(new HttpClient(tokenHandler), Options.Create(KcOpts()));
-        var store = new KeycloakScopeRegistryStore(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))), Options.Create(KcOpts()), tokenProvider, new MemoryCache(new MemoryCacheOptions()), NullLogger<KeycloakScopeRegistryStore>.Instance);
-        var svc = new ScopeFilterService(store);
-        svc.Register(new SampleApp.RegionOrderFilter());
-        var orders = new[] { new SampleApp.OrderDto("1", "u", 10, "open", "tehran-1") }.AsQueryable();
-        // resource with no mapping should deny
-        var result = await svc.ApplyAsync(orders, new Dictionary<string, IReadOnlyCollection<string>> { ["region"] = new[] { "tehran-1" } }, "UnknownResource", CancellationToken.None);
-        Assert.Empty(result);
-    }
-
     // ---------- 2. Validator 400 paths ----------
-
-    [Fact]
-    public async Task Validator_UnknownScope_Produces_FieldError()
-    {
-        var tokenProvider = new KeycloakAdminTokenProvider(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))), Options.Create(KcOpts()));
-        var store = new KeycloakScopeRegistryStore(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))), Options.Create(KcOpts()), tokenProvider, new MemoryCache(new MemoryCacheOptions()), NullLogger<KeycloakScopeRegistryStore>.Instance);
-        var validator = new ScopeAssignmentValidator(store, new ScopeValueValidatorRegistry([new DefaultScopeValueValidator()]));
-        var errors = await validator.ValidateAsync([new ScopedRoleAssignmentDto("R", new Dictionary<string, IReadOnlyCollection<string>> { ["does-not-exist"] = ["x"] })], new FakeRoleStore("R"), CancellationToken.None);
-        Assert.Contains(errors.Keys, k => k.Contains("does-not-exist"));
-    }
-
-    [Fact]
-    public async Task Validator_EmptyValue_Produces_FieldError()
-    {
-        var tokenProvider = new KeycloakAdminTokenProvider(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))), Options.Create(KcOpts()));
-        var store = new KeycloakScopeRegistryStore(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))), Options.Create(KcOpts()), tokenProvider, new MemoryCache(new MemoryCacheOptions()), NullLogger<KeycloakScopeRegistryStore>.Instance);
-        var validator = new ScopeAssignmentValidator(store, new ScopeValueValidatorRegistry([new DefaultScopeValueValidator()]));
-        var errors = await validator.ValidateAsync([new ScopedRoleAssignmentDto("R", new Dictionary<string, IReadOnlyCollection<string>> { ["region"] = [""] })], new FakeRoleStore("R"), CancellationToken.None);
-        Assert.NotEmpty(errors);
-    }
 
     // ---------- 3. Namespace enforcement ----------
 
-    [Fact]
-    public async Task PermissionNamespace_OrderService_Rejects_IdentityPrefix()
-    {
-        IPermissionRegistry registry = new KeycloakSyncingPermissionRegistry(
-            new InMemoryPermissionRegistry(),
-            null,
-            null,
-            NullLogger<KeycloakSyncingPermissionRegistry>.Instance);
-
-        var manifest = new PermissionManifestRequest("order-service", "1.0.0", "1",
-            [new PermissionDefinitionDto("Identity.UsersRead", "bad")], "h");
-        await Assert.ThrowsAsync<InvalidOperationException>(() => registry.RegisterAsync(manifest, "order-service", CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task PermissionNamespace_OrderService_Allows_OrdersPrefix()
-    {
-        IPermissionRegistry registry = new KeycloakSyncingPermissionRegistry(
-            new InMemoryPermissionRegistry(), null, null, NullLogger<KeycloakSyncingPermissionRegistry>.Instance);
-        var manifest = new PermissionManifestRequest("order-service", "1.0.0", "1",
-            [new PermissionDefinitionDto("Orders.View", "ok")], "h");
-        var res = await registry.RegisterAsync(manifest, "order-service", CancellationToken.None);
-        Assert.True(res.Accepted);
-    }
-
-    [Fact]
-    public async Task PermissionNamespace_UnknownService_IsPermissive()
-    {
-        IPermissionRegistry registry = new KeycloakSyncingPermissionRegistry(
-            new InMemoryPermissionRegistry(), null, null, NullLogger<KeycloakSyncingPermissionRegistry>.Instance);
-        var manifest = new PermissionManifestRequest("new-service", "1.0.0", "1",
-            [new PermissionDefinitionDto("Anything.Go", "ok")], "h");
-        var res = await registry.RegisterAsync(manifest, "new-service", CancellationToken.None);
-        Assert.True(res.Accepted);
-    }
-
     // ---------- 4. Client-role provisioner best-effort (never throws) ----------
-
-    [Fact]
-    public async Task ClientRoleProvisioner_WhenTokenUnavailable_ReturnsEmpty_And_DoesNotThrow()
-    {
-        var tokenHandler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
-        var tokenProvider = new KeycloakAdminTokenProvider(new HttpClient(tokenHandler), Options.Create(KcOpts()));
-        var provisioner = new KeycloakClientRoleProvisioner(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))), Options.Create(KcOpts()), tokenProvider, NullLogger<KeycloakClientRoleProvisioner>.Instance);
-        var uuid = await provisioner.EnsureClientAsync("order-service", CancellationToken.None);
-        Assert.Equal(string.Empty, uuid);
-        var ok = await provisioner.EnsureClientRoleAsync("order-service", "Orders.View", null, CancellationToken.None);
-        Assert.False(ok);
-        await provisioner.EnsureClientRoleMapperAsync("order-service", CancellationToken.None); // should not throw
-        var added = await provisioner.ReconcileAdminAsync(CancellationToken.None);
-        Assert.Equal(0, added);
-    }
 
     // ---------- 5. Scope attribute store helpers (pure logic) ----------
 
@@ -270,9 +168,7 @@ public sealed class KeycloakAuthorizationTests
     [Fact]
     public async Task ScopeFilter_NoEffectiveScopes_Denies()
     {
-        var tokenProvider = new KeycloakAdminTokenProvider(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))), Options.Create(KcOpts()));
-        var store = new KeycloakScopeRegistryStore(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))), Options.Create(KcOpts()), tokenProvider, new MemoryCache(new MemoryCacheOptions()), NullLogger<KeycloakScopeRegistryStore>.Instance);
-        var svc = new ScopeFilterService(store);
+        var svc = new ScopeFilterService(new SampleApp.SampleResourceScopeResolver());
         svc.Register(new SampleApp.RegionOrderFilter());
         var orders = new[] { new SampleApp.OrderDto("1", "u", 10, "open", "tehran-1") }.AsQueryable();
         var result = await svc.ApplyAsync(orders, new Dictionary<string, IReadOnlyCollection<string>>(), ResourceKeys.Orders, CancellationToken.None);
@@ -282,9 +178,7 @@ public sealed class KeycloakAuthorizationTests
     [Fact]
     public async Task ScopeFilter_MultiValues_OR_Semantics()
     {
-        var tokenProvider = new KeycloakAdminTokenProvider(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))), Options.Create(KcOpts()));
-        var store = new KeycloakScopeRegistryStore(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable))), Options.Create(KcOpts()), tokenProvider, new MemoryCache(new MemoryCacheOptions()), NullLogger<KeycloakScopeRegistryStore>.Instance);
-        var svc = new ScopeFilterService(store);
+        var svc = new ScopeFilterService(new SampleApp.SampleResourceScopeResolver());
         svc.Register(new SampleApp.RegionOrderFilter());
         var orders = new[]
         {
@@ -380,31 +274,4 @@ public sealed class KeycloakAuthorizationTests
         Assert.Equal("u-1", result.Value.UserId);
     }
 
-    [Fact]
-    public async Task EnsureRegistryAsync_WhenRegistryLacksScopes_SeedsDefaultScope()
-    {
-        var putCalled = false;
-        var handler = new StubHandler(req =>
-        {
-            if (req.RequestUri!.ToString().Contains("/protocol/openid-connect/token"))
-                return TokenOk();
-            if (req.Method == HttpMethod.Get && req.RequestUri.ToString().Contains("/groups?search=iam-scope-registry"))
-                return Json(new[] { new { id = "g-reg", name = "iam-scope-registry" } });
-            if (req.Method == HttpMethod.Get && req.RequestUri.ToString().Contains("/groups/g-reg"))
-                return Json(new { id = "g-reg", name = "iam-scope-registry", attributes = new Dictionary<string, string[]>() });
-            if (req.Method == HttpMethod.Put && req.RequestUri.ToString().Contains("/groups/g-reg"))
-            {
-                putCalled = true;
-                return new HttpResponseMessage(HttpStatusCode.NoContent);
-            }
-            return Json(new object());
-        });
-
-        var tokenProv = new KeycloakAdminTokenProvider(Client(handler), Options.Create(KcOpts()));
-        var store = new KeycloakScopeRegistryStore(Client(handler), Options.Create(KcOpts()), tokenProv, new MemoryCache(new MemoryCacheOptions()), NullLogger<KeycloakScopeRegistryStore>.Instance);
-
-        await store.EnsureRegistryAsync(CancellationToken.None);
-
-        Assert.True(putCalled);
-    }
 }

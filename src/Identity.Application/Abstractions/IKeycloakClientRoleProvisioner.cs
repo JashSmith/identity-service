@@ -1,30 +1,15 @@
 namespace Identity.Application;
 
 /// <summary>
-/// Provisions Keycloak <b>client roles</b> per owning service client.
-/// Replaces the flat realm-role model: each service owns a Keycloak client
-/// (clientId == serviceId) and its permissions are client roles on that client.
+/// The always-present super-admins group: it exists on every start and holds every permission of every
+/// registered application. Roles of Keycloak's own clients (realm-management, account, ...) are never
+/// granted, so super-admins administer applications, not Keycloak itself.
 /// </summary>
 public interface IKeycloakClientRoleProvisioner
 {
-    /// <summary>Ensures the owning client exists (creates it idempotently if missing). Returns its internal UUID.</summary>
-    Task<string> EnsureClientAsync(string serviceClientId, CancellationToken ct);
+    /// <summary>Maps every application permission missing from super-admins; returns how many were added.</summary>
+    Task<Result<int>> ReconcileAdminAsync(CancellationToken ct);
 
-    /// <summary>Ensures a client role exists on the owning client. Idempotent (409 = success). Never throws.</summary>
-    Task<bool> EnsureClientRoleAsync(string serviceClientId, string roleName, string? description, CancellationToken ct);
-
-    /// <summary>Ensures one oidc-usermodel-client-role-mapper on the client that aggregates its roles into the permissions claim.</summary>
-    Task EnsureClientRoleMapperAsync(string serviceClientId, CancellationToken ct);
-
-    /// <summary>Maps the given client role to the Admin group so administrators automatically receive it.</summary>
-    Task<bool> EnsureAdminGroupMappingAsync(string serviceClientId, string roleName, CancellationToken ct);
-
-    /// <summary>Reconciles Admin group: all registered client roles minus already-mapped → add missing. Returns added count.</summary>
-    Task<int> ReconcileAdminAsync(CancellationToken ct);
-
-    /// <summary>
-    /// Ensures the always-present super-admin group exists with all gateway management
-    /// permissions and every registered client role. Idempotent; best-effort.
-    /// </summary>
-    Task EnsureSuperAdminGroupAsync(CancellationToken ct) => Task.CompletedTask;
+    /// <summary>Creates super-admins when missing, then reconciles its permissions.</summary>
+    Task<Result> EnsureSuperAdminGroupAsync(CancellationToken ct);
 }

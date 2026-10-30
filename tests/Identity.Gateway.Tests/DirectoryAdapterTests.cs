@@ -108,7 +108,7 @@ public sealed class DirectoryAdapterTests
         var permissions = await Adapter(kc).GetUserPermissionsAsync("u0", Ct);
 
         Assert.True(permissions.IsSuccess);
-        Assert.Equal(["offline_access", "perm-of-c-billing", "perm-of-c-orders"], permissions.Value.Select(p => p.Name));
+        Assert.Equal(["billing:perm-of-c-billing", "offline_access", "orders:perm-of-c-orders"], permissions.Value.Select(p => p.Name));
         Assert.Equal(2, kc.Paths.Count(p => p.Contains("/role-mappings/clients/", StringComparison.Ordinal)));
         Assert.DoesNotContain(kc.Paths, p => p.EndsWith("/admin/realms/company/clients", StringComparison.Ordinal));
     }

@@ -14,7 +14,7 @@ public static class UserDirectoryEndpoints
         g.MapGet("/users", async (string? search, int? page, int? pageSize, bool? includeSessions, IUserDirectory dir, CancellationToken ct) =>
                 (await dir.GetUsersAsync(search, page ?? 1, pageSize ?? 20, includeSessions ?? false, ct))
                 .ToHttpResult(users => Results.Ok(users)))
-            .RequireAuthorization("Identity.Users.Read")
+            .RequireAuthorization(IamPermissions.UsersRead)
             .WithName("ListUsers").Produces<PagedResponse<UserDto>>(200)
             .WithOpenApi(o =>
             {
@@ -23,7 +23,7 @@ public static class UserDirectoryEndpoints
             });
 
         g.MapGet("/users/{id}", async (string id, IUserDirectory dir, CancellationToken ct) =>
-                (await dir.GetUserAsync(id, ct)).ToHttpResult(user => Results.Ok(user))).RequireAuthorization("Identity.Users.Read").WithName("GetUser").Produces<UserDto>(200)
+                (await dir.GetUserAsync(id, ct)).ToHttpResult(user => Results.Ok(user))).RequireAuthorization(IamPermissions.UsersRead).WithName("GetUser").Produces<UserDto>(200)
             .WithOpenApi(o =>
             {
                 o.Summary = "Get user by id";
@@ -32,7 +32,7 @@ public static class UserDirectoryEndpoints
 
         g.MapGet("/users/{id}/roles", async (string id, IUserDirectory dir, CancellationToken ct) =>
                 (await dir.GetUserRolesAsync(id, ct)).ToHttpResult(roles => Results.Ok(roles)))
-            .RequireAuthorization("Identity.Users.Read").WithName("GetUserRoles")
+            .RequireAuthorization(IamPermissions.UsersRead).WithName("GetUserRoles")
             .Produces<IReadOnlyCollection<RoleDto>>(200)
             .WithOpenApi(o =>
             {
@@ -42,7 +42,7 @@ public static class UserDirectoryEndpoints
 
         g.MapGet("/users/{id}/permissions", async (string id, IUserDirectory dir, CancellationToken ct) =>
                 (await dir.GetUserPermissionsAsync(id, ct)).ToHttpResult(permissions => Results.Ok(permissions)))
-            .RequireAuthorization("Identity.Users.Read").WithName("GetUserPermissions")
+            .RequireAuthorization(IamPermissions.UsersRead).WithName("GetUserPermissions")
             .Produces<IReadOnlyCollection<PermissionDto>>(200)
             .WithOpenApi(o =>
             {
@@ -53,21 +53,10 @@ public static class UserDirectoryEndpoints
         g.MapGet("/roles",
                 async (string? clientId, int? page, int? pageSize, IRoleDirectory dir, CancellationToken ct) =>
                     (await dir.GetRolesAsync(clientId, page ?? 1, pageSize ?? 20, ct)).ToHttpResult(roles => Results.Ok(roles)))
-            .RequireAuthorization("Identity.Roles.Read").WithName("ListRoles").Produces<PagedResponse<RoleDto>>(200)
+            .RequireAuthorization(IamPermissions.RolesRead).WithName("ListRoles").Produces<PagedResponse<RoleDto>>(200)
             .WithOpenApi(o =>
             {
                 o.Summary = "List roles";
-                return o;
-            });
-
-        // IPermissionRegistry passthrough for permission catalog if available
-        g.MapGet("/permissions",
-                async (string? serviceId, bool? includeDeprecated, IPermissionRegistry reg, CancellationToken ct) =>
-                    Results.Ok(await reg.GetPermissionsAsync(serviceId, includeDeprecated ?? false, ct)))
-            .RequireAuthorization("Identity.Permissions.Read").WithName("ListPermissions")
-            .WithOpenApi(o =>
-            {
-                o.Summary = "List registered permissions";
                 return o;
             });
 

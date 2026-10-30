@@ -24,8 +24,11 @@ public sealed class KeycloakGroupBusinessRoleStore(
 
     private sealed record GroupRef(string Id, string Name, string Path, Dictionary<string, string[]> Attributes);
 
-    /// <summary>A role that can be mapped as a permission: a client role (with its client) or a realm role.</summary>
-    private sealed record PermissionRole(string Id, string Name, string? ClientUuid);
+    /// <summary>
+    /// A role mapped as a permission. <see cref="Name"/> is what the API shows (the full
+    /// <c>{clientId}:{Module}:{Resource}:{Action}</c> for client roles); <see cref="RoleName"/> is Keycloak's role name.
+    /// </summary>
+    private sealed record PermissionRole(string Id, string Name, string RoleName, string? ClientUuid);
 
     private static Error RoleNotFound(string name) =>
         Error.NotFound("role.not_found", $"Business role '{name}' was not found.");
@@ -225,7 +228,7 @@ public sealed class KeycloakGroupBusinessRoleStore(
 
         var roles = new List<PermissionRole>();
         if (mappings.Value.TryGetProperty("realmMappings", out var realm) && realm.ValueKind == JsonValueKind.Array)
-            roles.AddRange(realm.EnumerateArray().Select(r => ToRole(r, clientUuid: null)).OfType<PermissionRole>());
+            roles.AddRange(realm.EnumerateArray().Select(r => ToRole(r, clientId: null, clientUuid: null)).OfType<PermissionRole>());
 
         if (mappings.Value.TryGetProperty("clientMappings", out var clients) && clients.ValueKind == JsonValueKind.Object)
         {
@@ -233,45 +236,67 @@ public sealed class KeycloakGroupBusinessRoleStore(
             {
                 var clientUuid = KeycloakAdminApi.GetString(client.Value, "id");
                 if (clientUuid is null || !client.Value.TryGetProperty("mappings", out var mapped)) continue;
-                roles.AddRange(mapped.EnumerateArray().Select(r => ToRole(r, clientUuid)).OfType<PermissionRole>());
+                roles.AddRange(mapped.EnumerateArray().Select(r => ToRole(r, client.Name, clientUuid)).OfType<PermissionRole>());
             }
         }
         return roles;
     }
 
     /// <summary>
-    /// Finds each permission among client roles (first matching client wins) and then legacy realm roles.
-    /// Reports all unknown permissions at once.
+    /// Resolves full permission names (<c>{clientId}:{Module}:{Resource}:{Action}</c>) to the client roles of that
+    /// application; names without an application are legacy realm roles. Reports all unknown permissions at once.
     /// </summary>
     private async Task<Result<IReadOnlyCollection<PermissionRole>>> ResolvePermissionsAsync(
         IReadOnlyCollection<string> permissions, CancellationToken ct)
     {
         var wanted = permissions.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim())
             .Distinct(StringComparer.Ordinal).ToArray();
-        if (wanted.Length == 0) return Array.Empty<PermissionRole>();
+        var resolved = new List<PermissionRole>();
+        var missing = new List<string>();
+        var clientUuids = new Dictionary<string, string?>(StringComparer.Ordinal);
 
-        var catalog = new Dictionary<string, PermissionRole>(StringComparer.Ordinal);
-        var clients = await _api.GetAllAsync("clients", Resource, ct);
-        if (!clients.IsSuccess) return clients.Error!;
-        foreach (var clientUuid in clients.Value.Select(c => KeycloakAdminApi.GetString(c, "id")).OfType<string>())
+        foreach (var permission in wanted)
         {
-            var clientRoles = await _api.GetAllAsync($"clients/{Escape(clientUuid)}/roles?briefRepresentation=true", Resource, ct);
-            if (!clientRoles.IsSuccess) return clientRoles.Error!;
-            foreach (var role in clientRoles.Value.Select(r => ToRole(r, clientUuid)).OfType<PermissionRole>())
-                catalog.TryAdd(role.Name, role);
+            string path;
+            string? clientId = null, clientUuid = null;
+            if (Identity.Application.Permissions.PermissionName.TryParseFull(permission, out var name))
+            {
+                clientId = name.Application;
+                if (!clientUuids.TryGetValue(clientId, out clientUuid))
+                {
+                    var found = await _api.GetAsync($"clients?clientId={Uri.EscapeDataString(clientId)}", Resource, ct);
+                    if (!found.IsSuccess) return found.Error!;
+                    clientUuid = found.Value.EnumerateArray()
+                        .Where(c => KeycloakAdminApi.GetString(c, "clientId") == clientId)
+                        .Select(c => KeycloakAdminApi.GetString(c, "id")).FirstOrDefault();
+                    clientUuids[clientId] = clientUuid;
+                }
+                if (clientUuid is null)
+                {
+                    missing.Add(permission);
+                    continue;
+                }
+                path = $"clients/{Escape(clientUuid)}/roles/{Escape(name.Local)}";
+            }
+            else
+            {
+                path = $"roles/{Escape(permission)}";
+            }
+
+            var role = await _api.GetAsync(path, Resource, ct);
+            if (!role.IsSuccess)
+            {
+                if (role.Error!.Kind != ErrorKind.NotFound) return role.Error;
+                missing.Add(permission);
+                continue;
+            }
+            if (ToRole(role.Value, clientId, clientUuid) is { } mapped) resolved.Add(mapped);
         }
 
-        var realmRoles = await _api.GetAllAsync("roles?briefRepresentation=true", Resource, ct);
-        if (!realmRoles.IsSuccess) return realmRoles.Error!;
-        foreach (var role in realmRoles.Value.Select(r => ToRole(r, clientUuid: null)).OfType<PermissionRole>())
-            catalog.TryAdd(role.Name, role);
-
-        var missing = wanted.Where(p => !catalog.ContainsKey(p)).ToArray();
-        if (missing.Length > 0)
+        if (missing.Count > 0)
             return Error.Validation("permission.not_found", $"Unknown permissions: {string.Join(", ", missing)}.",
                 new Dictionary<string, string[]> { ["permissions"] = missing.Select(m => $"Permission '{m}' does not exist.").ToArray() });
-
-        return wanted.Select(p => catalog[p]).ToArray();
+        return resolved;
     }
 
     private Task<Result> MapPermissionsAsync(GroupRef group, IReadOnlyCollection<PermissionRole> roles, CancellationToken ct) =>
@@ -287,18 +312,19 @@ public sealed class KeycloakGroupBusinessRoleStore(
             var path = byContainer.Key is null
                 ? $"groups/{Escape(group.Id)}/role-mappings/realm"
                 : $"groups/{Escape(group.Id)}/role-mappings/clients/{Escape(byContainer.Key)}";
-            var body = byContainer.Select(r => new { id = r.Id, name = r.Name }).ToArray();
+            var body = byContainer.Select(r => new { id = r.Id, name = r.RoleName }).ToArray();
             var result = await _api.SendWithoutResultAsync(method, path, body, Resource, ct);
             if (!result.IsSuccess) return result;
         }
         return Result.Success();
     }
 
-    private static PermissionRole? ToRole(JsonElement role, string? clientUuid)
+    private static PermissionRole? ToRole(JsonElement role, string? clientId, string? clientUuid)
     {
         var id = KeycloakAdminApi.GetString(role, "id");
         var name = KeycloakAdminApi.GetString(role, "name");
-        return string.IsNullOrEmpty(id) || string.IsNullOrEmpty(name) ? null : new PermissionRole(id, name, clientUuid);
+        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(name)) return null;
+        return new PermissionRole(id, clientId is null ? name : $"{clientId}:{name}", name, clientUuid);
     }
 
     private static GroupRef MapGroup(JsonElement e)

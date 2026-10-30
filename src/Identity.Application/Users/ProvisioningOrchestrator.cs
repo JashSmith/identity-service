@@ -189,7 +189,8 @@ public sealed class ProvisioningOrchestrator(
         if (scopeValidator is not null)
         {
             var errors = await scopeValidator.ValidateAsync(assignments, roles, ct);
-            return errors.Count == 0 ? null : Error.Validation("scope.invalid", "One or more assignments are invalid.", errors);
+            if (!errors.IsSuccess) return errors.Error;
+            return errors.Value.Count == 0 ? null : Error.Validation("scope.invalid", "One or more assignments are invalid.", errors.Value);
         }
 
         foreach (var a in assignments)
@@ -203,7 +204,8 @@ public sealed class ProvisioningOrchestrator(
     {
         if (profileRequirements is null) return null;
         var required = await profileRequirements.GetRequiredAttributesAsync(ct);
-        var missing = required.Where(attr => string.IsNullOrWhiteSpace(RequestValue(request, attr))).ToArray();
+        if (!required.IsSuccess) return required.Error;
+        var missing = required.Value.Where(attr => string.IsNullOrWhiteSpace(RequestValue(request, attr))).ToArray();
         if (missing.Length == 0) return null;
 
         return Error.Validation("user.profile_incomplete", "The identity provider requires more profile fields.",

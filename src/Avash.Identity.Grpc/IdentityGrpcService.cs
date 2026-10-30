@@ -9,8 +9,7 @@ namespace Avash.Identity.Grpc;
 public sealed class IdentityGrpcService(
     IUserDirectory users,
     IRoleDirectory roles,
-    IPermissionRegistry perms,
-    PermissionRegistrationService reg,
+    global::Identity.Application.Permissions.IPermissionCatalog catalog,
     IConfiguration cfg,
     IHttpClientFactory httpFactory) : IdentityService.IdentityServiceBase
 {
@@ -182,14 +181,15 @@ public sealed class IdentityGrpcService(
         ServerCallContext context)
     {
         var httpCtx = context.GetHttpContext();
-        var serviceId = httpCtx.User.FindFirst("client_id")?.Value ??
-                        httpCtx.User.FindFirst("azp")?.Value ?? request.ServiceId;
+        // The caller's own client id is the namespace; a manifest for another application is refused.
+        var serviceId = httpCtx.User.FindFirst("azp")?.Value ?? httpCtx.User.FindFirst("client_id")?.Value
+                        ?? throw new RpcException(new Status(StatusCode.PermissionDenied, "Only an application's service account can register its manifest."));
         var dto = new global::Identity.Contracts.PermissionManifestRequest(request.ServiceId, request.ServiceVersion,
             request.ManifestVersion,
             request.Permissions
                 .Select(p => new global::Identity.Contracts.PermissionDefinitionDto(p.Name, p.Description)).ToList(),
             request.ManifestHash, string.IsNullOrWhiteSpace(request.IdempotencyKey) ? null : request.IdempotencyKey);
-        var res = await reg.RegisterAsync(dto, serviceId, context.CancellationToken);
+        var res = Unwrap(await catalog.RegisterManifestAsync(serviceId, dto, context.CancellationToken));
         var outRes = new ManifestRegistrationResponse
         {
             ServiceId = res.ServiceId, ManifestVersion = res.ManifestVersion, ManifestHash = res.ManifestHash,

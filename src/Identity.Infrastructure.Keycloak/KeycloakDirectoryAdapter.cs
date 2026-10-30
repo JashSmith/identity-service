@@ -75,9 +75,10 @@ public sealed class KeycloakDirectoryAdapter(
         var roles = new List<RoleDto>();
         if (mappings.Value.TryGetProperty("realmMappings", out var realm) && realm.ValueKind == JsonValueKind.Array)
             roles.AddRange(realm.EnumerateArray().Select(MapRole));
-        foreach (var (_, client) in ClientMappings(mappings.Value))
-            if (client.TryGetProperty("mappings", out var mapped) && mapped.ValueKind == JsonValueKind.Array)
-                roles.AddRange(mapped.EnumerateArray().Select(MapRole));
+        if (mappings.Value.TryGetProperty("clientMappings", out var clients) && clients.ValueKind == JsonValueKind.Object)
+            foreach (var client in clients.EnumerateObject())
+                if (client.Value.TryGetProperty("mappings", out var mapped) && mapped.ValueKind == JsonValueKind.Array)
+                    roles.AddRange(mapped.EnumerateArray().Select(MapRole));
         return roles;
     }
 
@@ -88,18 +89,19 @@ public sealed class KeycloakDirectoryAdapter(
         // Effective realm roles already include roles inherited through groups and composites.
         var realm = await _api.GetAsync($"{UserPath(id)}/role-mappings/realm/composite", UserResource, ct);
         if (!realm.IsSuccess) return NamedNotFound(realm.Error!, id);
-        foreach (var role in realm.Value.EnumerateArray()) AddPermission(permissions, role, "realm");
+        foreach (var role in realm.Value.EnumerateArray()) AddPermission(permissions, role, "realm", "");
 
         // Only clients the user or one of its groups holds roles of can contribute client permissions,
         // so the composite lookup runs for those clients instead of every client of the realm.
         var clients = await ClientsWithMappingsAsync(id, ct);
         if (!clients.IsSuccess) return clients.Error!;
-        foreach (var clientUuid in clients.Value)
+        foreach (var (clientUuid, clientId) in clients.Value)
         {
             var effective = await _api.GetAsync(
                 $"{UserPath(id)}/role-mappings/clients/{Uri.EscapeDataString(clientUuid)}/composite", UserResource, ct);
             if (!effective.IsSuccess) return effective.Error!;
-            foreach (var role in effective.Value.EnumerateArray()) AddPermission(permissions, role, clientUuid);
+            // Client roles carry the application prefix, exactly as they appear in tokens.
+            foreach (var role in effective.Value.EnumerateArray()) AddPermission(permissions, role, clientId, $"{clientId}:");
         }
 
         return permissions.Values.OrderBy(p => p.Name, StringComparer.Ordinal).ToArray();
@@ -176,13 +178,14 @@ public sealed class KeycloakDirectoryAdapter(
         return failed is not null ? failed.Error! : results.Select(r => r.Value).ToArray();
     }
 
-    private async Task<Result<IReadOnlyCollection<string>>> ClientsWithMappingsAsync(string userId, CancellationToken ct)
+    /// <summary>(client UUID, client id) of every client the user or one of its groups holds roles of.</summary>
+    private async Task<Result<IReadOnlyDictionary<string, string>>> ClientsWithMappingsAsync(string userId, CancellationToken ct)
     {
-        var clients = new HashSet<string>(StringComparer.Ordinal);
+        var clients = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var direct = await _api.GetAsync($"{UserPath(userId)}/role-mappings", UserResource, ct);
         if (!direct.IsSuccess) return NamedNotFound(direct.Error!, userId);
-        foreach (var (uuid, _) in ClientMappings(direct.Value)) clients.Add(uuid);
+        foreach (var (uuid, clientId) in ClientMappings(direct.Value)) clients[uuid] = clientId;
 
         var groups = await _api.GetAllAsync($"{UserPath(userId)}/groups?briefRepresentation=true", UserResource, ct);
         if (!groups.IsSuccess) return groups.Error!;
@@ -190,27 +193,28 @@ public sealed class KeycloakDirectoryAdapter(
         {
             var mappings = await _api.GetAsync($"groups/{Uri.EscapeDataString(groupId)}/role-mappings", RoleResource, ct);
             if (!mappings.IsSuccess) return mappings.Error!;
-            foreach (var (uuid, _) in ClientMappings(mappings.Value)) clients.Add(uuid);
+            foreach (var (uuid, clientId) in ClientMappings(mappings.Value)) clients[uuid] = clientId;
         }
         return clients;
     }
 
-    /// <summary>The (client UUID, mapping) pairs of a Keycloak MappingsRepresentation.</summary>
-    private static IEnumerable<(string Uuid, JsonElement Mapping)> ClientMappings(JsonElement mappings)
+    /// <summary>The (client UUID, client id) pairs of a Keycloak MappingsRepresentation.</summary>
+    private static IEnumerable<(string Uuid, string ClientId)> ClientMappings(JsonElement mappings)
     {
         if (!mappings.TryGetProperty("clientMappings", out var clients) || clients.ValueKind != JsonValueKind.Object)
             yield break;
         foreach (var client in clients.EnumerateObject())
             if (KeycloakAdminApi.GetString(client.Value, "id") is { Length: > 0 } uuid)
-                yield return (uuid, client.Value);
+                yield return (uuid, client.Name);
     }
 
     private static Error NamedNotFound(Error error, string userId) =>
         error.Kind == ErrorKind.NotFound ? UserNotFound(userId) : error;
 
-    private static void AddPermission(Dictionary<string, PermissionDto> permissions, JsonElement role, string source)
+    private static void AddPermission(Dictionary<string, PermissionDto> permissions, JsonElement role, string source, string prefix)
     {
-        if (KeycloakAdminApi.GetString(role, "name") is not { Length: > 0 } name) return;
+        if (KeycloakAdminApi.GetString(role, "name") is not { Length: > 0 } local) return;
+        var name = prefix + local;
         permissions[name] = new PermissionDto(name, KeycloakAdminApi.GetString(role, "description") ?? "", source, "1.0", false,
             KeycloakAdminApi.GetString(role, "id"));
     }

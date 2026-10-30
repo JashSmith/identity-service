@@ -1,23 +1,22 @@
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Identity.Application;
 using Identity.Application.Scope;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Identity.Infrastructure.Keycloak;
 
 namespace Identity.Infrastructure.Keycloak.Scope;
 
 /// <summary>
-/// Scope registry backed by the dedicated config Group <c>iam-scope-registry</c>.
-/// Group attributes:
-///   scope.&lt;key&gt; = JSON {"displayName":...,"description":...,"isActive":true,"valueType":"String"}
-///   resource.&lt;name&gt; = multivalued scope keys (each value = one scope key)
-/// Business-role Groups hold <c>authz.allowed-scopes</c> multivalued.
-/// Implements <see cref="IScopeDefinitionLookup"/>, <see cref="IResourceScopeResolver"/>, <see cref="IScopeCacheInvalidator"/>.
+/// Scope registry backed by the reserved group <c>iam-scope-registry</c>. Group attributes:
+///   scope.&lt;key&gt; = JSON {"displayName","description","isActive","valueType"} (split into 200-byte chunks)
+///   resource.&lt;name&gt; = multivalued scope keys
+/// Business-role groups restrict usable scopes with <c>authz.allowed-scopes</c>.
+/// Reads are cached in memory and, when configured, in Redis; every failure to read Keycloak is an error,
+/// so validation fails closed instead of accepting scopes it could not check.
 /// </summary>
 public sealed class KeycloakScopeRegistryStore(
     HttpClient http,
@@ -25,31 +24,35 @@ public sealed class KeycloakScopeRegistryStore(
     KeycloakAdminTokenProvider tokenProvider,
     IMemoryCache cache,
     ILogger<KeycloakScopeRegistryStore> logger,
-    IDistributedCache? distributed = null) : IScopeDefinitionLookup, IResourceScopeResolver, IScopeCacheInvalidator, IScopeRegistryAdmin
+    IScopeAttributeProvisioner provisioner,
+    IDistributedCache? distributed = null)
+    : IScopeDefinitionLookup, IResourceScopeResolver, IScopeCacheInvalidator, IScopeRegistryAdmin
 {
-    private readonly KeycloakOptions _o = opts.Value;
-    private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
-    private const string RegistryGroupName = "iam-scope-registry";
-    private const string ActiveKey = "scopes:active:kc:v1";
-    private const string RoleAllowedKey = "scopes:roleAllowed:kc:v1";
-    private const string ResourceMapKey = "scopes:resourceMap:kc:v1";
+    private const string RegistryGroupName = ReservedGroups.ScopeRegistry;
+    private const string Resource = "scope";
+    private const string ScopePrefix = "scope.";
+    private const string ResourcePrefix = "resource.";
+    private const string AllowedScopesAttribute = "authz.allowed-scopes";
+    private const string RegistryCacheKey = "scopes:registry:kc:v2";
+    private const string RoleAllowedKey = "scopes:roleAllowed:kc:v2";
     private const string RedisPrefix = "identity:registry:";
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
+
+    private readonly KeycloakAdminApi _api = new(http, opts.Value, tokenProvider, logger);
 
     /// <summary>
     /// Non-ASCII characters are written raw instead of <c>\uXXXX</c> escapes, which would
     /// inflate Persian/Arabic text sixfold — Keycloak caps GROUP_ATTRIBUTE.VALUE at 255 bytes.
     /// </summary>
-    private static readonly JsonSerializerOptions CompactJson = new()
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
+    private static readonly JsonSerializerOptions CompactJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     /// <summary>
-    /// Keycloak stores each attribute value in a VARCHAR2(255) column. Long definitions are
+    /// Keycloak stores each attribute value in a VARCHAR(255) column. Long definitions are
     /// split across the multivalued attribute and rejoined on read.
     /// </summary>
     private const int AttributeChunkBytes = 200;
+
+    private static Error ScopeNotFound(string key) => Error.NotFound("scope.not_found", $"Scope '{key}' was not found.");
 
     internal static string[] ChunkAttributeValue(string value)
     {
@@ -61,36 +64,49 @@ public sealed class KeycloakScopeRegistryStore(
         {
             var len = Math.Min(AttributeChunkBytes, bytes.Length - start);
             // Never split a multi-byte UTF-8 sequence: back off until not on a continuation byte.
-            while (len > 1 && (bytes[start + len] & 0xC0) == 0x80) len--;
+            while (len > 1 && start + len < bytes.Length && (bytes[start + len] & 0xC0) == 0x80) len--;
             chunks.Add(Encoding.UTF8.GetString(bytes, start, len));
             start += len;
         }
         return chunks.ToArray();
     }
 
-    private static string JoinAttributeValues(string[] values) =>
-        values.Length == 0 ? "{}" : string.Concat(values);
+    // ---------- cache ----------
 
     public void Invalidate()
     {
-        cache.Remove(ActiveKey);
+        cache.Remove(RegistryCacheKey);
         cache.Remove(RoleAllowedKey);
-        cache.Remove(ResourceMapKey);
-        // Distributed invalidation so other gateway replicas drop their copies too.
-        // Sync-over-async is acceptable here: invalidation is rare and admin-triggered.
-        if (distributed is not null)
+        if (distributed is null) return;
+        try
         {
-            try
-            {
-                distributed.Remove(RedisPrefix + ActiveKey);
-                distributed.Remove(RedisPrefix + RoleAllowedKey);
-                distributed.Remove(RedisPrefix + ResourceMapKey);
-            }
-            catch (Exception ex) { logger.LogDebug(ex, "Redis cache invalidation failed"); }
+            distributed.Remove(RedisPrefix + RegistryCacheKey);
+            distributed.Remove(RedisPrefix + RoleAllowedKey);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Other replicas keep their copy until it expires (5 minutes); reported, not fatal.
+            logger.LogWarning(ex, "Could not invalidate the shared scope registry cache");
         }
     }
 
-    private T? DistributedGet<T>(string key) where T : class
+    private async Task<Result<T>> CachedAsync<T>(string key, Func<CancellationToken, Task<Result<T>>> load, CancellationToken ct) where T : class
+    {
+        if (cache.TryGetValue(key, out T? local) && local is not null) return local;
+        if (ReadShared<T>(key) is { } shared)
+        {
+            cache.Set(key, shared, Ttl);
+            return shared;
+        }
+
+        var loaded = await load(ct);
+        if (!loaded.IsSuccess) return loaded;
+        cache.Set(key, loaded.Value, Ttl);
+        WriteShared(key, loaded.Value);
+        return loaded;
+    }
+
+    private T? ReadShared<T>(string key) where T : class
     {
         if (distributed is null) return null;
         try
@@ -98,10 +114,14 @@ public sealed class KeycloakScopeRegistryStore(
             var raw = distributed.GetString(RedisPrefix + key);
             return string.IsNullOrEmpty(raw) ? null : JsonSerializer.Deserialize<T>(raw);
         }
-        catch (Exception ex) { logger.LogDebug(ex, "Redis cache read failed for {Key}", key); return null; }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Shared scope registry cache unreadable for {Key}; reading Keycloak", key);
+            return null;
+        }
     }
 
-    private void DistributedSet(string key, object value)
+    private void WriteShared(string key, object value)
     {
         if (distributed is null) return;
         try
@@ -109,589 +129,316 @@ public sealed class KeycloakScopeRegistryStore(
             distributed.SetString(RedisPrefix + key, JsonSerializer.Serialize(value),
                 new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = Ttl });
         }
-        catch (Exception ex) { logger.LogDebug(ex, "Redis cache write failed for {Key}", key); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not write the shared scope registry cache for {Key}", key);
+        }
     }
 
-    private sealed record ScopeDef(string Key, string DisplayName, string? Description, bool IsActive, string ValueType);
+    // ---------- registry reads ----------
 
-    private static ScopeDef ParseScope(string key, string json)
+    /// <summary>The registry group's attributes; the group is created when missing.</summary>
+    private Task<Result<Dictionary<string, string[]>>> GetRegistryAsync(CancellationToken ct) =>
+        CachedAsync(RegistryCacheKey, async token =>
+        {
+            var group = await GetRegistryGroupAsync(token);
+            return group.IsSuccess ? Result<Dictionary<string, string[]>>.Success(Attributes(group.Value)) : group.Error!;
+        }, ct);
+
+    private async Task<Result<JsonElement>> GetRegistryGroupAsync(CancellationToken ct)
+    {
+        var id = await GetRegistryGroupIdAsync(ct);
+        if (!id.IsSuccess) return id.Error!;
+        return await _api.GetAsync($"groups/{Uri.EscapeDataString(id.Value)}", Resource, ct);
+    }
+
+    private async Task<Result<string>> GetRegistryGroupIdAsync(CancellationToken ct)
+    {
+        var found = await FindRegistryGroupIdAsync(ct);
+        if (!found.IsSuccess) return found.Error!;
+        if (found.Value is not null) return found.Value;
+
+        // Missing registry: create it so admins can bootstrap scopes without a realm re-import.
+        var created = await _api.CreateAsync("groups", new { name = RegistryGroupName }, Resource, ct);
+        if (created.IsSuccess) return created.Value;
+        if (created.Error!.Kind != ErrorKind.Conflict) return created.Error;
+        var again = await FindRegistryGroupIdAsync(ct);
+        if (!again.IsSuccess) return again.Error!;
+        if (again.Value is not null) return again.Value;
+        return created.Error;
+    }
+
+    private async Task<Result<string?>> FindRegistryGroupIdAsync(CancellationToken ct)
+    {
+        var found = await _api.GetAsync($"groups?search={Uri.EscapeDataString(RegistryGroupName)}&exact=true&briefRepresentation=true", Resource, ct);
+        if (!found.IsSuccess) return found.Error!;
+        return found.Value.EnumerateArray()
+            .Where(g => KeycloakAdminApi.GetString(g, "name") == RegistryGroupName)
+            .Select(g => KeycloakAdminApi.GetString(g, "id"))
+            .FirstOrDefault();
+    }
+
+    private IEnumerable<ScopeDefinitionDto> Definitions(Dictionary<string, string[]> registry) =>
+        registry.Where(kv => kv.Key.StartsWith(ScopePrefix, StringComparison.Ordinal))
+            .Select(kv => ParseScope(kv.Key[ScopePrefix.Length..], string.Concat(kv.Value)))
+            .OrderBy(s => s.Key, StringComparer.Ordinal);
+
+    private ScopeDefinitionDto ParseScope(string key, string json)
     {
         try
         {
-            var doc = JsonDocument.Parse(json);
-            var display = doc.RootElement.TryGetProperty("displayName", out var d) ? d.GetString() ?? key : key;
-            var desc = doc.RootElement.TryGetProperty("description", out var dd) ? dd.GetString() : null;
-            var active = doc.RootElement.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
-            var vt = doc.RootElement.TryGetProperty("valueType", out var vt2) ? vt2.GetString() ?? "String" : "String";
-            return new ScopeDef(key, display, desc, active, vt);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            return new ScopeDefinitionDto(key,
+                KeycloakAdminApi.GetString(root, "displayName") ?? key,
+                KeycloakAdminApi.GetString(root, "description"),
+                !root.TryGetProperty("isActive", out var active) || active.ValueKind != JsonValueKind.False,
+                KeycloakAdminApi.GetString(root, "valueType") ?? "String");
         }
-        catch { return new ScopeDef(key, key, null, true, "String"); }
+        catch (JsonException ex)
+        {
+            // The key exists but its definition is unreadable: keep it usable under its key and report it.
+            logger.LogWarning(ex, "Scope '{Key}' has an unreadable definition in {Group}", key, RegistryGroupName);
+            return new ScopeDefinitionDto(key, key, null, true, "String");
+        }
     }
 
-    private async Task<Dictionary<string, string[]>> GetRegistryAttributesAsync(CancellationToken ct)
+    private static IEnumerable<ResourceScopeMappingDto> Resources(Dictionary<string, string[]> registry) =>
+        registry.Where(kv => kv.Key.StartsWith(ResourcePrefix, StringComparison.Ordinal))
+            .Select(kv => new ResourceScopeMappingDto(kv.Key[ResourcePrefix.Length..], kv.Value))
+            .OrderBy(r => r.Key, StringComparer.Ordinal);
+
+    // ---------- IScopeDefinitionLookup / IResourceScopeResolver ----------
+
+    public async Task<Result<bool>> ExistsActiveAsync(string key, CancellationToken ct)
     {
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) return new(StringComparer.Ordinal);
-        try
-        {
-            // Find registry group
-            var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(RegistryGroupName)}");
-            req.Headers.Add("Authorization", $"Bearer {token}");
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return new(StringComparer.Ordinal);
-            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return new(StringComparer.Ordinal);
-            foreach (var el in doc.RootElement.EnumerateArray())
-            {
-                var name = el.TryGetProperty("name", out var n) ? n.GetString() : null;
-                if (!string.Equals(name, RegistryGroupName, StringComparison.Ordinal)) continue;
-                var id = el.TryGetProperty("id", out var gid) ? gid.GetString() : null;
-                if (string.IsNullOrEmpty(id)) return AttrsFromElement(el);
-                // Fetch full group with attributes
-                var gReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(id)}");
-                gReq.Headers.Add("Authorization", $"Bearer {token}");
-                var gRes = await http.SendAsync(gReq, ct);
-                if (!gRes.IsSuccessStatusCode) return AttrsFromElement(el);
-                var gDoc = JsonDocument.Parse(await gRes.Content.ReadAsStringAsync(ct));
-                return AttrsFromElement(gDoc.RootElement);
-            }
-        }
-        catch (Exception ex) { logger.LogDebug(ex, "Failed to fetch scope registry group"); }
-        return new(StringComparer.Ordinal);
+        var registry = await GetRegistryAsync(ct);
+        if (!registry.IsSuccess) return registry.Error!;
+        return Definitions(registry.Value).Any(s => s.IsActive && string.Equals(s.Key, key, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static Dictionary<string, string[]> AttrsFromElement(JsonElement el)
+    public async Task<Result<bool>> IsScopeAllowedForRoleAsync(string role, string scopeKey, CancellationToken ct)
     {
-        var d = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        if (!el.TryGetProperty("attributes", out var attrs) || attrs.ValueKind != JsonValueKind.Object) return d;
-        foreach (var prop in attrs.EnumerateObject())
-        {
-            if (prop.Value.ValueKind == JsonValueKind.Array)
-                d[prop.Name] = prop.Value.EnumerateArray().Select(v => v.GetString() ?? "").Where(s => s.Length > 0).ToArray();
-            else if (prop.Value.ValueKind == JsonValueKind.String)
-                d[prop.Name] = new[] { prop.Value.GetString() ?? "" };
-        }
-        return d;
+        var map = await CachedAsync(RoleAllowedKey, LoadRoleAllowedAsync, ct);
+        if (!map.IsSuccess) return map.Error!;
+        // A role without authz.allowed-scopes restricts nothing.
+        return !map.Value.TryGetValue(role, out var allowed) || allowed.Length == 0 ||
+               allowed.Contains(scopeKey, StringComparer.OrdinalIgnoreCase);
     }
 
-    private async Task<IReadOnlyCollection<ScopeDef>> GetActiveScopesAsync(CancellationToken ct)
+    private async Task<Result<Dictionary<string, string[]>>> LoadRoleAllowedAsync(CancellationToken ct)
     {
-        if (cache.TryGetValue(ActiveKey, out IReadOnlyCollection<ScopeDef>? c) && c is not null) return c;
-        if (DistributedGet<ScopeDef[]>(ActiveKey) is { Length: > 0 } shared)
+        var groups = await _api.GetAllAsync("groups?briefRepresentation=false", Resource, ct);
+        if (!groups.IsSuccess) return groups.Error!;
+        var map = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in groups.Value)
         {
-            cache.Set(ActiveKey, shared, Ttl);
-            return shared;
+            var name = KeycloakAdminApi.GetString(group, "name");
+            if (string.IsNullOrEmpty(name) || ReservedGroups.IsReserved(name)) continue;
+            if (Attributes(group).TryGetValue(AllowedScopesAttribute, out var allowed)) map[name] = allowed;
         }
-        var attrs = await GetRegistryAttributesAsync(ct);
-        var list = new List<ScopeDef>();
-        foreach (var kv in attrs)
-        {
-            if (!kv.Key.StartsWith("scope.", StringComparison.Ordinal)) continue;
-            var key = kv.Key.Substring("scope.".Length);
-            var json = JoinAttributeValues(kv.Value);
-            var def = ParseScope(key, json);
-            if (def.IsActive) list.Add(def);
-        }
-        // Fallback to defaults if registry empty (migration window / no Keycloak): seed-like defaults
-        if (list.Count == 0 && attrs.Count == 0)
-        {
-            // Return in-memory defaults so validation doesn't break when Keycloak unreachable in tests
-            foreach (var k in new[] { "region", "branch", "department", "organization", "warehouse", "customer", "project", "test-key" })
-                list.Add(new ScopeDef(k, k, null, true, "String"));
-        }
-        IReadOnlyCollection<ScopeDef> result = list;
-        cache.Set(ActiveKey, result, Ttl);
-        if (attrs.Count > 0) DistributedSet(ActiveKey, list.ToArray());
-        return result;
-    }
-
-    public async Task<bool> ExistsActiveAsync(string key, CancellationToken ct)
-    {
-        var active = await GetActiveScopesAsync(ct);
-        return active.Any(s => string.Equals(s.Key, key, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public async Task<bool> IsScopeAllowedForRoleAsync(string role, string scopeKey, CancellationToken ct)
-    {
-        var map = await GetRoleAllowedMapAsync(ct);
-        if (!map.TryGetValue(role, out var allowed)) return true; // no restriction = allow
-        if (allowed.Count == 0) return true;
-        return allowed.Contains(scopeKey);
-    }
-
-    private async Task<Dictionary<string, HashSet<string>>> GetRoleAllowedMapAsync(CancellationToken ct)
-    {
-        if (cache.TryGetValue(RoleAllowedKey, out Dictionary<string, HashSet<string>>? c) && c is not null) return c;
-        if (DistributedGet<Dictionary<string, string[]>>(RoleAllowedKey) is { } sharedMap)
-        {
-            var shared = sharedMap.ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value, StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
-            cache.Set(RoleAllowedKey, shared, Ttl);
-            return shared;
-        }
-        var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (!string.IsNullOrEmpty(token))
-        {
-            try
-            {
-                // List all business-role groups and read authz.allowed-scopes
-                var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?briefRepresentation=false");
-                req.Headers.Add("Authorization", $"Bearer {token}");
-                var res = await http.SendAsync(req, ct);
-                if (res.IsSuccessStatusCode)
-                {
-                    var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var el in doc.RootElement.EnumerateArray())
-                        {
-                            var gname = el.TryGetProperty("name", out var n) ? n.GetString() : null;
-                            if (string.IsNullOrEmpty(gname) || string.Equals(gname, RegistryGroupName, StringComparison.OrdinalIgnoreCase)) continue;
-                            var attrs = AttrsFromElement(el);
-                            if (attrs.TryGetValue("authz.allowed-scopes", out var allowed))
-                                map[gname] = new HashSet<string>(allowed, StringComparer.OrdinalIgnoreCase);
-                            // Also try to fetch full group if brief lacked attributes
-                            if (!attrs.ContainsKey("authz.allowed-scopes") && el.TryGetProperty("id", out var gid) && gid.GetString() is string id)
-                            {
-                                var gReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(id)}");
-                                gReq.Headers.Add("Authorization", $"Bearer {token}");
-                                var gRes = await http.SendAsync(gReq, ct);
-                                if (gRes.IsSuccessStatusCode)
-                                {
-                                    var gDoc = JsonDocument.Parse(await gRes.Content.ReadAsStringAsync(ct));
-                                    var gAttrs = AttrsFromElement(gDoc.RootElement);
-                                    if (gAttrs.TryGetValue("authz.allowed-scopes", out var gAllowed))
-                                        map[gname] = new HashSet<string>(gAllowed, StringComparer.OrdinalIgnoreCase);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex) { logger.LogDebug(ex, "Failed to fetch role allowed scopes"); }
-        }
-        cache.Set(RoleAllowedKey, map, Ttl);
-        DistributedSet(RoleAllowedKey, map.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray(), StringComparer.OrdinalIgnoreCase));
         return map;
     }
 
+    /// <summary>Scope keys that filter <paramref name="resourceKey"/>; registry outages are raised, never "no scopes".</summary>
     public async Task<HashSet<string>> GetScopesForResourceAsync(string resourceKey, CancellationToken ct)
     {
-        var map = await GetResourceMapAsync(ct);
-        return map.TryGetValue(resourceKey, out var set) ? new HashSet<string>(set, StringComparer.OrdinalIgnoreCase) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var registry = await GetRegistryAsync(ct);
+        if (!registry.IsSuccess) throw new ErrorException(registry.Error!);
+        var mapping = Resources(registry.Value).FirstOrDefault(r => string.Equals(r.Key, resourceKey, StringComparison.OrdinalIgnoreCase));
+        return new HashSet<string>(mapping?.Scopes ?? [], StringComparer.OrdinalIgnoreCase);
     }
 
-    private async Task<Dictionary<string, HashSet<string>>> GetResourceMapAsync(CancellationToken ct)
+    // ---------- IScopeRegistryAdmin ----------
+
+    public async Task<Result<IReadOnlyCollection<ScopeDefinitionDto>>> ListScopesAsync(CancellationToken ct)
     {
-        if (cache.TryGetValue(ResourceMapKey, out Dictionary<string, HashSet<string>>? c) && c is not null) return c;
-        if (DistributedGet<Dictionary<string, string[]>>(ResourceMapKey) is { } sharedRes)
-        {
-            var shared = sharedRes.ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value, StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
-            cache.Set(ResourceMapKey, shared, Ttl);
-            return shared;
-        }
-        var attrs = await GetRegistryAttributesAsync(ct);
-        var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        // resource.<name> = multivalued scope keys
-        foreach (var kv in attrs)
-        {
-            if (!kv.Key.StartsWith("resource.", StringComparison.Ordinal)) continue;
-            var rKey = kv.Key.Substring("resource.".Length);
-            map[rKey] = new HashSet<string>(kv.Value, StringComparer.OrdinalIgnoreCase);
-        }
-        if (map.Count == 0 && attrs.Count == 0)
-        {
-            // Well-known defaults for offline/migration-window operation
-            map["Orders"] = new HashSet<string>(new[] { "region", "branch", "warehouse", "customer" }, StringComparer.OrdinalIgnoreCase);
-            map["Branches"] = new HashSet<string>(new[] { "region" }, StringComparer.OrdinalIgnoreCase);
-            map["Employees"] = new HashSet<string>(new[] { "region", "branch", "department", "organization" }, StringComparer.OrdinalIgnoreCase);
-            map["ProjectTasks"] = new HashSet<string>(new[] { "project" }, StringComparer.OrdinalIgnoreCase);
-            map["ProjectDocuments"] = new HashSet<string>(new[] { "project" }, StringComparer.OrdinalIgnoreCase);
-            map["CustomerOrders"] = new HashSet<string>(new[] { "customer" }, StringComparer.OrdinalIgnoreCase);
-            map["ResourceA"] = new HashSet<string>(new[] { "test-key" }, StringComparer.OrdinalIgnoreCase);
-        }
-        cache.Set(ResourceMapKey, map, Ttl);
-        if (attrs.Count > 0)
-            DistributedSet(ResourceMapKey, map.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray(), StringComparer.OrdinalIgnoreCase));
-        return map;
+        var registry = await GetRegistryAsync(ct);
+        return registry.IsSuccess ? Definitions(registry.Value).ToArray() : registry.Error!;
     }
 
-    // ---------- IScopeRegistryAdmin — CRUD on the iam-scope-registry group attributes ----------
-
-    public async Task<IReadOnlyCollection<ScopeDefinitionDto>> ListScopesAsync(CancellationToken ct)
+    public async Task<Result<ScopeDefinitionDto>> GetScopeAsync(string key, CancellationToken ct)
     {
-        var attrs = await GetRegistryAttributesAsync(ct);
-        var list = new List<ScopeDefinitionDto>();
-        foreach (var kv in attrs)
-        {
-            if (!kv.Key.StartsWith("scope.", StringComparison.Ordinal)) continue;
-            var key = kv.Key.Substring("scope.".Length);
-            var def = ParseScope(key, JoinAttributeValues(kv.Value));
-            list.Add(new ScopeDefinitionDto(def.Key, def.DisplayName, def.Description, def.IsActive, def.ValueType));
-        }
-        return list.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
+        var registry = await GetRegistryAsync(ct);
+        if (!registry.IsSuccess) return registry.Error!;
+        var scope = Definitions(registry.Value).FirstOrDefault(s => string.Equals(s.Key, key, StringComparison.Ordinal));
+        return scope is null ? ScopeNotFound(key) : scope;
     }
 
-    public async Task<ScopeDefinitionDto?> GetScopeAsync(string key, CancellationToken ct)
+    public async Task<Result<IReadOnlyCollection<ResourceScopeMappingDto>>> ListResourcesAsync(CancellationToken ct)
     {
-        var all = await ListScopesAsync(ct);
-        return all.FirstOrDefault(s => string.Equals(s.Key, key, StringComparison.Ordinal));
+        var registry = await GetRegistryAsync(ct);
+        return registry.IsSuccess ? Resources(registry.Value).ToArray() : registry.Error!;
     }
 
-    public async Task<IReadOnlyCollection<ResourceScopeMappingDto>> ListResourcesAsync(CancellationToken ct)
+    public async Task<Result<IReadOnlyCollection<string>>> GetResourcesForScopeAsync(string key, CancellationToken ct)
     {
-        var attrs = await GetRegistryAttributesAsync(ct);
-        var list = new List<ResourceScopeMappingDto>();
-        foreach (var kv in attrs)
-        {
-            if (!kv.Key.StartsWith("resource.", StringComparison.Ordinal)) continue;
-            list.Add(new ResourceScopeMappingDto(kv.Key.Substring("resource.".Length), kv.Value));
-        }
-        return list.OrderBy(x => x.Key, StringComparer.Ordinal).ToArray();
+        var scope = await GetScopeAsync(key, ct);
+        if (!scope.IsSuccess) return scope.Error!;
+        var registry = await GetRegistryAsync(ct);
+        if (!registry.IsSuccess) return registry.Error!;
+        return Resources(registry.Value).Where(r => r.Scopes.Contains(key, StringComparer.OrdinalIgnoreCase))
+            .Select(r => r.Key).ToArray();
     }
 
-    public async Task<IReadOnlyCollection<string>> GetResourcesForScopeAsync(string key, CancellationToken ct)
-    {
-        var resources = await ListResourcesAsync(ct);
-        return resources
-            .Where(r => r.Scopes.Contains(key, StringComparer.OrdinalIgnoreCase))
-            .Select(r => r.Key)
-            .OrderBy(x => x, StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    public async Task<ScopeDefinitionDto?> CreateScopeAsync(string key, string? displayName, string? description, CancellationToken ct)
+    public async Task<Result<ScopeDefinitionDto>> CreateScopeAsync(
+        string key, string? displayName, string? description, IReadOnlyCollection<string>? resources, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        var existing = await GetScopeAsync(key, ct);
-        if (existing is not null) return null; // conflict — caller maps to 409
-        var json = JsonSerializer.Serialize(new
+        var definition = SerializeDefinition(string.IsNullOrWhiteSpace(displayName) ? key : displayName, description, true, "String");
+
+        // Definition and resource mappings are written together in one PUT.
+        var written = await ModifyRegistryAsync(attributes =>
         {
-            displayName = string.IsNullOrWhiteSpace(displayName) ? key : displayName,
-            description,
-            isActive = true,
-            valueType = "String",
-        }, CompactJson);
-        var ok = await UpsertRegistryAttributeAsync($"scope.{key}", json, ct);
-        if (!ok) throw new InvalidOperationException($"Failed to create scope '{key}' in {RegistryGroupName}.");
-        Invalidate();
+            if (attributes.ContainsKey(ScopePrefix + key))
+                return Error.Conflict("scope.already_exists", $"Scope '{key}' already exists.");
+            attributes[ScopePrefix + key] = ChunkAttributeValue(definition);
+            SetResources(attributes, key, resources ?? []);
+            return Result.Success();
+        }, ct);
+        if (!written.IsSuccess) return written.Error!;
+
+        // Without the profile declaration and the claim mapper the scope would be silently unusable,
+        // so a failure there removes the scope again.
+        var provisioned = await ProvisionAllKeysAsync(ct);
+        if (!provisioned.IsSuccess)
+        {
+            var removed = await ModifyRegistryAsync(attributes => { RemoveScope(attributes, key); return Result.Success(); }, ct);
+            if (!removed.IsSuccess)
+                logger.LogError("Scope {Key} could not be provisioned and could not be removed again: {Code}", key, removed.Error!.Code);
+            return provisioned.Error!;
+        }
         return await GetScopeAsync(key, ct);
     }
 
-    public async Task<ScopeDefinitionDto?> UpdateScopeAsync(string key, string? displayName, string? description, bool? isActive, CancellationToken ct)
+    public async Task<Result<ScopeDefinitionDto>> UpdateScopeAsync(
+        string key, string? displayName, string? description, bool? isActive, IReadOnlyCollection<string>? resources, CancellationToken ct)
     {
-        var attrs = await GetRegistryAttributesAsync(ct);
-        var attrName = $"scope.{key}";
-        if (!attrs.TryGetValue(attrName, out var vals)) return null;
-        var def = ParseScope(key, JoinAttributeValues(vals));
-        var json = JsonSerializer.Serialize(new
+        var current = await GetScopeAsync(key, ct);
+        if (!current.IsSuccess) return current.Error!;
+
+        var definition = SerializeDefinition(displayName ?? current.Value.DisplayName, description ?? current.Value.Description,
+            isActive ?? current.Value.IsActive, current.Value.ValueType);
+        var written = await ModifyRegistryAsync(attributes =>
         {
-            displayName = displayName ?? def.DisplayName,
-            description = description ?? def.Description,
-            isActive = isActive ?? def.IsActive,
-            valueType = def.ValueType,
-        }, CompactJson);
-        var ok = await UpsertRegistryAttributeAsync(attrName, json, ct);
-        if (!ok) throw new InvalidOperationException($"Failed to update scope '{key}' in {RegistryGroupName}.");
+            attributes[ScopePrefix + key] = ChunkAttributeValue(definition);
+            if (resources is not null) SetResources(attributes, key, resources);
+            return Result.Success();
+        }, ct);
+        return written.IsSuccess ? await GetScopeAsync(key, ct) : written.Error!;
+    }
+
+    public Task<Result> DeleteScopeAsync(string key, CancellationToken ct) =>
+        ModifyRegistryAsync(attributes =>
+        {
+            if (!attributes.ContainsKey(ScopePrefix + key)) return ScopeNotFound(key);
+            RemoveScope(attributes, key);
+            return Result.Success();
+        }, ct);
+
+    public Task<Result> SetScopeResourcesAsync(string key, IReadOnlyCollection<string> resources, CancellationToken ct) =>
+        ModifyRegistryAsync(attributes =>
+        {
+            if (!attributes.ContainsKey(ScopePrefix + key)) return ScopeNotFound(key);
+            SetResources(attributes, key, resources);
+            return Result.Success();
+        }, ct);
+
+    /// <summary>
+    /// Ensures the registry group exists and seeds the default <c>region</c> scope when it defines none;
+    /// then makes every registry key usable (profile declaration and token mapper).
+    /// </summary>
+    public async Task<Result> EnsureRegistryAsync(CancellationToken ct)
+    {
         Invalidate();
-        return await GetScopeAsync(key, ct);
-    }
-
-    public async Task<bool> DeleteScopeAsync(string key, CancellationToken ct)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        try { await SetScopeResourcesAsync(key, Array.Empty<string>(), ct); } catch { /* best-effort cleanup */ }
-        var attrName = $"scope.{key}";
-        var ok = await DeleteRegistryAttributeAsync(attrName, ct);
-        if (ok) Invalidate();
-        return ok;
-    }
-
-    public async Task<bool> SetScopeResourcesAsync(string key, IReadOnlyCollection<string> resources, CancellationToken ct)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
-        try
+        var registry = await GetRegistryAsync(ct);
+        if (!registry.IsSuccess) return registry.Error!;
+        if (!registry.Value.Keys.Any(k => k.StartsWith(ScopePrefix, StringComparison.Ordinal)))
         {
-            var groupId = await ResolveRegistryGroupIdAsync(token, ct);
-            if (string.IsNullOrEmpty(groupId)) return false;
-
-            var getReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}");
-            getReq.Headers.Add("Authorization", $"Bearer {token}");
-            var getRes = await http.SendAsync(getReq, ct);
-            if (!getRes.IsSuccessStatusCode) return false;
-            var groupJson = JsonDocument.Parse(await getRes.Content.ReadAsStringAsync(ct)).RootElement;
-
-            var attributes = new Dictionary<string, string[]>(StringComparer.Ordinal);
-            if (groupJson.TryGetProperty("attributes", out var a) && a.ValueKind == JsonValueKind.Object)
+            var seeded = await ModifyRegistryAsync(attributes =>
             {
-                foreach (var prop in a.EnumerateObject())
-                {
-                    attributes[prop.Name] = prop.Value.ValueKind == JsonValueKind.Array
-                        ? prop.Value.EnumerateArray().Select(v => v.GetString() ?? "").ToArray()
-                        : [prop.Value.GetString() ?? ""];
-                }
-            }
+                attributes[ScopePrefix + "region"] = ChunkAttributeValue(SerializeDefinition("Region", "Geographic region", true, "String"));
+                return Result.Success();
+            }, ct);
+            if (!seeded.IsSuccess) return seeded;
+            logger.LogInformation("Seeded the default scope 'region' into {Group}", RegistryGroupName);
+        }
+        return await ProvisionAllKeysAsync(ct);
+    }
 
-            var targetResourceNames = new HashSet<string>(
-                (resources ?? Array.Empty<string>()).Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()),
-                StringComparer.OrdinalIgnoreCase);
+    // ---------- writes ----------
 
-            // 1. Remove scope key from any resource.* attribute that is NOT in targetResourceNames
-            var resourceKeys = attributes.Keys.Where(k => k.StartsWith("resource.", StringComparison.Ordinal)).ToList();
-            foreach (var rk in resourceKeys)
+    /// <summary>Read-modify-write of the registry group's attributes in a single PUT.</summary>
+    private async Task<Result> ModifyRegistryAsync(Func<Dictionary<string, string[]>, Result> change, CancellationToken ct)
+    {
+        var group = await GetRegistryGroupAsync(ct);
+        if (!group.IsSuccess) return group.Error!;
+
+        var attributes = Attributes(group.Value);
+        var changed = change(attributes);
+        if (!changed.IsSuccess) return changed;
+
+        var body = new Dictionary<string, object>
+        {
+            ["name"] = KeycloakAdminApi.GetString(group.Value, "name") ?? RegistryGroupName,
+            ["attributes"] = attributes,
+        };
+        if (KeycloakAdminApi.GetString(group.Value, "path") is { } path) body["path"] = path;
+
+        var id = KeycloakAdminApi.GetString(group.Value, "id")!;
+        var written = await _api.SendWithoutResultAsync(HttpMethod.Put, $"groups/{Uri.EscapeDataString(id)}", body, Resource, ct);
+        Invalidate();
+        return written;
+    }
+
+    private async Task<Result> ProvisionAllKeysAsync(CancellationToken ct)
+    {
+        var registry = await GetRegistryAsync(ct);
+        if (!registry.IsSuccess) return registry.Error!;
+        return await provisioner.EnsureAsync(Definitions(registry.Value).Select(s => s.Key).ToArray(), ct);
+    }
+
+    private static void SetResources(Dictionary<string, string[]> attributes, string key, IReadOnlyCollection<string> resources)
+    {
+        var target = resources.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in attributes.Keys.Where(k => k.StartsWith(ResourcePrefix, StringComparison.Ordinal)).ToArray())
+        {
+            if (target.Contains(name[ResourcePrefix.Length..])) continue;
+            var remaining = attributes[name].Where(s => !string.Equals(s, key, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (remaining.Length == 0) attributes.Remove(name);
+            else attributes[name] = remaining;
+        }
+        foreach (var resource in target)
+        {
+            var name = ResourcePrefix + resource;
+            var existing = attributes.GetValueOrDefault(name, []);
+            if (!existing.Contains(key, StringComparer.OrdinalIgnoreCase)) attributes[name] = [.. existing, key];
+        }
+    }
+
+    private static void RemoveScope(Dictionary<string, string[]> attributes, string key)
+    {
+        attributes.Remove(ScopePrefix + key);
+        SetResources(attributes, key, []);
+    }
+
+    private static string SerializeDefinition(string displayName, string? description, bool isActive, string valueType) =>
+        JsonSerializer.Serialize(new { displayName, description, isActive, valueType }, CompactJson);
+
+    private static Dictionary<string, string[]> Attributes(JsonElement group)
+    {
+        var attributes = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        if (!group.TryGetProperty("attributes", out var attrs) || attrs.ValueKind != JsonValueKind.Object) return attributes;
+        foreach (var prop in attrs.EnumerateObject())
+        {
+            attributes[prop.Name] = prop.Value.ValueKind switch
             {
-                var rName = rk.Substring("resource.".Length);
-                var currentScopes = attributes[rk].ToList();
-                if (!targetResourceNames.Contains(rName))
-                {
-                    if (currentScopes.RemoveAll(s => string.Equals(s, key, StringComparison.OrdinalIgnoreCase)) > 0)
-                    {
-                        if (currentScopes.Count == 0)
-                            attributes.Remove(rk);
-                        else
-                            attributes[rk] = currentScopes.ToArray();
-                    }
-                }
-            }
-
-            // 2. Add scope key to each resource in targetResourceNames
-            foreach (var rName in targetResourceNames)
-            {
-                var attrName = $"resource.{rName}";
-                if (attributes.TryGetValue(attrName, out var existing))
-                {
-                    if (!existing.Contains(key, StringComparer.OrdinalIgnoreCase))
-                    {
-                        attributes[attrName] = existing.Append(key).ToArray();
-                    }
-                }
-                else
-                {
-                    attributes[attrName] = [key];
-                }
-            }
-
-            var name = groupJson.TryGetProperty("name", out var nm) ? nm.GetString() ?? RegistryGroupName : RegistryGroupName;
-            var body = new Dictionary<string, object>
-            {
-                ["name"] = name,
-                ["attributes"] = attributes,
+                JsonValueKind.Array => prop.Value.EnumerateArray().Select(v => v.GetString() ?? "").Where(s => s.Length > 0).ToArray(),
+                JsonValueKind.String => [prop.Value.GetString() ?? ""],
+                _ => [],
             };
-            if (groupJson.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String)
-                body["path"] = path.GetString()!;
-
-            var putReq = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}")
-            { Content = JsonContent.Create(body) };
-            putReq.Headers.Add("Authorization", $"Bearer {token}");
-            var putRes = await http.SendAsync(putReq, ct);
-            if (!putRes.IsSuccessStatusCode) return false;
-
-            Invalidate();
-            return true;
         }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to set resources for scope {Key}", key);
-            return false;
-        }
-    }
-
-    private async Task<string?> ResolveRegistryGroupIdAsync(string token, CancellationToken ct)
-    {
-        var searchReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(RegistryGroupName)}");
-        searchReq.Headers.Add("Authorization", $"Bearer {token}");
-        var searchRes = await http.SendAsync(searchReq, ct);
-        if (!searchRes.IsSuccessStatusCode) return null;
-        var searchDoc = JsonDocument.Parse(await searchRes.Content.ReadAsStringAsync(ct));
-        if (searchDoc.RootElement.ValueKind == JsonValueKind.Array)
-            foreach (var el in searchDoc.RootElement.EnumerateArray())
-                if (el.TryGetProperty("name", out var n) && n.GetString() == RegistryGroupName &&
-                    el.TryGetProperty("id", out var gid)) return gid.GetString();
-        return null;
-    }
-
-    private async Task<bool> DeleteRegistryAttributeAsync(string attrName, CancellationToken ct)
-    {
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
-        try
-        {
-            string? groupId = null;
-            var searchReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(RegistryGroupName)}");
-            searchReq.Headers.Add("Authorization", $"Bearer {token}");
-            var searchRes = await http.SendAsync(searchReq, ct);
-            if (!searchRes.IsSuccessStatusCode) return false;
-            var searchDoc = JsonDocument.Parse(await searchRes.Content.ReadAsStringAsync(ct));
-            if (searchDoc.RootElement.ValueKind == JsonValueKind.Array)
-                foreach (var el in searchDoc.RootElement.EnumerateArray())
-                    if (el.TryGetProperty("name", out var n) && n.GetString() == RegistryGroupName &&
-                        el.TryGetProperty("id", out var gid)) { groupId = gid.GetString(); break; }
-            if (string.IsNullOrEmpty(groupId)) return false;
-
-            var getReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}");
-            getReq.Headers.Add("Authorization", $"Bearer {token}");
-            var getRes = await http.SendAsync(getReq, ct);
-            if (!getRes.IsSuccessStatusCode) return false;
-            var groupJson = JsonDocument.Parse(await getRes.Content.ReadAsStringAsync(ct)).RootElement;
-
-            var attributes = new Dictionary<string, string[]>(StringComparer.Ordinal);
-            bool existed = false;
-            if (groupJson.TryGetProperty("attributes", out var a) && a.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var prop in a.EnumerateObject())
-                {
-                    if (string.Equals(prop.Name, attrName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        existed = true;
-                        continue;
-                    }
-                    attributes[prop.Name] = prop.Value.ValueKind == JsonValueKind.Array
-                        ? prop.Value.EnumerateArray().Select(v => v.GetString() ?? "").ToArray()
-                        : [prop.Value.GetString() ?? ""];
-                }
-            }
-
-            if (!existed) return false;
-
-            var name = groupJson.TryGetProperty("name", out var nm) ? nm.GetString() ?? RegistryGroupName : RegistryGroupName;
-            var body = new Dictionary<string, object>
-            {
-                ["name"] = name,
-                ["attributes"] = attributes,
-            };
-            if (groupJson.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String)
-                body["path"] = path.GetString()!;
-
-            var putReq = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}")
-            { Content = JsonContent.Create(body) };
-            putReq.Headers.Add("Authorization", $"Bearer {token}");
-            var putRes = await http.SendAsync(putReq, ct);
-            return putRes.IsSuccessStatusCode;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to delete registry attribute {Attr}", attrName);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Read-modify-write of a single registry group attribute via GET group + PUT group.
-    /// Long values are split across the multivalued attribute so no single value exceeds
-    /// Keycloak's 255-byte GROUP_ATTRIBUTE.VALUE column.
-    /// </summary>
-    private async Task<bool> UpsertRegistryAttributeAsync(string attrName, string value, CancellationToken ct)
-    {
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
-        try
-        {
-            // Resolve registry group id
-            string? groupId = null;
-            var searchReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(RegistryGroupName)}");
-            searchReq.Headers.Add("Authorization", $"Bearer {token}");
-            var searchRes = await http.SendAsync(searchReq, ct);
-            if (!searchRes.IsSuccessStatusCode) return false;
-            var searchDoc = JsonDocument.Parse(await searchRes.Content.ReadAsStringAsync(ct));
-            if (searchDoc.RootElement.ValueKind == JsonValueKind.Array)
-                foreach (var el in searchDoc.RootElement.EnumerateArray())
-                    if (el.TryGetProperty("name", out var n) && n.GetString() == RegistryGroupName &&
-                        el.TryGetProperty("id", out var gid)) { groupId = gid.GetString(); break; }
-            if (string.IsNullOrEmpty(groupId))
-            {
-                // Registry group missing — create it so admins can bootstrap scopes without a realm re-import.
-                var createReq = new HttpRequestMessage(HttpMethod.Post, $"{AdminBase}/{_o.Realm}/groups")
-                { Content = JsonContent.Create(new { name = RegistryGroupName }) };
-                createReq.Headers.Add("Authorization", $"Bearer {token}");
-                var createRes = await http.SendAsync(createReq, ct);
-                if (!createRes.IsSuccessStatusCode && createRes.StatusCode != System.Net.HttpStatusCode.Conflict) return false;
-                var reSearch = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(RegistryGroupName)}");
-                reSearch.Headers.Add("Authorization", $"Bearer {token}");
-                var reRes = await http.SendAsync(reSearch, ct);
-                if (!reRes.IsSuccessStatusCode) return false;
-                var reDoc = JsonDocument.Parse(await reRes.Content.ReadAsStringAsync(ct));
-                if (reDoc.RootElement.ValueKind == JsonValueKind.Array)
-                    foreach (var el in reDoc.RootElement.EnumerateArray())
-                        if (el.TryGetProperty("name", out var n2) && n2.GetString() == RegistryGroupName &&
-                            el.TryGetProperty("id", out var gid2)) { groupId = gid2.GetString(); break; }
-                if (string.IsNullOrEmpty(groupId)) return false;
-            }
-
-            // GET full group, merge attribute, PUT back
-            var getReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}");
-            getReq.Headers.Add("Authorization", $"Bearer {token}");
-            var getRes = await http.SendAsync(getReq, ct);
-            if (!getRes.IsSuccessStatusCode) return false;
-            var groupJson = JsonDocument.Parse(await getRes.Content.ReadAsStringAsync(ct)).RootElement;
-
-            var attributes = new Dictionary<string, string[]>(StringComparer.Ordinal);
-            if (groupJson.TryGetProperty("attributes", out var a) && a.ValueKind == JsonValueKind.Object)
-                foreach (var prop in a.EnumerateObject())
-                    attributes[prop.Name] = prop.Value.ValueKind == JsonValueKind.Array
-                        ? prop.Value.EnumerateArray().Select(v => v.GetString() ?? "").ToArray()
-                        : [prop.Value.GetString() ?? ""];
-            attributes[attrName] = ChunkAttributeValue(value);
-
-            var name = groupJson.TryGetProperty("name", out var nm) ? nm.GetString() ?? RegistryGroupName : RegistryGroupName;
-            var body = new Dictionary<string, object>
-            {
-                ["name"] = name,
-                ["attributes"] = attributes,
-            };
-            if (groupJson.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String)
-                body["path"] = path.GetString()!;
-
-            var putReq = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(groupId)}")
-            { Content = JsonContent.Create(body) };
-            putReq.Headers.Add("Authorization", $"Bearer {token}");
-            var putRes = await http.SendAsync(putReq, ct);
-            if (!putRes.IsSuccessStatusCode)
-            {
-                var errBody = await putRes.Content.ReadAsStringAsync(ct);
-                logger.LogWarning("Registry group PUT failed: {Status} {Body}", (int)putRes.StatusCode, errBody);
-                return false;
-            }
-            return true;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to upsert registry attribute {Attr}", attrName);
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Idempotently ensures the <c>iam-scope-registry</c> group exists in Keycloak on first startup,
-    /// and seeds the single default scope (<c>region</c>) if no scopes exist yet.
-    /// </summary>
-    public async Task EnsureRegistryAsync(CancellationToken ct)
-    {
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) return;
-        try
-        {
-            var attrs = await GetRegistryAttributesAsync(ct);
-            var hasScope = attrs.Keys.Any(k => k.StartsWith("scope.", StringComparison.Ordinal));
-            if (!hasScope)
-            {
-                var defaultScope = JsonSerializer.Serialize(new
-                {
-                    displayName = "Region",
-                    description = "Geographic region",
-                    isActive = true,
-                    valueType = "String"
-                }, CompactJson);
-                await UpsertRegistryAttributeAsync("scope.region", defaultScope, ct);
-                Invalidate();
-                logger.LogInformation("Seeded single default scope 'region' into {Group}", RegistryGroupName);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug(ex, "Failed to ensure registry group on startup");
-        }
+        return attributes;
     }
 }
-

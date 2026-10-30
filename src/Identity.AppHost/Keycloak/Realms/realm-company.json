@@ -1,7 +1,7 @@
 {
   "realm": "company",
   "enabled": true,
-  "displayName": "Company",
+  "displayName": "سامانهٔ هویت",
   "sslRequired": "none",
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
@@ -22,38 +22,6 @@
       {
         "name": "uma_authorization",
         "description": "UMA authorization"
-      },
-      {
-        "name": "identity.users.read",
-        "description": "Read users / directory"
-      },
-      {
-        "name": "identity.users.manage",
-        "description": "Manage users including scoped assignments"
-      },
-      {
-        "name": "identity.roles.read",
-        "description": "Read business roles"
-      },
-      {
-        "name": "identity.roles.manage",
-        "description": "Manage business (composite) roles"
-      },
-      {
-        "name": "identity.scopes.read",
-        "description": "Read scoped access assignments"
-      },
-      {
-        "name": "identity.scopes.manage",
-        "description": "Manage scoped access assignments"
-      },
-      {
-        "name": "identity.permissions.read",
-        "description": "Read permissions catalog"
-      },
-      {
-        "name": "identity.permissions.register",
-        "description": "Register service permission manifests"
       }
     ]
   },
@@ -64,17 +32,7 @@
         "description": [
           "Always-present unrestricted administrators; every registered client role is auto-mapped to this group"
         ]
-      },
-      "realmRoles": [
-        "identity.users.read",
-        "identity.users.manage",
-        "identity.roles.read",
-        "identity.roles.manage",
-        "identity.scopes.read",
-        "identity.scopes.manage",
-        "identity.permissions.read",
-        "identity.permissions.register"
-      ]
+      }
     },
     {
       "name": "iam-scope-registry",
@@ -127,17 +85,19 @@
       "defaultClientScopes": [
         "iam-access",
         "authz-scopes",
-        "permissions-mapper"
+        "iam-permissions"
       ],
       "optionalClientScopes": [
         "offline_access"
       ],
       "attributes": {
         "access.token.lifespan": "300",
-        "client.secret.creation.time": "0"
+        "client.secret.creation.time": "0",
+        "iam.application": "true",
+        "iam.display_name": "درگاه هویت",
+        "iam.kind": "service"
       },
       "protocolMappers": [
-
         {
           "name": "gateway-audience",
           "protocol": "openid-connect",
@@ -204,10 +164,12 @@
       "standardFlowEnabled": false,
       "protocol": "openid-connect",
       "attributes": {
-        "client.secret.creation.time": "0"
+        "client.secret.creation.time": "0",
+        "iam.application": "true",
+        "iam.display_name": "سرویس سفارش (نمونه)",
+        "iam.kind": "service"
       },
       "protocolMappers": [
-
         {
           "name": "identity-gateway-audience",
           "protocol": "openid-connect",
@@ -245,47 +207,15 @@
             "id.token.claim": "false"
           }
         }
+      ],
+      "defaultClientScopes": [
+        "iam-access",
+        "authz-scopes",
+        "iam-permissions"
       ]
     }
   ],
   "clientScopes": [
-    {
-      "name": "permissions-mapper",
-      "description": "Maps realm roles into permission / permissions claims for the gateway authorizer",
-      "protocol": "openid-connect",
-      "attributes": {
-        "include.in.token.scope": "false",
-        "display.on.consent.screen": "false"
-      },
-      "protocolMappers": [
-        {
-          "name": "permission-claim",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
-          "config": {
-            "claim.name": "permissions",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "userinfo.token.claim": "true",
-            "access.token.claim": "true",
-            "id.token.claim": "false"
-          }
-        },
-        {
-          "name": "client-roles-mapper",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-client-role-mapper",
-          "config": {
-            "claim.name": "permissions",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "userinfo.token.claim": "true",
-            "access.token.claim": "true",
-            "id.token.claim": "false"
-          }
-        }
-      ]
-    },
     {
       "name": "iam-access",
       "description": "Maps iam.scoped_access user attribute to iam_access claim",
@@ -323,6 +253,16 @@
         "display.on.consent.screen": "false"
       },
       "protocolMappers": []
+    },
+    {
+      "name": "iam-permissions",
+      "description": "Application permissions as {clientId}:{Module}:{Resource}:{Action}; mappers are provisioned per application at runtime",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
     }
   ],
   "users": [
@@ -354,9 +294,6 @@
       "username": "service-account-order-service",
       "enabled": true,
       "serviceAccountClientId": "order-service",
-      "realmRoles": [
-        "identity.permissions.register"
-      ],
       "email": "service-account-order-service@company.local",
       "emailVerified": true,
       "requiredActions": []
@@ -374,21 +311,17 @@
           "temporary": false
         }
       ],
-      "realmRoles": [
-        "identity.users.read",
-        "identity.users.manage",
-        "identity.roles.read",
-        "identity.roles.manage",
-        "identity.scopes.read",
-        "identity.scopes.manage",
-        "identity.permissions.read",
-        "identity.permissions.register"
-      ],
       "groups": [
         "super-admins"
       ],
       "email": "admin@company.local",
       "requiredActions": []
     }
-  ]
+  ],
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "fa",
+    "en"
+  ],
+  "defaultLocale": "fa"
 }

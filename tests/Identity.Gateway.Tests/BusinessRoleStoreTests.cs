@@ -21,6 +21,7 @@ public sealed class BusinessRoleStoreTests
 
         public List<Group> Groups { get; } = [];
         public Dictionary<string, List<(string Id, string Name)>> ClientRoles { get; } = new() { ["c-orders"] = [] };
+        public Dictionary<string, string> ClientIds { get; } = new() { ["c-orders"] = "orders" };
         public List<(string Id, string Name)> RealmRoles { get; } = [];
         public List<(HttpMethod Method, string Path, string? Body)> Requests { get; } = [];
         public Func<HttpMethod, string, HttpStatusCode?> FailWith { get; set; } = (_, _) => null;
@@ -70,7 +71,7 @@ public sealed class BusinessRoleStoreTests
                     {
                         realmMappings = g2.Mappings.Where(r => r.Client is null).Select(r => new { id = r.Id, name = r.Name }),
                         clientMappings = g2.Mappings.Where(r => r.Client is not null).GroupBy(r => r.Client!)
-                            .ToDictionary(c => c.Key, c => new { id = c.Key, client = c.Key, mappings = c.Select(r => new { id = r.Id, name = r.Name }) }),
+                            .ToDictionary(c => ClientIds[c.Key], c => new { id = c.Key, client = ClientIds[c.Key], mappings = c.Select(r => new { id = r.Id, name = r.Name }) }),
                     });
                 case ["groups", var id, "role-mappings", "realm", "composite"]:
                     return Json(Groups.Single(g => g.Id == id).Mappings.Where(r => r.Client is null).Select(r => new { id = r.Id, name = r.Name }));
@@ -79,7 +80,12 @@ public sealed class BusinessRoleStoreTests
                 case ["groups", var id, "role-mappings", "realm"]:
                     return ChangeMappings(Groups.Single(g => g.Id == id), request.Method, null);
                 case ["clients"]:
-                    return Json(Page(ClientRoles.Keys.Select(c => new { id = c, clientId = c })));
+                    var byClientId = query["clientId"];
+                    return Json(Page(ClientRoles.Keys.Where(c => byClientId is null || ClientIds[c] == byClientId)
+                        .Select(c => new { id = c, clientId = ClientIds[c] })));
+                case ["clients", var client, "roles", var roleName]:
+                    var single = ClientRoles[client].Where(r => r.Name == Uri.UnescapeDataString(roleName)).ToArray();
+                    return single.Length == 0 ? new HttpResponseMessage(HttpStatusCode.NotFound) : Json(new { id = single[0].Id, name = single[0].Name });
                 case ["clients", var client, "roles"]:
                     return Json(Page(ClientRoles[client].Select(r => new { id = r.Id, name = r.Name })));
                 case ["roles"]:
@@ -113,7 +119,7 @@ public sealed class BusinessRoleStoreTests
     private static FakeKeycloak WithOrdersPermissions()
     {
         var kc = new FakeKeycloak();
-        kc.ClientRoles["c-orders"].AddRange([("r-read", "orders.read"), ("r-write", "orders.write")]);
+        kc.ClientRoles["c-orders"].AddRange([("r-read", "Sales:Order:Read"), ("r-write", "Sales:Order:Write")]);
         return kc;
     }
 
@@ -123,16 +129,16 @@ public sealed class BusinessRoleStoreTests
     public async Task List_reads_each_role_with_one_mapping_call_and_pages_through_all_groups()
     {
         var kc = WithOrdersPermissions();
-        for (var i = 0; i < 150; i++) kc.Groups.Add(new($"g{i}", $"role-{i:000}", [("r-read", "orders.read", "c-orders")]));
+        for (var i = 0; i < 150; i++) kc.Groups.Add(new($"g{i}", $"role-{i:000}", [("r-read", "Sales:Order:Read", "c-orders")]));
         kc.Groups.Add(new("g-super", ReservedGroups.SuperAdmins, []));
 
         var roles = await Store(kc).ListAsync(Ct);
 
         Assert.True(roles.IsSuccess);
         Assert.Equal(150, roles.Value.Count);
-        Assert.All(roles.Value, r => Assert.Equal(["orders.read"], r.Permissions));
+        Assert.All(roles.Value, r => Assert.Equal(["orders:Sales:Order:Read"], r.Permissions));
         Assert.Equal(150, kc.Requests.Count(r => r.Path.EndsWith("/role-mappings", StringComparison.Ordinal)));
-        Assert.DoesNotContain(kc.Requests, r => r.Path.Contains("/clients", StringComparison.Ordinal));
+        Assert.DoesNotContain(kc.Requests, r => r.Path.Contains("/clients", StringComparison.Ordinal) && !r.Path.Contains("/role-mappings", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -159,10 +165,10 @@ public sealed class BusinessRoleStoreTests
     {
         var kc = WithOrdersPermissions();
 
-        var created = await Store(kc).CreateAsync("Accountant", "desc", ["orders.read"], Ct);
+        var created = await Store(kc).CreateAsync("Accountant", "desc", ["orders:Sales:Order:Read"], Ct);
 
         Assert.True(created.IsSuccess);
-        Assert.Equal(["orders.read"], created.Value.Permissions);
+        Assert.Equal(["orders:Sales:Order:Read"], created.Value.Permissions);
     }
 
     [Fact]
@@ -170,10 +176,10 @@ public sealed class BusinessRoleStoreTests
     {
         var kc = WithOrdersPermissions();
 
-        var created = await Store(kc).CreateAsync("Accountant", null, ["orders.read", "orders.fly"], Ct);
+        var created = await Store(kc).CreateAsync("Accountant", null, ["orders:Sales:Order:Read", "orders:Sales:Order:Fly"], Ct);
 
         Assert.Equal("permission.not_found", created.Error?.Code);
-        Assert.Contains("orders.fly", created.Error!.Message);
+        Assert.Contains("orders:Sales:Order:Fly", created.Error!.Message);
         Assert.Empty(kc.Writes);
     }
 
@@ -184,7 +190,7 @@ public sealed class BusinessRoleStoreTests
         kc.FailWith = (method, path) => method == HttpMethod.Post && path.Contains("/role-mappings/", StringComparison.Ordinal)
             ? HttpStatusCode.Forbidden : null;
 
-        var created = await Store(kc).CreateAsync("Accountant", null, ["orders.read"], Ct);
+        var created = await Store(kc).CreateAsync("Accountant", null, ["orders:Sales:Order:Read"], Ct);
 
         Assert.Equal("keycloak.access_denied", created.Error?.Code);
         Assert.Empty(kc.Groups);
@@ -230,24 +236,24 @@ public sealed class BusinessRoleStoreTests
     public async Task SetPermissions_adds_and_removes_to_match_exactly()
     {
         var kc = WithOrdersPermissions();
-        kc.Groups.Add(new("g1", "Accountant", [("r-read", "orders.read", "c-orders")]));
+        kc.Groups.Add(new("g1", "Accountant", [("r-read", "Sales:Order:Read", "c-orders")]));
 
-        var set = await Store(kc).SetPermissionsAsync("Accountant", ["orders.write"], Ct);
+        var set = await Store(kc).SetPermissionsAsync("Accountant", ["orders:Sales:Order:Write"], Ct);
 
         Assert.True(set.IsSuccess);
-        Assert.Equal(["orders.write"], kc.Groups[0].Mappings.Select(m => m.Name));
+        Assert.Equal(["Sales:Order:Write"], kc.Groups[0].Mappings.Select(m => m.Name));
     }
 
     [Fact]
     public async Task SetPermissions_with_unknown_permission_changes_nothing()
     {
         var kc = WithOrdersPermissions();
-        kc.Groups.Add(new("g1", "Accountant", [("r-read", "orders.read", "c-orders")]));
+        kc.Groups.Add(new("g1", "Accountant", [("r-read", "Sales:Order:Read", "c-orders")]));
 
-        var set = await Store(kc).SetPermissionsAsync("Accountant", ["orders.fly"], Ct);
+        var set = await Store(kc).SetPermissionsAsync("Accountant", ["orders:Sales:Order:Fly"], Ct);
 
         Assert.Equal("permission.not_found", set.Error?.Code);
-        Assert.Equal(["orders.read"], kc.Groups[0].Mappings.Select(m => m.Name));
+        Assert.Equal(["Sales:Order:Read"], kc.Groups[0].Mappings.Select(m => m.Name));
         Assert.Empty(kc.Writes);
     }
 
@@ -257,7 +263,7 @@ public sealed class BusinessRoleStoreTests
         var kc = WithOrdersPermissions();
         kc.Groups.Add(new("g1", "Accountant", []));
 
-        var removed = await Store(kc).RemovePermissionAsync("Accountant", "orders.read", Ct);
+        var removed = await Store(kc).RemovePermissionAsync("Accountant", "orders:Sales:Order:Read", Ct);
 
         Assert.Equal("permission.not_assigned", removed.Error?.Code);
     }

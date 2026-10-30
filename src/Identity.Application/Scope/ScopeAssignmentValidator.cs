@@ -4,7 +4,11 @@ namespace Identity.Application.Scope;
 
 public sealed class ScopeAssignmentValidator(IScopeDefinitionLookup lookup, IScopeValueValidatorRegistry validators)
 {
-    public async Task<Dictionary<string, string[]>> ValidateAsync(IEnumerable<ScopedRoleAssignmentDto> assignments, IBusinessRoleStore roles, CancellationToken ct)
+    /// <summary>
+    /// Field errors keyed like "assignments[0].scopes.region"; empty when valid. Fails when the registry or
+    /// role store cannot be read, so unchecked scopes are never accepted.
+    /// </summary>
+    public async Task<Result<Dictionary<string, string[]>>> ValidateAsync(IEnumerable<ScopedRoleAssignmentDto> assignments, IBusinessRoleStore roles, CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>();
         int idx = 0;
@@ -14,12 +18,16 @@ public sealed class ScopeAssignmentValidator(IScopeDefinitionLookup lookup, ISco
             foreach (var kv in a.Scopes)
             {
                 var scopeKey = kv.Key;
-                if (!await lookup.ExistsActiveAsync(scopeKey, ct))
+                var exists = await lookup.ExistsActiveAsync(scopeKey, ct);
+                if (!exists.IsSuccess) return exists.Error!;
+                if (!exists.Value)
                 {
                     Add(errors, $"assignments[{idx}].scopes.{scopeKey}", $"Scope '{scopeKey}' is not defined or is inactive.");
                     continue;
                 }
-                if (!await lookup.IsScopeAllowedForRoleAsync(a.Role, scopeKey, ct))
+                var allowed = await lookup.IsScopeAllowedForRoleAsync(a.Role, scopeKey, ct);
+                if (!allowed.IsSuccess) return allowed.Error!;
+                if (!allowed.Value)
                     Add(errors, $"assignments[{idx}].scopes.{scopeKey}", $"Scope '{scopeKey}' is not allowed for role '{a.Role}'.");
                 var validator = validators.GetValidator(scopeKey);
                 var values = kv.Value ?? Array.Empty<string>();
