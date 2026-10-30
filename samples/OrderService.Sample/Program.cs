@@ -26,6 +26,10 @@ builder.Services.AddAvashAccessContext(o =>
                  ?? builder.Configuration["Identity:Authority"];
     o.GatewayBaseUrl = string.IsNullOrWhiteSpace(gateway) ? null : gateway.TrimEnd('/');
 });
+// Weekly access schedules (Identity Gateway: /api/identity/schedules) apply to every permission policy.
+builder.Services.AddAvashAccessSchedules(o =>
+    o.GatewayBaseUrl = builder.Configuration["Identity:AccessContext:GatewayBaseUrl"]
+                       ?? builder.Configuration["PermissionRegistration:IdentityServer"]);
 
 // DB-driven scope filter — safe, type-safe, deny-by-default.
 // IResourceScopeResolver is the DB mapping (in-memory mirror here); handlers are strongly-typed.

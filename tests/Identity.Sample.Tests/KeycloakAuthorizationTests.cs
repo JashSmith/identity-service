@@ -122,6 +122,7 @@ public sealed class KeycloakAuthorizationTests
         Assert.Contains("authz.scope.region", names);
         Assert.Contains("authz.scope.branch", names);
         Assert.Contains("iam.scoped_access", names);
+        Assert.Contains("access.schedule", names);
         Assert.DoesNotContain("authz.scope.*", names);
 
         var region = arr.First(e => e.GetProperty("name").GetString() == "authz.scope.region");
@@ -137,7 +138,8 @@ public sealed class KeycloakAuthorizationTests
             {"attributes":[
               {"name":"username"},
               {"name":"authz.scope.region","multivalued":true,"permissions":{"view":["admin"],"edit":["admin"]}},
-              {"name":"iam.scoped_access","permissions":{"view":["admin"],"edit":["admin"]}}
+              {"name":"iam.scoped_access","permissions":{"view":["admin"],"edit":["admin"]}},
+              {"name":"access.schedule","permissions":{"view":["admin"],"edit":["admin"]}}
             ]}
             """).RootElement;
         // Nothing missing → no churn.

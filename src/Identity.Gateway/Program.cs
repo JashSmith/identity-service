@@ -105,6 +105,13 @@ builder.Services.AddSingleton<IScopedAccessStore>(sp =>
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();
 builder.Services.AddSingleton<IUserProvisioningService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>();
+builder.Services.AddSingleton<Identity.Application.Schedules.IAccessScheduleStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>());
+builder.Services.AddSingleton(builder.Configuration.GetSection("Identity:Schedules").Get<Identity.Application.Schedules.AccessScheduleOptions>()
+    ?? new Identity.Application.Schedules.AccessScheduleOptions());
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<Identity.Application.Schedules.AccessScheduleService>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserLifecycleAdapter>();
 builder.Services.AddSingleton<IUserLifecycleService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserLifecycleAdapter>());
@@ -217,6 +224,7 @@ app.MapAuth();
 app.MapUsers();
 app.MapUserManagement();
 app.MapUserLifecycle();
+app.MapSchedules();
 app.MapBusinessRoles();
 app.MapScopeAdmin();
 app.MapAccessContext();

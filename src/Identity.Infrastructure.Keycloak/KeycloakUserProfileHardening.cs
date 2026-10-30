@@ -90,7 +90,9 @@ public sealed class KeycloakUserProfileHardening(
     /// <summary>Returns the patched profile JSON, or null when every required attribute already exists.</summary>
     public static string? PatchProfile(JsonElement root, IReadOnlyCollection<string> scopeKeys)
     {
-        var required = scopeKeys.Select(k => ScopeAttrPrefix + k).Append(LegacyAttributeName).ToArray();
+        // access.schedule is a user-level schedule override (see WeeklySchedule); admin-only like the scopes.
+        var required = scopeKeys.Select(k => ScopeAttrPrefix + k).Append(LegacyAttributeName)
+            .Append(Identity.Contracts.WeeklySchedule.AttributeName).ToArray();
 
         var existing = new HashSet<string>(StringComparer.Ordinal);
         if (root.TryGetProperty("attributes", out var attrs) && attrs.ValueKind == JsonValueKind.Array)

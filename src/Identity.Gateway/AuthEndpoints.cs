@@ -4,6 +4,7 @@ using System.Text.Json;
 using Identity.Contracts;
 using Microsoft.Extensions.Options;
 using Identity.Application;
+using Identity.Application.Schedules;
 using Identity.Gateway.Errors;
 
 namespace Identity.Gateway;
@@ -43,7 +44,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> Login(HttpContext ctx, IConfiguration cfg, IHttpClientFactory httpFactory,
-        CancellationToken ct)
+        AccessScheduleService schedules, CancellationToken ct)
     {
         var form = await ReadFormAsync(ctx, ct);
         // Machine clients authenticate with client_credentials (no username/password) —
@@ -58,18 +59,18 @@ public static class AuthEndpoints
         var rejected = ApplyClientCredentials(form, cfg, ctx);
         if (rejected is not null) return rejected;
 
-        return await ProxyTokenAsync(cfg, httpFactory, form, ct, ctx);
+        return await ProxyTokenAsync(cfg, httpFactory, form, ct, ctx, schedules);
     }
 
     private static async Task<IResult> Refresh(HttpContext ctx, IConfiguration cfg, IHttpClientFactory httpFactory,
-        CancellationToken ct)
+        AccessScheduleService schedules, CancellationToken ct)
     {
         var form = await ReadFormAsync(ctx, ct);
         form["grant_type"] = "refresh_token";
         var rejected = ApplyClientCredentials(form, cfg, ctx);
         if (rejected is not null) return rejected;
 
-        return await ProxyTokenAsync(cfg, httpFactory, form, ct, ctx);
+        return await ProxyTokenAsync(cfg, httpFactory, form, ct, ctx, schedules);
     }
 
     private static async Task<IResult> Introspect(HttpContext ctx, IConfiguration cfg, IHttpClientFactory httpFactory,
@@ -126,7 +127,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> ProxyTokenAsync(IConfiguration cfg, IHttpClientFactory fac,
-        Dictionary<string, string> form, CancellationToken ct, HttpContext ctx)
+        Dictionary<string, string> form, CancellationToken ct, HttpContext ctx, AccessScheduleService schedules)
     {
         var realm = Realm(cfg);
         var baseUrl = BaseUrl(cfg);
@@ -134,8 +135,46 @@ public static class AuthEndpoints
         var res = await http.PostAsync($"{baseUrl}/realms/{realm}/protocol/openid-connect/token",
             new FormUrlEncodedContent(form), ct);
         var body = await res.Content.ReadAsStringAsync(ct);
+
+        // People (password and refresh grants) only get tokens inside their weekly schedule.
+        if (res.IsSuccessStatusCode && form.GetValueOrDefault("grant_type") is "password" or "refresh_token" &&
+            TokenSubject(body) is { } userId)
+        {
+            var allowed = await schedules.EnsureCanSignInAsync(userId, ct);
+            if (!allowed.IsSuccess)
+            {
+                await RevokeIssuedSessionAsync(http, baseUrl, realm, form, body, ct);
+                return allowed.Error!.ToProblem();
+            }
+        }
         // Never log body (contains tokens). Redaction is enforced at caller logging boundaries.
         return Results.Content(body, "application/json", System.Text.Encoding.UTF8, (int)res.StatusCode);
+    }
+
+    /// <summary>The <c>sub</c> of the access token Keycloak just issued (read without validation: it came from Keycloak).</summary>
+    private static string? TokenSubject(string tokenResponse)
+    {
+        using var response = JsonDocument.Parse(tokenResponse);
+        var accessToken = response.RootElement.TryGetProperty("access_token", out var at) ? at.GetString() : null;
+        var parts = accessToken?.Split('.');
+        if (parts is not { Length: 3 }) return null;
+        var payload = parts[1].Replace('-', '+').Replace('_', '/');
+        payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+        using var claims = JsonDocument.Parse(Convert.FromBase64String(payload));
+        return claims.RootElement.TryGetProperty("sub", out var sub) ? sub.GetString() : null;
+    }
+
+    /// <summary>Ends the Keycloak session behind tokens that are not handed out, so its refresh token is useless.</summary>
+    private static async Task RevokeIssuedSessionAsync(HttpClient http, string baseUrl, string realm,
+        Dictionary<string, string> form, string tokenResponse, CancellationToken ct)
+    {
+        using var response = JsonDocument.Parse(tokenResponse);
+        if (!response.RootElement.TryGetProperty("refresh_token", out var refresh) || refresh.GetString() is not { } refreshToken) return;
+        var logout = new Dictionary<string, string> { ["refresh_token"] = refreshToken };
+        foreach (var key in new[] { "client_id", "client_secret" })
+            if (form.TryGetValue(key, out var value)) logout[key] = value;
+        using var revoked = await http.PostAsync($"{baseUrl}/realms/{realm}/protocol/openid-connect/logout",
+            new FormUrlEncodedContent(logout), ct);
     }
 
     /// <summary>Returns an error result when the request must not be forwarded, otherwise null.</summary>

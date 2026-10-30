@@ -55,7 +55,7 @@ public sealed class KeycloakAdminApi(
         var token = await tokens.GetTokenResultAsync(ct);
         if (!token.IsSuccess) return token.Error!;
 
-        using var request = new HttpRequestMessage(method, $"{RealmBase}/{path}");
+        using var request = new HttpRequestMessage(method, path.Length == 0 ? RealmBase : $"{RealmBase}/{path}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Value);
         if (body is not null) request.Content = JsonContent.Create(body);
 
