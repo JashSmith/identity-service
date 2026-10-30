@@ -7,6 +7,10 @@ namespace Identity.Gateway;
 
 public static class UserDirectoryEndpoints
 {
+    /// <summary>A delegated admin's user list scans at most this many Keycloak users (search narrows it).</summary>
+    private const int DelegatedScanPageSize = 100;
+    private const int DelegatedScanPages = 20;
+
     public static RouteGroupBuilder MapUsers(this IEndpointRouteBuilder app)
     {
         var g = app.MapGroup("/api/identity").WithTags("Users", "Roles", "Permissions");
@@ -14,17 +18,30 @@ public static class UserDirectoryEndpoints
         g.MapGet("/users", async (string? search, int? page, int? pageSize, bool? includeSessions, IUserDirectory dir,
                 DelegationGuard delegation, CancellationToken ct) =>
             {
-                var users = await dir.GetUsersAsync(search, page ?? 1, pageSize ?? 20, includeSessions ?? false, ct);
-                if (!users.IsSuccess) return users.Error!.ToProblem();
                 var restricted = await delegation.IsRestrictedAsync(ct);
                 if (!restricted.IsSuccess) return restricted.Error!.ToProblem();
-                if (!restricted.Value) return Results.Ok(users.Value);
+                if (!restricted.Value)
+                    return (await dir.GetUsersAsync(search, page ?? 1, pageSize ?? 20, includeSessions ?? false, ct))
+                        .ToHttpResult(users => Results.Ok(users));
 
-                // Delegated admins only see users inside their scope; the realm-wide total would leak a count.
-                var visible = await delegation.FilterManageableAsync(users.Value.Items.Select(u => u.Id).ToArray(), ct);
-                if (!visible.IsSuccess) return visible.Error!.ToProblem();
-                var ids = visible.Value.ToHashSet(StringComparer.Ordinal);
-                return Results.Ok(users.Value with { Items = users.Value.Items.Where(u => ids.Contains(u.Id)).ToArray(), Total = null });
+                // Delegated admins only see users inside their scope. Keycloak cannot filter by the merged scope
+                // view, so the matching users are scanned (up to a cap), filtered, and then paged; the total is
+                // the number of visible users, never the realm's.
+                var visible = new List<UserDto>();
+                for (var scanPage = 1; scanPage <= DelegatedScanPages; scanPage++)
+                {
+                    var batch = await dir.GetUsersAsync(search, scanPage, DelegatedScanPageSize, false, ct);
+                    if (!batch.IsSuccess) return batch.Error!.ToProblem();
+                    var manageable = await delegation.FilterManageableAsync(batch.Value.Items.Select(u => u.Id).ToArray(), ct);
+                    if (!manageable.IsSuccess) return manageable.Error!.ToProblem();
+                    var ids = manageable.Value.ToHashSet(StringComparer.Ordinal);
+                    visible.AddRange(batch.Value.Items.Where(u => ids.Contains(u.Id)));
+                    if (batch.Value.Items.Count < DelegatedScanPageSize) break;
+                }
+
+                var size = Math.Clamp(pageSize ?? 20, 1, DelegatedScanPageSize);
+                var number = Math.Max(1, page ?? 1);
+                return Results.Ok(new PagedResponse<UserDto>(visible.Skip((number - 1) * size).Take(size).ToArray(), number, size, visible.Count));
             })
             .RequireAuthorization(IamPermissions.UsersRead)
             .WithName("ListUsers").Produces<PagedResponse<UserDto>>(200)

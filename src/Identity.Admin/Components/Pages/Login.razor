@@ -1,0 +1,27 @@
+@page "/login"
+@using Microsoft.Extensions.Options
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@inject IOptions<ConsoleOptions> Options
+
+<PageTitle>ورود | کنسول مدیریت هویت</PageTitle>
+
+<div class="login-page">
+    <RadzenCard class="login-card">
+        <RadzenStack Gap="1rem">
+            <RadzenText TextStyle="TextStyle.H5" TagName="TagName.H1">کنسول مدیریت هویت</RadzenText>
+            <RadzenText TextStyle="TextStyle.Body2">سازمان خود را انتخاب کنید تا به صفحه ورود آن هدایت شوید.</RadzenText>
+            @foreach (var tenant in Options.Value.Tenants)
+            {
+                <a class="rz-button rz-button-md rz-variant-filled rz-primary rz-shade-default login-tenant"
+                   href="@($"/auth/login/{Uri.EscapeDataString(tenant.Id)}?returnUrl={Uri.EscapeDataString(ReturnUrl ?? "/")}")">
+                    @tenant.DisplayName
+                </a>
+            }
+        </RadzenStack>
+    </RadzenCard>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+}

@@ -22,6 +22,7 @@
         <Project Path="src/Identity.Domain/Identity.Domain.csproj"/>
     </Folder>
     <Folder Name="/src/Host/">
+        <Project Path="src/Identity.Admin/Identity.Admin.csproj"/>
         <Project Path="src/Identity.AppHost/Identity.AppHost.csproj"/>
         <Project Path="src/Identity.Gateway/Identity.Gateway.csproj"/>
         <Project Path="src/Identity.ServiceDefaults/Identity.ServiceDefaults.csproj"/>

@@ -35,6 +35,9 @@ var gatewayAdminClientSecret = ClientSecret("gateway-admin-client-secret");
 // Second, demo tenant (realm "acme") with its own gateway clients: shows one-realm-per-tenant locally.
 var acmeGatewayClientSecret = ClientSecret("acme-gateway-client-secret");
 var acmeGatewayAdminClientSecret = ClientSecret("acme-gateway-admin-client-secret");
+// The admin console's OIDC client; the gateway creates it in every tenant realm with this secret.
+var adminConsoleClientSecret = ClientSecret("admin-console-client-secret");
+const string AdminConsoleUrl = "http://localhost:5090";
 
 var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin, keycloakAdminPassword)
     .WithImageTag(KeycloakImageTag)
@@ -70,6 +73,8 @@ var gateway = builder.AddProject<Projects.Identity_Gateway>("identity-gateway")
     .WithEnvironment("Identity__Tenants__0__Realm", "acme")
     .WithEnvironment("Identity__Tenants__0__AdminClientSecret", acmeGatewayAdminClientSecret)
     .WithEnvironment("Identity__Tenants__0__ClientSecret", acmeGatewayClientSecret)
+    .WithEnvironment("Identity__AdminConsole__BaseUrl", AdminConsoleUrl)
+    .WithEnvironment("Identity__AdminConsole__ClientSecret", adminConsoleClientSecret)
     .WithEnvironment("Identity__Redis__Configuration", redis.Resource.ConnectionStringExpression)
     .WithEnvironment("Database__Provider", "postgres")
     .WithEnvironment("Database__ConnectionStrings__postgres", keycloakDb.Resource.ConnectionStringExpression)
@@ -79,6 +84,20 @@ var gateway = builder.AddProject<Projects.Identity_Gateway>("identity-gateway")
 
 var gatewayHttp = gateway.GetEndpoint("http");
 gateway.WithEnvironment("Identity__PublicBaseUrl", gatewayHttp);
+
+// Persian (RTL) admin console: signs in through Keycloak (Avash login theme) and calls the gateway API.
+builder.AddProject<Projects.Identity_Admin>("identity-admin")
+    .WithEnvironment("Console__KeycloakBaseUrl", keycloakHttp)
+    .WithEnvironment("Console__GatewayBaseUrl", gatewayHttp)
+    .WithEnvironment("Console__ClientSecret", adminConsoleClientSecret)
+    .WithEnvironment("Console__Tenants__0__Id", "company")
+    .WithEnvironment("Console__Tenants__0__DisplayName", "شرکت (پیش‌فرض)")
+    .WithEnvironment("Console__Tenants__0__Realm", KeycloakRealm)
+    .WithEnvironment("Console__Tenants__1__Id", "acme")
+    .WithEnvironment("Console__Tenants__1__DisplayName", "Acme (نمونه)")
+    .WithEnvironment("Console__Tenants__1__Realm", "acme")
+    .WithHttpHealthCheck("/alive")
+    .WaitFor(gateway);
 
 builder.AddProject<Projects.OrderService_Sample>("order-service")
     .WithEnvironment("Identity__Authority", gatewayHttp)

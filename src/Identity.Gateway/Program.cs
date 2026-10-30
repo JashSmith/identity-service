@@ -111,6 +111,9 @@ builder.Services.AddSingleton<IScopedAccessStore>(sp =>
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();
 builder.Services.AddSingleton<IUserProvisioningService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
+builder.Services.Configure<Identity.Infrastructure.Keycloak.AdminConsoleClientOptions>(
+    builder.Configuration.GetSection("Identity:AdminConsole"));
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminConsoleClient>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>();
 builder.Services.AddSingleton<Identity.Application.Settings.IAuthSettingsService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>());
@@ -214,8 +217,6 @@ if (app.Environment.IsDevelopment())
 app.MapOpenApi();
 // No HTTPS endpoint exists in Development/compose (plain HTTP on 5080), so a redirect here would 307 every request.
 if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
-app.UseDefaultFiles();
-app.UseStaticFiles();
 app.UseMiddleware<Identity.Gateway.Tenancy.TenantResolutionMiddleware>();
 app.UseAuthentication();
 app.UseMiddleware<Identity.Gateway.Tenancy.TenantIssuerMiddleware>();
@@ -252,11 +253,9 @@ app.MapGet("/api/system/database-info", async (IDatabaseDiagnosticsService dbSer
     .WithTags("System")
     .Produces<Identity.Contracts.Diagnostics.DatabaseStatusDto>(200);
 app.MapGrpcService<Avash.Identity.Grpc.IdentityGrpcService>();
-app.MapGet("/dashboard", () => Results.Redirect("/"));
-// Unknown API routes answer with a 404 problem instead of the dashboard page.
+// Unknown API routes answer with a 404 problem.
 app.MapFallback("/api/{**path}", () =>
     Error.NotFound("route.not_found", "No API endpoint matches this path.").ToProblem());
-app.MapFallbackToFile("index.html");
 app.Run();
 
 public partial class Program;

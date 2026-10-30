@@ -1,0 +1,186 @@
+@page "/settings"
+@inherits ConsolePage
+
+<PageTitle>تنظیمات احراز هویت | کنسول مدیریت هویت</PageTitle>
+
+<RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1">تنظیمات احراز هویت</RadzenText>
+
+<RadzenTabs RenderMode="TabRenderMode.Client">
+    <Tabs>
+        <RadzenTabsItem Text="توکن و نشست">
+            @if (tokens is not null)
+            {
+                <RadzenRow Gap="1rem">
+                    <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="عمر توکن دسترسی (ثانیه)" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="tokens.AccessTokenLifespan" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="بیکاری مجاز نشست (ثانیه)" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="tokens.SsoSessionIdleTimeout" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="حداکثر عمر نشست (ثانیه)" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="tokens.SsoSessionMaxLifespan" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="بیکاری مجاز نشست آفلاین (ثانیه)" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="tokens.OfflineSessionIdleTimeout" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="6">
+                        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                            <RadzenSwitch @bind-Value="tokens.RevokeRefreshToken" /> <RadzenText class="rz-m-0">توکن تمدید یک‌بارمصرف باشد</RadzenText>
+                        </RadzenStack>
+                    </RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="دفعات مجاز استفاده دوباره از توکن تمدید" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="tokens.RefreshTokenMaxReuse" /></RadzenFormField></RadzenColumn>
+                </RadzenRow>
+                <RadzenText TextStyle="TextStyle.Caption">اپلیکیشنی که عمر توکن اختصاصی دارد از این مقدار پیروی نمی‌کند.</RadzenText>
+                <SaveButton Visible="@canManage" Click="@(() => SaveAsync("tokens", ToTokens()))" />
+            }
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="رمز عبور">
+            @if (password is not null)
+            {
+                <RadzenRow Gap="1rem">
+                    <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="حداقل طول" Style="width: 100%;"><RadzenNumeric TValue="int?" @bind-Value="password.MinLength" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="حداقل رقم" Style="width: 100%;"><RadzenNumeric TValue="int?" @bind-Value="password.Digits" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="حداقل حرف بزرگ" Style="width: 100%;"><RadzenNumeric TValue="int?" @bind-Value="password.UpperCase" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="حداقل حرف کوچک" Style="width: 100%;"><RadzenNumeric TValue="int?" @bind-Value="password.LowerCase" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="حداقل نویسه خاص" Style="width: 100%;"><RadzenNumeric TValue="int?" @bind-Value="password.SpecialChars" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="عدم تکرار چند رمز اخیر" Style="width: 100%;"><RadzenNumeric TValue="int?" @bind-Value="password.History" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="انقضای رمز (روز)" Style="width: 100%;"><RadzenNumeric TValue="int?" @bind-Value="password.ExpireDays" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12">
+                        <RadzenStack Orientation="Orientation.Horizontal" Gap="1.5rem">
+                            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="password.NotUsername" /><RadzenText class="rz-m-0">مشابه نام کاربری نباشد</RadzenText></RadzenStack>
+                            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="password.NotEmail" /><RadzenText class="rz-m-0">مشابه ایمیل نباشد</RadzenText></RadzenStack>
+                        </RadzenStack>
+                    </RadzenColumn>
+                </RadzenRow>
+                <SaveButton Visible="@canManage" Click="@(() => SaveAsync("password-policy", ToPassword()))" />
+            }
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="قفل حساب">
+            @if (bruteForce is not null)
+            {
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-mb-2">
+                    <RadzenSwitch @bind-Value="bruteForce.Enabled" /> <RadzenText class="rz-m-0">قفل حساب پس از تلاش‌های ناموفق</RadzenText>
+                </RadzenStack>
+                <RadzenRow Gap="1rem">
+                    <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="تعداد تلاش ناموفق" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="bruteForce.FailureFactor" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="افزایش زمان انتظار (ثانیه)" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="bruteForce.WaitIncrementSeconds" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="حداکثر زمان قفل (ثانیه)" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="bruteForce.MaxFailureWaitSeconds" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="بازه شمارش تلاش‌ها (ثانیه)" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="bruteForce.MaxDeltaTimeSeconds" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="8">
+                        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" Style="height: 100%;">
+                            <RadzenSwitch @bind-Value="bruteForce.PermanentLockout" /> <RadzenText class="rz-m-0">قفل دائمی (رفع فقط توسط مدیر)</RadzenText>
+                        </RadzenStack>
+                    </RadzenColumn>
+                </RadzenRow>
+                <SaveButton Visible="@canManage" Click="@(() => SaveAsync("brute-force", ToBruteForce()))" />
+            }
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="ورود دومرحله‌ای">
+            @if (otp is not null)
+            {
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-mb-2">
+                    <RadzenSwitch @bind-Value="otp.RequiredForNewUsers" /> <RadzenText class="rz-m-0">کاربران جدید باید ورود دومرحله‌ای (اپ احراز هویت) را فعال کنند</RadzenText>
+                </RadzenStack>
+                <RadzenRow Gap="1rem">
+                    <RadzenColumn Size="12" SizeMD="3"><RadzenFormField Text="نوع" Style="width: 100%;"><RadzenDropDown TValue="string" Data="@(new[] { "totp", "hotp" })" @bind-Value="otp.Type" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="3"><RadzenFormField Text="الگوریتم" Style="width: 100%;"><RadzenDropDown TValue="string" Data="@(new[] { "HmacSHA1", "HmacSHA256", "HmacSHA512" })" @bind-Value="otp.Algorithm" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="2"><RadzenFormField Text="تعداد رقم" Style="width: 100%;"><RadzenDropDown TValue="int" Data="@(new[] { 6, 8 })" @bind-Value="otp.Digits" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="2"><RadzenFormField Text="دوره (ثانیه)" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="otp.Period" /></RadzenFormField></RadzenColumn>
+                    <RadzenColumn Size="12" SizeMD="2"><RadzenFormField Text="پنجره تحمل" Style="width: 100%;"><RadzenNumeric TValue="int" @bind-Value="otp.LookAheadWindow" /></RadzenFormField></RadzenColumn>
+                </RadzenRow>
+                <RadzenText TextStyle="TextStyle.Caption">Google Authenticator فقط HmacSHA1 با ۶ رقم و دوره ۳۰ ثانیه را پشتیبانی می‌کند.</RadzenText>
+                <SaveButton Visible="@canManage" Click="@(() => SaveAsync("otp", ToOtp()))" />
+            }
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="صفحه ورود">
+            @if (login is not null)
+            {
+                <RadzenStack Gap="0.75rem">
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="login.LoginWithEmailAllowed" /><RadzenText class="rz-m-0">ورود با ایمیل</RadzenText></RadzenStack>
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="login.ResetPasswordAllowed" /><RadzenText class="rz-m-0">بازیابی رمز عبور</RadzenText></RadzenStack>
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="login.RememberMe" /><RadzenText class="rz-m-0">گزینه «مرا به خاطر بسپار»</RadzenText></RadzenStack>
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="login.VerifyEmail" /><RadzenText class="rz-m-0">تأیید ایمیل الزامی</RadzenText></RadzenStack>
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="login.RegistrationAllowed" /><RadzenText class="rz-m-0">ثبت‌نام آزاد کاربران</RadzenText></RadzenStack>
+                    <RadzenRow Gap="1rem">
+                        <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="قالب صفحه ورود سازمان" Style="width: 100%;"><RadzenTextBox @bind-Value="login.LoginTheme" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                        <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="زبان پیش‌فرض" Style="width: 100%;"><RadzenTextBox @bind-Value="login.DefaultLocale" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                    </RadzenRow>
+                    <RadzenText TextStyle="TextStyle.Caption">قالب «avash» صفحه ورود فارسی و راست‌به‌چپ است؛ هر اپلیکیشن می‌تواند قالب خود را داشته باشد.</RadzenText>
+                </RadzenStack>
+                <SaveButton Visible="@canManage" Click="@(() => SaveAsync("login", ToLogin()))" />
+            }
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="ورود با سرویس‌های دیگر">
+            <IdentityProviders CanManage="@canManage" />
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="LDAP / Active Directory">
+            <LdapProviders CanManage="@canManage" />
+        </RadzenTabsItem>
+    </Tabs>
+</RadzenTabs>
+
+@code {
+    // Editable copies of the settings records (records are immutable; the forms bind to these).
+    private sealed class Tokens { public int AccessTokenLifespan, SsoSessionIdleTimeout, SsoSessionMaxLifespan, OfflineSessionIdleTimeout, RefreshTokenMaxReuse; public bool RevokeRefreshToken; }
+    private sealed class Password { public int? MinLength, Digits, UpperCase, LowerCase, SpecialChars, History, ExpireDays; public bool NotUsername, NotEmail; }
+    private sealed class BruteForce { public bool Enabled, PermanentLockout; public int FailureFactor, WaitIncrementSeconds, MaxFailureWaitSeconds, MaxDeltaTimeSeconds; }
+    private sealed class Otp { public string Type = "totp", Algorithm = "HmacSHA1"; public int Digits, Period, LookAheadWindow; public bool RequiredForNewUsers; }
+    private sealed class Login { public bool RegistrationAllowed, ResetPasswordAllowed, RememberMe, VerifyEmail, LoginWithEmailAllowed; public string? LoginTheme, DefaultLocale; }
+
+    private Tokens? tokens;
+    private Password? password;
+    private BruteForce? bruteForce;
+    private Otp? otp;
+    private Login? login;
+    private bool canManage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.SettingsManage);
+        await RunAsync(async () =>
+        {
+            var t = await Api.GetAsync<TokenSettingsDto>("api/identity/settings/tokens");
+            tokens = new Tokens
+            {
+                AccessTokenLifespan = t.AccessTokenLifespan, SsoSessionIdleTimeout = t.SsoSessionIdleTimeout, SsoSessionMaxLifespan = t.SsoSessionMaxLifespan,
+                OfflineSessionIdleTimeout = t.OfflineSessionIdleTimeout, RevokeRefreshToken = t.RevokeRefreshToken, RefreshTokenMaxReuse = t.RefreshTokenMaxReuse,
+            };
+            var p = await Api.GetAsync<PasswordPolicyDto>("api/identity/settings/password-policy");
+            password = new Password
+            {
+                MinLength = p.MinLength, Digits = p.Digits, UpperCase = p.UpperCase, LowerCase = p.LowerCase, SpecialChars = p.SpecialChars,
+                History = p.History, ExpireDays = p.ExpireDays, NotUsername = p.NotUsername, NotEmail = p.NotEmail,
+            };
+            var b = await Api.GetAsync<BruteForceSettingsDto>("api/identity/settings/brute-force");
+            bruteForce = new BruteForce
+            {
+                Enabled = b.Enabled, PermanentLockout = b.PermanentLockout, FailureFactor = b.FailureFactor, WaitIncrementSeconds = b.WaitIncrementSeconds,
+                MaxFailureWaitSeconds = b.MaxFailureWaitSeconds, MaxDeltaTimeSeconds = b.MaxDeltaTimeSeconds,
+            };
+            var o = await Api.GetAsync<OtpSettingsDto>("api/identity/settings/otp");
+            otp = new Otp { Type = o.Type, Algorithm = o.Algorithm, Digits = o.Digits, Period = o.Period, LookAheadWindow = o.LookAheadWindow, RequiredForNewUsers = o.RequiredForNewUsers };
+            var l = await Api.GetAsync<LoginSettingsDto>("api/identity/settings/login");
+            login = new Login
+            {
+                RegistrationAllowed = l.RegistrationAllowed, ResetPasswordAllowed = l.ResetPasswordAllowed, RememberMe = l.RememberMe,
+                VerifyEmail = l.VerifyEmail, LoginWithEmailAllowed = l.LoginWithEmailAllowed, LoginTheme = l.LoginTheme, DefaultLocale = l.DefaultLocale,
+            };
+        });
+    }
+
+    private TokenSettingsDto ToTokens() => new(tokens!.AccessTokenLifespan, tokens.SsoSessionIdleTimeout, tokens.SsoSessionMaxLifespan,
+        tokens.OfflineSessionIdleTimeout, tokens.RevokeRefreshToken, tokens.RefreshTokenMaxReuse);
+
+    private PasswordPolicyDto ToPassword() => new(password!.MinLength, password.Digits, password.UpperCase, password.LowerCase,
+        password.SpecialChars, password.NotUsername, password.NotEmail, password.History, password.ExpireDays);
+
+    private BruteForceSettingsDto ToBruteForce() => new(bruteForce!.Enabled, bruteForce.PermanentLockout, bruteForce.FailureFactor,
+        bruteForce.WaitIncrementSeconds, bruteForce.MaxFailureWaitSeconds, bruteForce.MaxDeltaTimeSeconds);
+
+    private OtpSettingsDto ToOtp() => new(otp!.Type, otp.Algorithm, otp.Digits, otp.Period, otp.LookAheadWindow, otp.RequiredForNewUsers);
+
+    private LoginSettingsDto ToLogin() => new(login!.RegistrationAllowed, login.ResetPasswordAllowed, login.RememberMe, login.VerifyEmail,
+        login.LoginWithEmailAllowed, string.IsNullOrWhiteSpace(login.LoginTheme) ? null : login.LoginTheme,
+        string.IsNullOrWhiteSpace(login.DefaultLocale) ? null : login.DefaultLocale);
+
+    private Task SaveAsync(string section, object body) =>
+        RunAsync(() => Api.SendAsync(HttpMethod.Put, $"api/identity/settings/{section}", body), "تنظیمات ذخیره شد");
+}

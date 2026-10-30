@@ -1,0 +1,52 @@
+@inherits ConsolePage
+
+<RadzenStack Gap="1rem">
+    @if (Scope is null)
+    {
+        <RadzenFormField Text="کلید (لاتین، مثل province)" Style="width: 100%;"><RadzenTextBox @bind-Value="key" Style="direction: ltr;" /></RadzenFormField>
+    }
+    <RadzenFormField Text="نام نمایشی" Style="width: 100%;"><RadzenTextBox @bind-Value="displayName" /></RadzenFormField>
+    <RadzenFormField Text="توضیح" Style="width: 100%;"><RadzenTextArea @bind-Value="description" Rows="2" /></RadzenFormField>
+    <RadzenFormField Text="محدوده والد" Style="width: 100%;">
+        <RadzenDropDown TValue="string" AllowClear="true" Data="@All.Where(s => s.Key != Scope?.Key)" TextProperty="DisplayName" ValueProperty="Key"
+                        @bind-Value="parent" Placeholder="بدون والد" />
+    </RadzenFormField>
+    @if (Scope is not null)
+    {
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+            <RadzenSwitch @bind-Value="active" /> <RadzenText class="rz-m-0">فعال</RadzenText>
+        </RadzenStack>
+    }
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
+        <RadzenButton Text="انصراف" ButtonStyle="ButtonStyle.Light" Click="@(() => Dialogs.Close())" />
+        <RadzenButton Text="ذخیره" Icon="check" IsBusy="@Busy" Click="@SaveAsync" />
+    </RadzenStack>
+</RadzenStack>
+
+@code {
+    [Parameter] public ScopeDefinitionView? Scope { get; set; }
+    [Parameter] public IReadOnlyCollection<ScopeDefinitionView> All { get; set; } = [];
+
+    private string? key, displayName, description, parent;
+    private bool active = true;
+
+    protected override void OnInitialized()
+    {
+        if (Scope is null) return;
+        displayName = Scope.DisplayName;
+        description = Scope.Description;
+        parent = Scope.Parent;
+        active = Scope.IsActive;
+    }
+
+    private async Task SaveAsync()
+    {
+        var saved = Scope is null
+            ? await RunAsync(() => Api.SendAsync(HttpMethod.Post, "api/identity/scopes",
+                new CreateScopeRequest(key ?? "", displayName, description, null, parent)), "محدوده ایجاد شد")
+            // "" removes the parent; null would keep it.
+            : await RunAsync(() => Api.SendAsync(HttpMethod.Put, $"api/identity/scopes/{Uri.EscapeDataString(Scope.Key)}",
+                new UpdateScopeRequest(displayName, description ?? "", active, null, parent ?? "")), "محدوده ذخیره شد");
+        if (saved) Dialogs.Close(true);
+    }
+}

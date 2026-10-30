@@ -1,0 +1,87 @@
+@* Scoped role assignments: a business role plus the scope values it applies to (e.g. province = tehran).
+   Scopes with a value catalog are picked from it; others take comma-separated values; "*" means all. *@
+
+<RadzenStack Gap="0.75rem">
+    @foreach (var row in Rows)
+    {
+        <RadzenCard Variant="Variant.Outlined">
+            <RadzenStack Gap="0.5rem">
+                <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                    <RadzenDropDown TValue="string" Data="@RoleNames" @bind-Value="row.Role" Placeholder="نقش" Style="min-width: 220px;" AllowFiltering="true" />
+                    <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small"
+                                  Click="@(() => Rows.Remove(row))" title="حذف تخصیص" />
+                    @if (RequiredOf(row.Role) is { Count: > 0 } required)
+                    {
+                        <RadzenText TextStyle="TextStyle.Caption" class="rz-m-0">الزامی: @string.Join("، ", required)</RadzenText>
+                    }
+                </RadzenStack>
+                @foreach (var scope in ScopesFor(row))
+                {
+                    <RadzenRow AlignItems="AlignItems.Center" Gap="0.5rem">
+                        <RadzenColumn Size="4" SizeMD="3"><RadzenText class="rz-m-0">@scope.DisplayName <span class="ltr">(@scope.Key)</span></RadzenText></RadzenColumn>
+                        <RadzenColumn Size="8" SizeMD="9">
+                            @if (Values.TryGetValue(scope.Key, out var catalog) && catalog.Count > 0)
+                            {
+                                <RadzenDropDown TValue="IEnumerable<string>" Multiple="true" Chips="true" AllowClear="true" AllowFiltering="true"
+                                                Data="@CatalogOptions(catalog)" TextProperty="Label" ValueProperty="Value"
+                                                Value="@row.Selected(scope.Key)" ValueChanged="@((IEnumerable<string> v) => row.Set(scope.Key, v))"
+                                                Style="width: 100%;" Placeholder="بدون مقدار" />
+                            }
+                            else
+                            {
+                                <RadzenTextBox Value="@row.Text(scope.Key)" ValueChanged="@((string v) => row.SetText(scope.Key, v))"
+                                               Placeholder="مقادیر با کاما؛ * یعنی همه" Style="width: 100%; direction: ltr;" />
+                            }
+                        </RadzenColumn>
+                    </RadzenRow>
+                }
+            </RadzenStack>
+        </RadzenCard>
+    }
+    <RadzenButton Icon="add" Text="افزودن نقش" ButtonStyle="ButtonStyle.Secondary" Variant="Variant.Outlined" Click="@(() => Rows.Add(new Row()))" />
+</RadzenStack>
+
+@code {
+    [Parameter, EditorRequired] public List<Row> Rows { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyCollection<BusinessRoleDto> Roles { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyCollection<ScopeDefinitionView> Scopes { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, IReadOnlyCollection<ScopeValueDto>> Values { get; set; } =
+        new Dictionary<string, IReadOnlyCollection<ScopeValueDto>>();
+
+    private IEnumerable<string> RoleNames => Roles.Select(r => r.Name);
+
+    private IReadOnlyCollection<string>? RequiredOf(string? role) => Roles.FirstOrDefault(r => r.Name == role)?.RequiredScopes;
+
+    /// <summary>The keys the row's role allows (all active keys when it restricts none), plus keys that already have values.</summary>
+    private IEnumerable<ScopeDefinitionView> ScopesFor(Row row)
+    {
+        var allowed = Roles.FirstOrDefault(r => r.Name == row.Role)?.AllowedScopes;
+        return Scopes.Where(s => s.IsActive && (allowed is not { Count: > 0 } || allowed.Contains(s.Key) || row.Selected(s.Key).Any()));
+    }
+
+    private static IEnumerable<ScopeValueDto> CatalogOptions(IReadOnlyCollection<ScopeValueDto> catalog) =>
+        catalog.Select(v => v with { Label = v.Label ?? v.Value }).Prepend(new ScopeValueDto("*", "همه"));
+
+    /// <summary>One editable assignment.</summary>
+    public sealed class Row
+    {
+        public string? Role { get; set; }
+        public Dictionary<string, List<string>> Scopes { get; } = new(StringComparer.Ordinal);
+
+        public static Row From(ScopedRoleAssignment a)
+        {
+            var row = new Row { Role = a.Role };
+            foreach (var (key, values) in a.Scopes) row.Scopes[key] = values.ToList();
+            return row;
+        }
+
+        public IEnumerable<string> Selected(string key) => Scopes.GetValueOrDefault(key) ?? [];
+        public void Set(string key, IEnumerable<string>? values) => Scopes[key] = values?.ToList() ?? [];
+        public string Text(string key) => string.Join(", ", Selected(key));
+        public void SetText(string key, string? text) =>
+            Scopes[key] = (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+        public ScopedRoleAssignmentDto ToDto() => new(Role ?? "",
+            Scopes.Where(s => s.Value.Count > 0).ToDictionary(s => s.Key, s => (IReadOnlyCollection<string>)s.Value));
+    }
+}

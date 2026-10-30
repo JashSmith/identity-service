@@ -1,0 +1,43 @@
+@inherits ConsolePage
+
+<RadzenStack Gap="1rem">
+    <RadzenText TextStyle="TextStyle.Body2">
+        برنامه یک دسترسی بر برنامه نقش‌ها مقدم است و فقط برنامه اختصاصی کاربر بر آن غلبه می‌کند.
+        <span class="ltr">@Permission</span>
+    </RadzenText>
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+        <RadzenSwitch @bind-Value="hasSchedule" /> <RadzenText class="rz-m-0">برنامه اختصاصی برای این دسترسی</RadzenText>
+    </RadzenStack>
+    @if (hasSchedule)
+    {
+        <ScheduleEditor @ref="editor" Value="@schedule" />
+    }
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
+        <RadzenButton Text="انصراف" ButtonStyle="ButtonStyle.Light" Click="@(() => Dialogs.Close())" />
+        <RadzenButton Text="ذخیره" Icon="check" IsBusy="@Busy" Click="@SaveAsync" />
+    </RadzenStack>
+</RadzenStack>
+
+@code {
+    [Parameter] public string Permission { get; set; } = "";
+
+    private WeeklyScheduleDto? schedule;
+    private bool hasSchedule;
+    private ScheduleEditor? editor;
+
+    private string Path => $"api/identity/schedules/permissions/{Uri.EscapeDataString(Permission)}";
+
+    protected override Task OnInitializedAsync() => RunAsync(async () =>
+    {
+        schedule = (await Api.GetAsync<ScheduleSettingDto>(Path)).Value;
+        hasSchedule = schedule is not null;
+    });
+
+    private async Task SaveAsync()
+    {
+        var saved = hasSchedule && editor is not null
+            ? await RunAsync(() => Api.SendAsync(HttpMethod.Put, Path, editor.Current), "برنامه زمانی ذخیره شد")
+            : await RunAsync(() => Api.SendAsync(HttpMethod.Delete, Path), "دسترسی از برنامه نقش‌ها پیروی می‌کند");
+        if (saved) Dialogs.Close(true);
+    }
+}

@@ -1,0 +1,67 @@
+@page "/scopes"
+@inherits ConsolePage
+
+<PageTitle>محدوده‌ها | کنسول مدیریت هویت</PageTitle>
+
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-2">
+    <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">محدوده‌های دسترسی</RadzenText>
+    @if (canManage)
+    {
+        <RadzenButton Icon="add" Text="محدوده جدید" Click="@(() => EditAsync(null))" />
+    }
+</RadzenStack>
+<RadzenText TextStyle="TextStyle.Body2" class="rz-mb-4">
+    محدوده‌ها (مثل استان، شهر یا شعبه) تعیین می‌کنند کاربر به داده‌های کدام بخش دسترسی دارد. هر محدوده می‌تواند والد داشته باشد (شهر ← استان) و فهرست مقادیر مجاز.
+</RadzenText>
+
+<RadzenDataGrid TItem="ScopeDefinitionView" Data="@scopes" IsLoading="@Busy" AllowSorting="true" EmptyText="محدوده‌ای تعریف نشده است">
+    <Columns>
+        <RadzenDataGridColumn Property="DisplayName" Title="نام" />
+        <RadzenDataGridColumn Property="Key" Title="کلید"><Template Context="s"><span class="ltr">@s.Key</span></Template></RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="والد"><Template Context="s"><span class="ltr">@s.Parent</span></Template></RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="وضعیت" Width="110px">
+            <Template Context="s"><RadzenBadge BadgeStyle="@(s.IsActive ? BadgeStyle.Success : BadgeStyle.Light)" Text="@(s.IsActive ? "فعال" : "غیرفعال")" /></Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="" Width="230px" Sortable="false">
+            <Template Context="s">
+                <RadzenButton Icon="list" Text="مقادیر" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => ValuesAsync(s))" />
+                @if (canManage)
+                {
+                    <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => EditAsync(s))" title="ویرایش" />
+                    <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Text" ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteAsync(s))" title="حذف" />
+                }
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    private List<ScopeDefinitionView> scopes = [];
+    private bool canManage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.ScopesManage);
+        await LoadAsync();
+    }
+
+    private Task LoadAsync() => RunAsync(async () => scopes = await Api.GetAsync<List<ScopeDefinitionView>>("api/identity/scopes"));
+
+    private async Task EditAsync(ScopeDefinitionView? scope)
+    {
+        var saved = await Dialogs.OpenAsync<ScopeDialog>(scope is null ? "محدوده جدید" : $"ویرایش {scope.DisplayName}",
+            new Dictionary<string, object?> { ["Scope"] = scope, ["All"] = scopes }, new DialogOptions { Width = "560px" });
+        if (saved is not null) await LoadAsync();
+    }
+
+    private Task ValuesAsync(ScopeDefinitionView scope) =>
+        Dialogs.OpenAsync<ScopeValuesDialog>($"مقادیر {scope.DisplayName}",
+            new Dictionary<string, object?> { ["Scope"] = scope, ["ReadOnly"] = !canManage }, new DialogOptions { Width = "720px" });
+
+    private async Task DeleteAsync(ScopeDefinitionView scope)
+    {
+        if (!await ConfirmAsync($"محدوده «{scope.DisplayName}» حذف شود؟")) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Delete, $"api/identity/scopes/{Uri.EscapeDataString(scope.Key)}"), "محدوده حذف شد"))
+            await LoadAsync();
+    }
+}

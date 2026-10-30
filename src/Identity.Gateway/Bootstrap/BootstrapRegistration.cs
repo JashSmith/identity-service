@@ -28,7 +28,11 @@ public static class BootstrapRegistration
         services.AddSingleton(new BootstrapStep("gateway-permissions", (sp, ct) =>
             sp.GetRequiredService<GatewayPermissionRegistrar>().RegisterAsync(typeof(Program).Assembly, ct)));
 
-        // 5. One prefixed permission mapper per application in the shared iam-permissions client scope.
+        // 5. The admin console's OIDC client (when a console is configured).
+        services.AddSingleton(new BootstrapStep("admin-console-client", (sp, ct) =>
+            sp.GetRequiredService<KeycloakAdminConsoleClient>().EnsureAsync(ct)));
+
+        // 6. One prefixed permission mapper per application in the shared iam-permissions client scope.
         services.AddSingleton(new BootstrapStep("permission-claims", (sp, ct) =>
             sp.GetRequiredService<Identity.Application.Permissions.IApplicationCatalog>().EnsurePermissionClaimsAsync(ct)));
 

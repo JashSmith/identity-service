@@ -1,0 +1,141 @@
+@inherits ConsolePage
+
+<RadzenStack Gap="1rem">
+    <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0">
+        اتصال به Active Directory یا LDAP: کاربران با نام کاربری و رمز دامنه وارد می‌شوند. رمز اتصال فقط نوشتنی است.
+    </RadzenText>
+    <RadzenDataGrid TItem="LdapProviderDto" Data="@providers" IsLoading="@Busy" EmptyText="اتصالی تعریف نشده است">
+        <Columns>
+            <RadzenDataGridColumn Property="Name" Title="نام" />
+            <RadzenDataGridColumn Title="آدرس"><Template Context="p"><span class="ltr">@p.ConnectionUrl</span></Template></RadzenDataGridColumn>
+            <RadzenDataGridColumn Title="وضعیت" Width="110px">
+                <Template Context="p"><RadzenBadge BadgeStyle="@(p.Enabled ? BadgeStyle.Success : BadgeStyle.Light)" Text="@(p.Enabled ? "فعال" : "غیرفعال")" /></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Title="" Width="260px">
+                <Template Context="p">
+                    @if (CanManage)
+                    {
+                        <RadzenButton Icon="sync" Text="همگام‌سازی" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => SyncAsync(p))" />
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => Edit(p))" title="ویرایش" />
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Text" ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteAsync(p))" title="حذف" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+
+    @if (CanManage)
+    {
+        <RadzenCard Variant="Variant.Outlined">
+            <RadzenText TextStyle="TextStyle.Subtitle1">@(form.Id is null ? "اتصال جدید" : $"ویرایش {form.Name}")</RadzenText>
+            <RadzenRow Gap="1rem">
+                <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="نام" Style="width: 100%;"><RadzenTextBox @bind-Value="form.Name" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="نوع سرور" Style="width: 100%;"><RadzenDropDown TValue="string" Data="@Vendors" TextProperty="Text" ValueProperty="Value" @bind-Value="form.Vendor" Change="@(_ => ApplyVendorDefaults())" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="حالت ویرایش" Style="width: 100%;"><RadzenDropDown TValue="string" Data="@EditModes" TextProperty="Text" ValueProperty="Value" @bind-Value="form.EditMode" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="آدرس سرور" Style="width: 100%;"><RadzenTextBox @bind-Value="form.ConnectionUrl" Placeholder="ldaps://dc.corp.local:636" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="DN کاربران" Style="width: 100%;"><RadzenTextBox @bind-Value="form.UsersDn" Placeholder="OU=Users,DC=corp,DC=local" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="DN حساب اتصال" Style="width: 100%;"><RadzenTextBox @bind-Value="form.BindDn" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="رمز حساب اتصال (خالی یعنی بدون تغییر)" Style="width: 100%;"><RadzenPassword @bind-Value="form.BindCredential" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="ویژگی نام کاربری" Style="width: 100%;"><RadzenTextBox @bind-Value="form.UsernameAttribute" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="ویژگی RDN" Style="width: 100%;"><RadzenTextBox @bind-Value="form.RdnAttribute" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="ویژگی شناسه یکتا" Style="width: 100%;"><RadzenTextBox @bind-Value="form.UuidAttribute" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="6" SizeMD="3"><RadzenFormField Text="کلاس‌های کاربر" Style="width: 100%;"><RadzenTextBox @bind-Value="form.UserObjectClasses" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12">
+                    <RadzenStack Orientation="Orientation.Horizontal" Gap="1.5rem" Wrap="FlexWrap.Wrap">
+                        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="form.Enabled" /><RadzenText class="rz-m-0">فعال</RadzenText></RadzenStack>
+                        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="form.ImportEnabled" /><RadzenText class="rz-m-0">ورود کاربران به سامانه</RadzenText></RadzenStack>
+                        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="form.StartTls" /><RadzenText class="rz-m-0">StartTLS</RadzenText></RadzenStack>
+                    </RadzenStack>
+                </RadzenColumn>
+            </RadzenRow>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mt-2" Wrap="FlexWrap.Wrap">
+                <RadzenButton Text="آزمایش اتصال" Icon="lan" ButtonStyle="ButtonStyle.Secondary" Click="@(() => TestAsync("connection"))" />
+                <RadzenButton Text="آزمایش ورود حساب اتصال" Icon="login" ButtonStyle="ButtonStyle.Secondary" Click="@(() => TestAsync("authentication"))" />
+                <RadzenButton Text="ذخیره" Icon="save" Click="@SaveAsync" />
+                @if (form.Id is not null)
+                {
+                    <RadzenButton Text="انصراف" ButtonStyle="ButtonStyle.Light" Click="@Reset" />
+                }
+            </RadzenStack>
+        </RadzenCard>
+    }
+</RadzenStack>
+
+@code {
+    [Parameter] public bool CanManage { get; set; }
+
+    private const string Path = "api/identity/settings/ldap";
+    private static readonly object[] Vendors = [new { Text = "Active Directory", Value = "ad" }, new { Text = "سایر LDAP", Value = "other" }];
+    private static readonly object[] EditModes =
+    [
+        new { Text = "فقط خواندنی", Value = "READ_ONLY" }, new { Text = "قابل نوشتن", Value = "WRITABLE" }, new { Text = "بدون همگام‌سازی تغییرات", Value = "UNSYNCED" },
+    ];
+
+    private sealed class Form
+    {
+        public string? Id, Name, ConnectionUrl, BindDn, BindCredential, UsersDn;
+        public string Vendor = "ad", EditMode = "READ_ONLY";
+        public string UsernameAttribute = "sAMAccountName", RdnAttribute = "cn", UuidAttribute = "objectGUID";
+        public string UserObjectClasses = "person, organizationalPerson, user";
+        public bool Enabled = true, ImportEnabled = true, StartTls;
+    }
+
+    private List<LdapProviderDto> providers = [];
+    private Form form = new();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task LoadAsync() => RunAsync(async () => providers = await Api.GetAsync<List<LdapProviderDto>>(Path));
+
+    private void ApplyVendorDefaults()
+    {
+        (form.UsernameAttribute, form.UuidAttribute, form.UserObjectClasses) = form.Vendor == "ad"
+            ? ("sAMAccountName", "objectGUID", "person, organizationalPerson, user")
+            : ("uid", "entryUUID", "inetOrgPerson, organizationalPerson");
+        form.RdnAttribute = form.Vendor == "ad" ? "cn" : "uid";
+    }
+
+    private void Edit(LdapProviderDto p) => form = new Form
+    {
+        Id = p.Id, Name = p.Name, Enabled = p.Enabled, Vendor = p.Vendor, ConnectionUrl = p.ConnectionUrl, BindDn = p.BindDn,
+        UsersDn = p.UsersDn, UsernameAttribute = p.UsernameAttribute, RdnAttribute = p.RdnAttribute, UuidAttribute = p.UuidAttribute,
+        UserObjectClasses = p.UserObjectClasses, EditMode = p.EditMode, ImportEnabled = p.ImportEnabled, StartTls = p.StartTls,
+    };
+
+    private void Reset() => form = new Form();
+
+    private LdapProviderDto ToDto() => new(form.Id, form.Name ?? "", form.Enabled, form.Vendor, form.ConnectionUrl ?? "", form.BindDn,
+        string.IsNullOrEmpty(form.BindCredential) ? null : form.BindCredential, form.UsersDn ?? "", form.UsernameAttribute, form.RdnAttribute,
+        form.UuidAttribute, form.UserObjectClasses, form.EditMode, form.ImportEnabled, StartTls: form.StartTls);
+
+    private Task TestAsync(string mode) => RunAsync(() => Api.SendAsync(HttpMethod.Post, $"{Path}/test",
+        // An existing provider's stored password is used when none is typed.
+        new LdapTestRequest(mode, form.ConnectionUrl ?? "", form.BindDn,
+            string.IsNullOrEmpty(form.BindCredential) && form.Id is not null ? "**********" : form.BindCredential, form.StartTls, form.Id)),
+        "اتصال موفق بود");
+
+    private async Task SaveAsync()
+    {
+        var saved = form.Id is null
+            ? await RunAsync(() => Api.SendAsync(HttpMethod.Post, Path, ToDto()), "اتصال ایجاد شد")
+            : await RunAsync(() => Api.SendAsync(HttpMethod.Put, $"{Path}/{Uri.EscapeDataString(form.Id)}", ToDto()), "اتصال ذخیره شد");
+        if (!saved) return;
+        Reset();
+        await LoadAsync();
+    }
+
+    private async Task SyncAsync(LdapProviderDto p)
+    {
+        LdapSyncResultDto? result = null;
+        if (await RunAsync(async () => result = await Api.SendAsync<LdapSyncResultDto>(HttpMethod.Post, $"{Path}/{Uri.EscapeDataString(p.Id!)}/sync?mode=full", null)))
+            Notifications.Notify(NotificationSeverity.Info, "همگام‌سازی انجام شد",
+                $"افزوده: {result!.Added}، به‌روز: {result.Updated}، حذف: {result.Removed}، خطا: {result.Failed}", duration: 8000);
+    }
+
+    private async Task DeleteAsync(LdapProviderDto p)
+    {
+        if (!await ConfirmAsync($"اتصال «{p.Name}» حذف شود؟ کاربرانی که از این سرور وارد سامانه شده‌اند هم حذف می‌شوند.")) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Delete, $"{Path}/{Uri.EscapeDataString(p.Id!)}?confirm=true"), "اتصال حذف شد"))
+            await LoadAsync();
+    }
+}

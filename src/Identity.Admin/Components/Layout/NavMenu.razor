@@ -1,0 +1,27 @@
+<AuthorizeView>
+    <Authorized>
+        <RadzenPanelMenu>
+            <RadzenPanelMenuItem Text="داشبورد" Icon="dashboard" Path="/" />
+            @foreach (var item in Items.Where(i => context.User.Has(i.Permission)))
+            {
+                <RadzenPanelMenuItem Text="@item.Text" Icon="@item.Icon" Path="@item.Path" />
+            }
+        </RadzenPanelMenu>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private sealed record MenuItem(string Text, string Icon, string Path, string Permission);
+
+    // Each section shows only for administrators who may read it (identity-gateway:* permissions).
+    private static readonly MenuItem[] Items =
+    [
+        new("کاربران", "people", "/users", Permissions.UsersRead),
+        new("نقش‌ها", "badge", "/roles", Permissions.RolesRead),
+        new("اپلیکیشن‌ها و دسترسی‌ها", "apps", "/applications", Permissions.ApplicationsRead),
+        new("محدوده‌ها", "account_tree", "/scopes", Permissions.ScopesRead),
+        new("برنامه زمانی", "schedule", "/schedules", Permissions.SchedulesRead),
+        new("تنظیمات احراز هویت", "settings", "/settings", Permissions.SettingsRead),
+        new("سازمان‌ها", "domain", "/tenants", Permissions.SystemRead),
+    ];
+}
