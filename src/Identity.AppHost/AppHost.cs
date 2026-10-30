@@ -27,6 +27,11 @@ var keycloakAdminPassword = builder.AddParameter(
     secret: true,
     persist: true);
 
+// Confidential client secrets: generated once, persisted in the AppHost user secrets and injected
+// into the realm import through ${...} placeholders, so no secret lives in the repository.
+var gatewayClientSecret = ClientSecret("gateway-client-secret");
+var orderServiceClientSecret = ClientSecret("order-service-client-secret");
+
 var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin, keycloakAdminPassword)
     .WithImageTag(KeycloakImageTag)
     .WithRealmImport("./Keycloak/Realms")
@@ -35,11 +40,9 @@ var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin
         $"jdbc:postgresql://{postgres.Resource.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}/{keycloakDb.Resource.DatabaseName}"))
     .WithEnvironment("KC_DB_USERNAME", postgres.Resource.UserNameReference)
     .WithEnvironment("KC_DB_PASSWORD", postgres.Resource.PasswordParameter)
+    .WithEnvironment("GATEWAY_CLIENT_SECRET", gatewayClientSecret)
+    .WithEnvironment("ORDER_SERVICE_CLIENT_SECRET", orderServiceClientSecret)
     .WaitFor(keycloakDb);
-
-// Secret of the realm's confidential identity-gateway client. Its value must match the realm
-// export, so it comes from configuration (Parameters:gateway-client-secret), never from code.
-var gatewayClientSecret = builder.AddParameter("gateway-client-secret", secret: true);
 
 var keycloakHttp = keycloak.GetEndpoint("http");
 
@@ -65,7 +68,11 @@ gateway.WithEnvironment("Identity__PublicBaseUrl", gatewayHttp);
 builder.AddProject<Projects.OrderService_Sample>("order-service")
     .WithEnvironment("Identity__Authority", gatewayHttp)
     .WithEnvironment("PermissionRegistration__IdentityServer", gatewayHttp)
+    .WithEnvironment("PermissionRegistration__ClientSecret", orderServiceClientSecret)
     .WithHttpHealthCheck("/health/live")
     .WaitFor(gateway);
 
 builder.Build().Run();
+
+IResourceBuilder<ParameterResource> ClientSecret(string name) => builder.AddParameter(
+    name, new GenerateParameterDefault { MinLength = 32, Special = false }, secret: true, persist: true);
