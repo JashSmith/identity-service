@@ -105,6 +105,9 @@ builder.Services.AddSingleton<IScopedAccessStore>(sp =>
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();
 builder.Services.AddSingleton<IUserProvisioningService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>();
+builder.Services.AddSingleton<Identity.Application.Settings.IAuthSettingsService>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>();
 builder.Services.AddSingleton<Identity.Application.Schedules.IAccessScheduleStore>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>());
@@ -225,6 +228,7 @@ app.MapUsers();
 app.MapUserManagement();
 app.MapUserLifecycle();
 app.MapSchedules();
+app.MapSettings();
 app.MapBusinessRoles();
 app.MapScopeAdmin();
 app.MapAccessContext();

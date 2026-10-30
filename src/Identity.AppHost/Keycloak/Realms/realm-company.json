@@ -323,5 +323,6 @@
     "fa",
     "en"
   ],
-  "defaultLocale": "fa"
+  "defaultLocale": "fa",
+  "loginTheme": "avash"
 }

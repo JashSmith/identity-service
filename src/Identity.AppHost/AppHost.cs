@@ -36,6 +36,8 @@ var gatewayAdminClientSecret = ClientSecret("gateway-admin-client-secret");
 var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin, keycloakAdminPassword)
     .WithImageTag(KeycloakImageTag)
     .WithRealmImport("./Keycloak/Realms")
+    // Custom themes (e.g. "avash": Persian RTL login); Keycloak's built-in themes live in its jars, not in this folder.
+    .WithBindMount("./Keycloak/Themes", "/opt/keycloak/themes", isReadOnly: true)
     .WithEnvironment("KC_DB", "postgres")
     .WithEnvironment("KC_DB_URL", ReferenceExpression.Create(
         $"jdbc:postgresql://{postgres.Resource.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}/{keycloakDb.Resource.DatabaseName}"))
