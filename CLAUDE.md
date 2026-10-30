@@ -47,14 +47,17 @@ Delegated admins may only manage users inside their own scope and grant only wha
 ## Layout
 | Path | Purpose |
 |---|---|
-| `src/Identity.AppHost` | Aspire AppHost: PostgreSQL, Keycloak (realm import from `Keycloak/Realms`), Redis, gateway, sample |
+| `src/Identity.AppHost` | Aspire AppHost: PostgreSQL, Keycloak (realms `company` + demo tenant `acme` from `Keycloak/Realms`, Persian `avash` login theme from `Keycloak/Themes`), Redis, gateway, console, sample |
 | `src/Identity.ServiceDefaults` | OpenTelemetry, health, service discovery, resilience (no retries for unsafe methods) |
-| `src/Identity.Gateway` | Host: minimal API endpoints, legacy vanilla-JS dashboard in `wwwroot` (to be replaced) |
+| `src/Identity.Gateway` | Host: minimal API endpoints, error model, tenancy (`Tenancy/`), Keycloak bootstrap (`Bootstrap/`) |
+| `src/Identity.Admin` | Persian RTL admin console (Radzen Blazor, interactive server, OIDC code + PKCE per tenant) |
 | `src/Identity.Application` / `Identity.Domain` / `Identity.Contracts` | Use cases, domain, DTOs |
 | `src/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
 | `src/Avash.Identity.*` | Consumer packages |
 | `samples/OrderService.Sample` | Sample consumer service |
-| `scripts/smoke-test.sh` | End-to-end business-flow smoke test against a running stack |
+| `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |
+| `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`) |
+| `docs/` | Persian docs: architecture + Keycloak ERD, run guide, API summary |
 
 ## Commands
 ```bash
@@ -62,6 +65,7 @@ dotnet build IdentityService.slnx            # TreatWarningsAsErrors is on
 dotnet test IdentityService.slnx
 dotnet run --project src/Identity.AppHost --launch-profile http   # whole stack + Aspire dashboard
 bash scripts/smoke-test.sh                   # needs the stack running
+IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests   # starts its own stack; dev stack must be stopped
 ```
 Use the `run-stack` skill to start, verify and stop the stack correctly.
 
@@ -94,28 +98,29 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
   owner the compare link, or ask them to run `gh auth login`. GitHub's default base is `master`;
   PRs must target `develop`.
 - After stashing/unstashing source files, rebuild with `--no-incremental`; otherwise tests can run
-  against stale binaries.
+  against stale binaries. The same after deleting a `wwwroot` (stale static-web-assets manifest crashes startup).
+- `dotnet test` does not rebuild the AppHost; run `dotnet build IdentityService.slnx` before starting the stack.
+- Keycloak imports a realm only when it does not exist yet: a realm imported with missing secrets must be
+  deleted (master admin) and the stack restarted.
+- Tenant realms define their own client scopes, so Keycloak's built-in `profile`/`basic` scopes do not exist;
+  clients carry their own `sub`/`preferred_username` mappers.
 
-## Known open issues (found during phase 2, not yet fixed)
-- Permission registration from services fails with 403: the `order-service` service-account token
-  carries no `permissions` claim, so it cannot pass `identity.permissions.register` (phase 4).
-- The permission catalog (`GET /api/identity/permissions`) is in-memory and empty after a restart
-  (phase 4).
-- `/api/system/database-info` reports the Keycloak database as unreachable under Aspire (phase 3).
-- The developer exception page echoes request headers, including bearer tokens (Development only).
-- Super-admin permissions exist twice (realm roles and identity-gateway client roles) (phase 3/4).
+## Known open issues
+- Weekly schedules are not enforced on Keycloak's own login page (only gateway login/refresh and
+  consumers); a Keycloak authenticator SPI is a follow-up.
+- Realm provisioning for a new tenant is manual (see `docs/running.md`).
+- The console keeps tokens in server memory: a console restart signs administrators out.
 
 ## Roadmap
 1. Foundation: cleanup, rename, Aspire, agent knowledge (done)
-2. Security hotfixes: login-proxy secret injection, `super-admins` escalation, scope bypass via
-   `PUT /users`, anonymous diagnostics, bearer token logging, `realm-admin` bypass (done, in review)
-3. Keycloak core: one tenant-aware admin client with a cached service-account token, Result +
-   ProblemDetails error model, no swallowed errors
-4. Applications and permissions (new format, persistent sync v2)
-5. Roles and scopes (required scope keys, value hierarchy, delegated admin)
-6. Users (full lifecycle)
-7. Weekly schedules (attributes, API, consumer enforcement, login SPI)
-8. Auth settings (flows, OTP/MFA, LDAP/AD, IdPs, per-app login theme)
-9. Multi-tenancy (realm provisioning, tenant routing)
-10. E2E tests with `Aspire.Hosting.Testing`
-11. Documentation (README, architecture, ERD of the Keycloak model, run guide)
+2. Security hotfixes (done)
+3. Keycloak core: tenant-aware admin client, Result + ProblemDetails error model (done)
+4. Applications and permissions: `App:Module:Resource:Action`, persistent catalog and sync (done)
+5. Roles and scopes: required scope keys, value hierarchy and catalog, delegated admin (done)
+6. Users: lockout, credentials/OTP reset, required actions, delegated visibility (done)
+7. Weekly schedules: attributes, API, gateway login/refresh and consumer enforcement (done; login SPI open)
+8. Auth settings: tokens, password policy, brute force, OTP/MFA, IdPs, LDAP/AD, Persian login theme (done)
+9. Multi-tenancy: realm per tenant, tenant header, per-issuer token validation (done; provisioning manual)
+10. Radzen admin console and E2E tests with `Aspire.Hosting.Testing` (done)
+11. Documentation in Persian (done)
+12. Next: SMS login (when the owner asks), Keycloak schedule SPI, automated realm provisioning

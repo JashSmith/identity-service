@@ -29,7 +29,7 @@ public interface IUserProfileRequirements
     /// </summary>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A collection of required attribute names.</returns>
-    Task<IReadOnlyCollection<string>> GetRequiredAttributesAsync(CancellationToken ct);
+    Task<Result<IReadOnlyCollection<string>>> GetRequiredAttributesAsync(CancellationToken ct);
 }
 
 /// <summary>

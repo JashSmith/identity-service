@@ -1,0 +1,16 @@
+/* Persian (RTL) Markdown preview: each block picks its direction from its first strong letter, like GitLab. */
+body p, body h1, body h2, body h3, body h4, body h5, body h6,
+body li, body blockquote, body td, body th {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+body li {
+  list-style-position: inside;
+}
+
+body pre, body code {
+  direction: ltr;
+  unicode-bidi: embed;
+  text-align: left;
+}

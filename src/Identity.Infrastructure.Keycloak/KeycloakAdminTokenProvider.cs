@@ -19,21 +19,25 @@ public sealed class KeycloakAdminTokenProvider(
     TimeProvider? time = null,
     ILogger<KeycloakAdminTokenProvider>? logger = null)
 {
-    private readonly KeycloakOptions _o = opts.Value;
+    private readonly KeycloakOptions _default = opts.Value;
+
+    /// <summary>The current tenant's realm and service account (see <see cref="KeycloakTenant"/>).</summary>
+    private KeycloakOptions Current => KeycloakTenant.Resolve(_default);
     private readonly KeycloakAdminTokenCache _cache = cache ?? new KeycloakAdminTokenCache();
     private readonly TimeProvider _time = time ?? TimeProvider.System;
 
     public async Task<string> GetTokenAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(_o.AdminClientId) || string.IsNullOrWhiteSpace(_o.AdminClientSecret))
+        if (string.IsNullOrWhiteSpace(Current.AdminClientId) || string.IsNullOrWhiteSpace(Current.AdminClientSecret))
         {
             logger?.LogError(
                 "Keycloak admin client is not configured; set Identity:KeycloakAdmin:AdminClientId and AdminClientSecret.");
             return string.Empty;
         }
 
-        var key = $"{_o.BaseUrl.TrimEnd('/')}|{_o.Realm}|{_o.AdminClientId}";
-        return await _cache.GetOrRefreshAsync(key, _time, RequestTokenAsync, ct);
+        var key = $"{Current.BaseUrl.TrimEnd('/')}|{Current.Realm}|{Current.AdminClientId}";
+        var tenant = Current;
+        return await _cache.GetOrRefreshAsync(key, _time, token => RequestTokenAsync(tenant, token), ct);
     }
 
     /// <summary>Like <see cref="GetTokenAsync"/>, but reports a missing token as an error.</summary>
@@ -43,14 +47,14 @@ public sealed class KeycloakAdminTokenProvider(
         return string.IsNullOrEmpty(token) ? KeycloakErrors.AdminTokenUnavailable : token;
     }
 
-    private async Task<AdminToken?> RequestTokenAsync(CancellationToken ct)
+    private async Task<AdminToken?> RequestTokenAsync(KeycloakOptions tenant, CancellationToken ct)
     {
-        var url = $"{_o.BaseUrl.TrimEnd('/')}/realms/{Uri.EscapeDataString(_o.Realm)}/protocol/openid-connect/token";
+        var url = $"{tenant.BaseUrl.TrimEnd('/')}/realms/{Uri.EscapeDataString(tenant.Realm)}/protocol/openid-connect/token";
         using var form = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["grant_type"] = "client_credentials",
-            ["client_id"] = _o.AdminClientId,
-            ["client_secret"] = _o.AdminClientSecret,
+            ["client_id"] = tenant.AdminClientId,
+            ["client_secret"] = tenant.AdminClientSecret,
         });
 
         try
@@ -59,7 +63,7 @@ public sealed class KeycloakAdminTokenProvider(
             if (!res.IsSuccessStatusCode)
             {
                 logger?.LogError("Keycloak admin token request for realm {Realm} failed with status {Status}",
-                    _o.Realm, (int)res.StatusCode);
+                    tenant.Realm, (int)res.StatusCode);
                 return null;
             }
 
@@ -74,12 +78,12 @@ public sealed class KeycloakAdminTokenProvider(
         }
         catch (HttpRequestException ex)
         {
-            logger?.LogError(ex, "Keycloak admin token request for realm {Realm} could not reach Keycloak", _o.Realm);
+            logger?.LogError(ex, "Keycloak admin token request for realm {Realm} could not reach Keycloak", tenant.Realm);
             return null;
         }
         catch (JsonException ex)
         {
-            logger?.LogError(ex, "Keycloak admin token response for realm {Realm} was not valid JSON", _o.Realm);
+            logger?.LogError(ex, "Keycloak admin token response for realm {Realm} was not valid JSON", tenant.Realm);
             return null;
         }
     }

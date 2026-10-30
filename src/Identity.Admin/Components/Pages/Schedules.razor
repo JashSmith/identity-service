@@ -1,0 +1,51 @@
+@page "/schedules"
+@inherits ConsolePage
+
+<PageTitle>برنامه زمانی | کنسول مدیریت هویت</PageTitle>
+
+<RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1">برنامه زمانی دسترسی</RadzenText>
+
+<RadzenCard Variant="Variant.Outlined" class="rz-mb-4">
+    <RadzenText TextStyle="TextStyle.Subtitle1">ترتیب اولویت</RadzenText>
+    <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0">
+        ۱. برنامه اختصاصی کاربر (مثلاً «بدون محدودیت» برای دورکاران) ← ۲. برنامه دسترسی ← ۳. برنامه نقش ← ۴. برنامه پیش‌فرض سازمان (همین صفحه).
+        کاربری که چند نقش دارد در هر بازه‌ای که یکی از نقش‌هایش مجاز باشد می‌تواند کار کند. ورود و تمدید توکن خارج از برنامه رد می‌شود.
+    </RadzenText>
+    <RadzenText TextStyle="TextStyle.Caption">برنامه نقش‌ها در صفحه هر نقش، برنامه دسترسی‌ها در صفحه دسترسی‌های هر اپلیکیشن و برنامه کاربر در صفحه کاربر تنظیم می‌شود.</RadzenText>
+</RadzenCard>
+
+<RadzenCard>
+    <RadzenText TextStyle="TextStyle.Subtitle1">برنامه پیش‌فرض سازمان</RadzenText>
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-mb-2">
+        <RadzenSwitch @bind-Value="hasSchedule" Disabled="@(!canManage)" /> <RadzenText class="rz-m-0">محدودیت زمانی پیش‌فرض دارد</RadzenText>
+    </RadzenStack>
+    @if (hasSchedule)
+    {
+        <ScheduleEditor @ref="editor" Value="@schedule" ReadOnly="@(!canManage)" />
+    }
+    @if (canManage)
+    {
+        <RadzenButton Text="ذخیره" Icon="save" class="rz-mt-4" IsBusy="@Busy" Click="@SaveAsync" />
+    }
+</RadzenCard>
+
+@code {
+    private const string Path = "api/identity/schedules/realm";
+    private WeeklyScheduleDto? schedule;
+    private bool hasSchedule, canManage;
+    private ScheduleEditor? editor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.SchedulesManage);
+        await RunAsync(async () =>
+        {
+            schedule = (await Api.GetAsync<ScheduleSettingDto>(Path)).Value;
+            hasSchedule = schedule is not null;
+        });
+    }
+
+    private Task SaveAsync() => hasSchedule && editor is not null
+        ? RunAsync(() => Api.SendAsync(HttpMethod.Put, Path, editor.Current), "برنامه پیش‌فرض ذخیره شد")
+        : RunAsync(() => Api.SendAsync(HttpMethod.Delete, Path), "محدودیت زمانی پیش‌فرض برداشته شد");
+}

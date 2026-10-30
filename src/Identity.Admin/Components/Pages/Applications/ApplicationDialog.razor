@@ -1,0 +1,64 @@
+@inherits ConsolePage
+
+<RadzenStack Gap="1rem">
+    @if (Application is null)
+    {
+        <RadzenFormField Text="شناسه (حروف کوچک لاتین، مثل order-service)" Style="width: 100%;"><RadzenTextBox @bind-Value="clientId" Style="direction: ltr;" /></RadzenFormField>
+        <RadzenFormField Text="نوع" Style="width: 100%;">
+            <RadzenDropDown TValue="string" Data="@Kinds" TextProperty="Text" ValueProperty="Value" @bind-Value="kind" />
+        </RadzenFormField>
+    }
+    <RadzenFormField Text="نام نمایشی" Style="width: 100%;"><RadzenTextBox @bind-Value="displayName" /></RadzenFormField>
+    <RadzenFormField Text="توضیح" Style="width: 100%;"><RadzenTextArea @bind-Value="description" Rows="2" /></RadzenFormField>
+    <RadzenFormField Text="آدرس‌های بازگشت پس از ورود (هر خط یک آدرس)" Style="width: 100%;">
+        <RadzenTextArea @bind-Value="redirectUris" Rows="3" Style="direction: ltr;" />
+    </RadzenFormField>
+    <RadzenFormField Text="قالب صفحه ورود (خالی یعنی قالب سازمان)" Style="width: 100%;"><RadzenTextBox @bind-Value="loginTheme" Style="direction: ltr;" /></RadzenFormField>
+    @if (Application is not null)
+    {
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+            <RadzenSwitch @bind-Value="enabled" /> <RadzenText class="rz-m-0">فعال</RadzenText>
+        </RadzenStack>
+    }
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
+        <RadzenButton Text="انصراف" ButtonStyle="ButtonStyle.Light" Click="@(() => Dialogs.Close())" />
+        <RadzenButton Text="ذخیره" Icon="check" IsBusy="@Busy" Click="@SaveAsync" />
+    </RadzenStack>
+</RadzenStack>
+
+@code {
+    [Parameter] public ApplicationDto? Application { get; set; }
+
+    private static readonly object[] Kinds = [new { Text = "سرویس (بدون ورود کاربر)", Value = "service" }, new { Text = "وب (ورود کاربر)", Value = "web" }];
+
+    private string? clientId, displayName, description, redirectUris, loginTheme;
+    private string kind = "service";
+    private bool enabled = true;
+
+    protected override void OnInitialized()
+    {
+        if (Application is null) return;
+        displayName = Application.DisplayName;
+        description = Application.Description;
+        redirectUris = string.Join(Environment.NewLine, Application.RedirectUris);
+        loginTheme = Application.LoginTheme;
+        enabled = Application.Enabled;
+    }
+
+    private string[] RedirectList => (redirectUris ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private async Task SaveAsync()
+    {
+        if (Application is null)
+        {
+            ApplicationSecretResponse? created = null;
+            if (await RunAsync(async () => created = await Api.SendAsync<ApplicationSecretResponse>(HttpMethod.Post, "api/identity/applications",
+                    new CreateApplicationRequest(clientId ?? "", displayName ?? "", description, kind, RedirectList, loginTheme)), "اپلیکیشن ایجاد شد"))
+                Dialogs.Close(created);
+            return;
+        }
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Put, $"api/identity/applications/{Uri.EscapeDataString(Application.ClientId)}",
+                new UpdateApplicationRequest(displayName, description ?? "", enabled, RedirectList, loginTheme ?? "")), "اپلیکیشن ذخیره شد"))
+            Dialogs.Close(true);
+    }
+}

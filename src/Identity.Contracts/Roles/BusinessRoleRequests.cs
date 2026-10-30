@@ -9,7 +9,9 @@ namespace Identity.Contracts;
 public sealed record CreateBusinessRoleRequest(
     string Name,
     string? Description,
-    IReadOnlyCollection<string>? Permissions);
+    IReadOnlyCollection<string>? Permissions,
+    IReadOnlyCollection<string>? RequiredScopes = null,
+    IReadOnlyCollection<string>? AllowedScopes = null);
 
 /// <summary>
 /// Request payload to update an existing business role.
@@ -18,7 +20,9 @@ public sealed record CreateBusinessRoleRequest(
 /// <param name="Permissions">Optional updated collection of permission names to assign to this role.</param>
 public sealed record UpdateBusinessRoleRequest(
     string? Description,
-    IReadOnlyCollection<string>? Permissions = null);
+    IReadOnlyCollection<string>? Permissions = null,
+    IReadOnlyCollection<string>? RequiredScopes = null,
+    IReadOnlyCollection<string>? AllowedScopes = null);
 
 /// <summary>
 /// Request payload to assign permissions to a business role.

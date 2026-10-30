@@ -1,210 +1,110 @@
-# Running the Identity Platform with the order-service Sample
+# راهنمای اجرا
 
-Step-by-step operator guide: bring the full stack up on a server, watch it come healthy,
-log in, and call both APIs. Everything below is verified against the committed code.
+این راهنما اجرای کامل سامانه روی سیستم توسعه، بررسی سلامت، تست‌ها و افزودن سازمان جدید را توضیح می‌دهد.
 
-## What `docker compose up` starts
+- [پیش‌نیازها](#پیشنیازها)
+- [اجرا](#اجرا)
+- [بررسی سلامت](#بررسی-سلامت)
+- [اولین ورود](#اولین-ورود)
+- [تست‌ها](#تستها)
+- [توقف](#توقف)
+- [افزودن سازمان جدید](#افزودن-سازمان-جدید)
+- [عیب‌یابی](#عیبیابی)
 
-| Service | Image | Purpose |
-| --- | --- | --- |
-| `keycloak-db` | `gvenzl/oracle-xe:21-slim` | Oracle 21 XE — Keycloak's user/realm database |
-| `identity-meta-db` | `gvenzl/oracle-xe:21-slim` | Oracle 21 XE — gateway key-metadata DB (signing keys, rotation ops) |
-| `keycloak` | custom (Keycloak 26.4 + ojdbc11 21.9) | Identity Provider — users, credentials, sessions, token issuance, signing keys |
-| `identity-gateway` | `deploy/Identity.Gateway.Dockerfile` | Identity Gateway — auth proxy, directory, permissions, key lifecycle, Scalar |
-| `order-service` | `deploy/OrderService.Sample.Dockerfile` | Sample consumer — 10 `[RequirePermission]` endpoints, registers at startup |
-| `vault` | `hashicorp/vault:1.20` | Signing-key material source of truth |
-| `redis` | `redis:7-alpine` | Key rotation lock |
+## پیش‌نیازها
 
-## 1. Prerequisites
+- ‏.NET 10 SDK
+- ‏Docker Desktop در حال اجرا
+- آزاد بودن پورت‌های `18080` (Keycloak)، ‏`5080` (درگاه)، ‏`5081` (سرویس نمونه) و `5090` (کنسول)
 
-- Docker Engine + compose plugin
-- 4 GB free RAM (two Oracle XE instances are the bulk of it)
-- Host ports **5080, 8080, 5180, 8200, 1521** free — or override with
-  `GATEWAY_HTTP_PORT`, `KEYCLOAK_HTTP_PORT`, `ORDER_HTTP_PORT` (Oracle ports fixed at 1521; the two
-  DBs share it on different service names, reachable only inside the compose network except 1521)
+پورت 8080 روی سیستم مالک پروژه در اختیار Apache است؛ به همین دلیل Keycloak روی 18080 و با گواهی توسعه HTTPS اجرا می‌شود.
 
-## 2. Start the stack
+## اجرا
 
 ```bash
-cd deploy
-docker compose up --build -d
-docker compose ps
+dotnet build IdentityService.slnx
+dotnet run --project src/Identity.AppHost --launch-profile http
 ```
 
-Wait for all seven services to show `healthy` (Oracle takes 1–2 min on first boot):
+‏Aspire این منابع را بالا می‌آورد:
+
+| منبع | توضیح |
+|---|---|
+| ‏`postgres` | پایگاه داده Keycloak؛ ظرف ماندگار است و با توقف Stack پاک نمی‌شود |
+| ‏`keycloak` | ‏Import دو Realm نمونه (`company` و `acme`) و تم فارسی `avash` |
+| ‏`redis` | ‏Cache |
+| ‏`identity-gateway` | درگاه هویت |
+| ‏`identity-admin` | کنسول مدیریت |
+| ‏`order-service` | سرویس نمونه که دسترسی‌هایش را ثبت می‌کند |
+
+رمزهای Clientها و رمز مدیر Keycloak به‌صورت پارامتر Aspire ساخته و در User Secrets پروژه AppHost نگه داشته می‌شوند و در مخزن ذخیره نمی‌شوند.
+
+## بررسی سلامت
 
 ```bash
-watch docker compose ps
+curl http://localhost:5080/health        # Healthy پس از پایان Bootstrap کلیدکول برای همه سازمان‌ها
+curl http://localhost:5090/alive         # کنسول
 ```
 
-Startup order is enforced by healthchecks:
-`keycloak-db` / `identity-meta-db` → `keycloak` → `identity-gateway` → `order-service`.
+اولین اجرا به خاطر دریافت Imageها چند دقیقه طول می‌کشد و اجراهای بعدی حدود ۱۵ ثانیه.
 
-## 3. Verify health
+## اولین ورود
+
+1. ‏`http://localhost:5090` را باز کنید و سازمان «شرکت» را انتخاب کنید.
+2. در صفحه ورود فارسی با `admin` و رمز `admin` وارد شوید. این کاربر فقط برای محیط توسعه است.
+3. از بخش «نقش‌ها» یک نقش بسازید و از بخش «کاربران» کاربری با آن نقش و محدوده دلخواه ایجاد کنید.
+
+ورود مستقیم از طریق API:
 
 ```bash
-curl -fsS http://localhost:5080/health/live          # gateway
-curl -fsS http://localhost:8080/health/ready -o /dev/null -w "%{http_code}\n"   # keycloak (host)
-curl -fsS http://localhost:5180/health/live          # order-service sample
+curl -X POST http://localhost:5080/api/identity/auth/login \
+  -H "X-Tenant-Id: company" \
+  -d "grant_type=password&username=admin&password=admin"
 ```
 
-`200` everywhere = good. If Keycloak reports unhealthy, check
-`docker compose logs keycloak | tail -50` — the most common cause is the realm import (below).
-
-## 4. Log in and get a token — through the gateway only
-
-All tokens are genuine Keycloak-issued JWTs, obtained through the gateway's login proxy
-(the gateway never mints tokens; it forwards the grant as received):
+## تست‌ها
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:5080/api/identity/auth/login \
-  -d "grant_type=password&client_id=identity-gateway&client_secret=gateway-development-only&username=admin&password=admin" \
-  | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
-echo "$TOKEN" | cut -c1-40   # peek, never log the whole token
+dotnet test IdentityService.slnx                       # بدون نیاز به Stack
+bash scripts/smoke-test.sh                             # روی Stack در حال اجرا
+IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests    # Stack را خودش بالا می‌آورد؛ Stack توسعه باید خاموش باشد
 ```
 
-Machine clients use the same endpoint with a client-credentials grant:
+## توقف
+
+با `Ctrl+C` در پنجره AppHost همه منابع متوقف می‌شوند. اگر پردازه AppHost را مستقیم ببندید، ظرف‌های `keycloak-*` و `redis-*` باقی می‌مانند و باید حذفشان کنید:
 
 ```bash
-curl -s -X POST http://localhost:5080/api/identity/auth/login \
-  -d "grant_type=client_credentials&client_id=order-service&client_secret=order-service-development-only"
+docker ps --format '{{.Names}}' | grep -E '^(keycloak|redis)-' | xargs -r docker rm -f
 ```
 
-## 5. Call the Identity Gateway (Scalar at /scalar)
+ظرف `postgres-*` عمداً ماندگار است.
 
-Open **http://localhost:5080/scalar** — 39 endpoints across Auth / Users / Roles / Permissions / Business Roles / Scoped Access / Access / Keys (Admin). Click **Authenticate → Bearer**, paste `$TOKEN`, and "Try it":
+## افزودن سازمان جدید
 
-```bash
-curl -s http://localhost:5080/api/identity/me -H "Authorization: Bearer $TOKEN"
-curl -s "http://localhost:5080/api/identity/users?page=1&pageSize=5" -H "Authorization: Bearer $TOKEN"
-curl -s "http://localhost:5080/api/identity/roles?page=1&pageSize=10" -H "Authorization: Bearer $TOKEN"
-curl -s "http://localhost:5080/api/identity/permissions?serviceId=order-service" -H "Authorization: Bearer $TOKEN"
-```
+هر سازمان یک Realm است و ساخت خودکار Realm هنوز پیاده‌سازی نشده است. مراحل:
 
-`/me` returns the caller's id/username/roles/permissions. The `admin` user carries all
-`Identity.*` permissions; other users get only what their realm roles map into the
-`permissions` claim.
+1. ‏Realm را با فایل Import یا با کنسول مدیریت Keycloak بسازید. فایل `src/Identity.AppHost/Keycloak/Realms/realm-acme.json` الگوی کاملی است: کلاینت‌های `identity-gateway-admin` (Service Account با نقش‌های realm-management) و `identity-gateway`، گروه‌های `super-admins` و `iam-scope-registry`، و Client Scopeهای `iam-access`، ‏`authz-scopes` و `iam-permissions`.
+2. سازمان را در تنظیمات درگاه اضافه کنید؛ رمزها را از پیکربندی امن بدهید، نه در فایل:
 
-## 6. Watch the sample register its permissions
+   ```text
+   Identity__Tenants__1__Id=branch-north
+   Identity__Tenants__1__DisplayName=شعبه شمال
+   Identity__Tenants__1__Realm=branch-north
+   Identity__Tenants__1__AdminClientSecret=<secret>
+   Identity__Tenants__1__ClientSecret=<secret>
+   ```
 
-On first start, `order-service` discovers its ten `[RequirePermission]` actions and pushes a
-manifest to the gateway, which mirrors them as Keycloak realm roles
-(`Orders.View`, `Orders.Create`, … `Orders.Reports.Export`):
+3. سازمان را در تنظیمات کنسول (`Console__Tenants__N__*`) اضافه کنید.
+4. درگاه را دوباره اجرا کنید. ‏Bootstrap برای Realm جدید رجیستری محدوده، Mapperها، گروه `super-admins`، دسترسی‌های درگاه و کلاینت کنسول را می‌سازد.
 
-```bash
-docker compose logs order-service | grep -i registered
-# expect: Permission manifest registered for order-service v1.0.0 (10 permissions, attempt 1)
+## عیب‌یابی
 
-curl -s "http://localhost:5080/api/identity/permissions?serviceId=order-service" \
-  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
-```
-
-Registration is retried with exponential backoff and never blocks the sample's startup.
-
-## 7. Call the sample service (Scalar at /scalar on 5180)
-
-The sample never contacts Keycloak: it validates tokens against the gateway's
-`/.well-known/openid-configuration` + `/api/identity/oidc/jwks` proxy
-(`AcceptIssuerFromDiscovery`). A token is honored if it carries the required
-`Orders.*` permission claim.
-
-Grant `admin` the `Orders.View` role once (Keycloak Admin Console → company realm →
-Users → admin → Role mapping → add `Orders.View`), or via Admin REST, then:
-
-```bash
-curl -s http://localhost:5180/api/orders -H "Authorization: Bearer $TOKEN"
-# [{"id":"ord-1","customerUsername":"admin","total":120.50,"status":"open"}, ...]
-```
-
-Without the permission the call returns 403; without a token, 401.
-Browse **http://localhost:5180/scalar** for all ten guarded endpoints.
-
-### Business roles & scoped access
-
-> The full target flow below (login → create role → assign permissions → create scoped
-> user → verify token claims) is scripted end-to-end in **`deploy/smoke-test.sh`** — run
-> it after `docker compose up` to verify everything at once.
-
-```bash
-# Create a composite business role (permissions are client roles registered by order-service)
-curl -s -X POST http://localhost:5080/api/identity/business-roles \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"name":"RegionalManager","permissions":["Orders.View","Orders.Create"]}' | python3 -m json.tool
-
-# Create a user with scoped assignment (region/branch are arbitrary keys)
-curl -s -X POST http://localhost:5080/api/identity/users \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"username":"alice","email":"alice@example.com","enabled":true,"credentials":{"password":"Secret123!","temporary":false},"assignments":[{"role":"RegionalManager","scopes":{"region":["tehran-1"]}}]}' | python3 -m json.tool
-
-# Read back effective authorization (authoritative) — also available as flat JWT claims authz.scope.<key>
-curl -s http://localhost:5080/api/identity/access-context -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
-# Inspect the token itself (flat per-scope claims, plus legacy iam_access kept during migration)
-echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool | grep -E "authz\.scope|iam_access|permissions"
-
-# Add a new scope value without touching DTOs — arbitrary keys via the registry (backed by Keycloak group /iam-scope-registry)
-curl -s http://localhost:5080/api/identity/scopes -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
-# Assign test-key to a user: both scalar and array forms normalize ("test-key": "items-1"  ==  "test-key": ["items-1"])
-curl -s -X PUT http://localhost:5080/api/identity/users/<userId>/scoped-access \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"assignments":[{"role":"RegionalManager","scopes":{"test-key":"items-1"}}]}' | python3 -m json.tool
-# Re-login (or refresh) — new JWT now carries "authz.scope.test-key": ["items-1"] via the authz-scopes clientScope
-
-# New service permission appears on Admin without re-login / without Keycloak console:
-# after the service registers its manifest, reconcile any missing mappings:
-curl -s -X POST http://localhost:5080/api/identity/permissions/reconcile-admin -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
-# then POST /api/identity/auth/refresh with the refresh_token — new access token already has the permission
-```
-
-Consumer services read scopes via `ICurrentAccessContext.GetScopeValues("region")` / `HasPermission(..., "region", value)` — see `samples/OrderService.Sample/Program.cs` (`/api/orders/scoped`, `/api/orders/{id}/scoped-check`). `EnsureLoadedAsync()` resolves via the gateway when the claim was omitted for size. The scope system is **Keycloak-attribute-driven** (`authz.scope.<key>` multivalued on user/group + registry group `/iam-scope-registry` holding `scope.<key>`/`resource.<name>`); it accepts both `"test-key": "items-1"` (scalar, normalized by `ScopeDictionaryConverter`) and `"test-key": ["items-1"]`; unknown/inactive/disallowed scopes return `400 ValidationProblem` with `assignments[0].scopes.<key>` errors. Filtering in consumers uses `ScopeFilterService.ApplyAsync` (see `samples/OrderService.Sample/ScopeFilters.cs`) — deny-by-default, per-`IScopeFilterHandler` (no raw SQL), resource isolation enforced (e.g. `test-key` only on `ResourceA`). The declarative User Profile hardens `authz.scope.*` to `admin`-only (`PUT /admin/realms/{realm}/users/profile`).
-
-## 8. What lives where (config ownership)
-
-- **Identity Gateway config** (`src/Identity.Gateway/appsettings.json` + compose env):
-  `Identity:Keycloak:BaseUrl`, `Identity:KeycloakAdmin:*`, `Identity:Authority`.
-  This is the ONLY place that knows Keycloak's address.
-- **Sample/consumer config** (`samples/OrderService.Sample/appsettings.json`):
-  only `Identity:Authority` (points at the gateway), `Identity:Audience`,
-  `PermissionRegistration:IdentityServer`, `ClientId`, `ClientSecret`.
-  No Keycloak URL, realm, or admin secret anywhere in the consumer.
-- **Realm definition** (`deploy/realm-company.json`): clients `identity-gateway`
-  (secret `gateway-development-only`) and `order-service`
-  (secret `order-service-development-only`), the permission claim mappers
-  (`permissions`/`permission` from realm roles, `aud: identity-gateway`,
-  `sub`, `preferred_username`), realm roles `Identity.*`/`identity.*`, the groups
-  `super-admins` (always-present unrestricted admin — every registered client role is
-  auto-mapped to it, plus the `identity.*` gateway-management permissions), `key-admins`,
-  `iam-scope-registry`, and the `admin` user (member of `super-admins` + `key-admins`).
-
-## 9. Re-importing the realm after changes
-
-`deploy/realm-company.json` is imported once (IGNORE_EXISTING). After editing it:
-
-```bash
-AT=$(curl -s -X POST http://localhost:8080/realms/master/protocol/openid-connect/token \
-  -d "grant_type=password&client_id=admin-cli&username=admin&password=admin-development-only" \
-  | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
-curl -X DELETE http://localhost:8080/admin/realms/company -H "Authorization: Bearer $AT"
-docker compose restart keycloak      # re-imports the realm on boot
-docker compose restart identity-gateway order-service   # clear their cached discovery docs
-```
-
-## 10. Teardown
-
-```bash
-cd deploy
-docker compose down          # keep data volumes
-docker compose down -v       # also wipe Oracle/Redis data
-```
-
-## Troubleshooting
-
-| Symptom | Cause / fix |
-| --- | --- |
-| Keycloak `unhealthy`, no curl errors in log | Fixed healthcheck probes port 9000 via `/dev/tcp`; ensure compose file is current |
-| Vault `unhealthy` | Its healthcheck forces `VAULT_ADDR=http://…` — dev server is plain HTTP |
-| `invalid_grant` on login | Password wrong or brute-force lockout; clear via Admin REST `attack-detection` or re-import realm |
-| `unauthorized_client` on client_credentials | Client secret mismatch; ensure `client.secret.creation.time: "0"` attribute is in the realm JSON so the import keeps the declared secret |
-| Token has no `aud`/`sub`/`permissions` | Realm JSON mappers missing — re-import the realm |
-| 401 from a consumer with a valid token | Consumer cached an old discovery doc — restart it; `jwks_uri` is served relative to the caller's Host |
-| Port already allocated | Override `GATEWAY_HTTP_PORT` / `KEYCLOAK_HTTP_PORT` / `ORDER_HTTP_PORT` |
-| Gateway 401 after realm re-import | Gateway cached the previous realm signing key — `docker compose restart identity-gateway` |
+| نشانه | علت و راه‌حل |
+|---|---|
+| ‏`/health` مدت طولانی Unhealthy است | پیام وضعیت Bootstrap را در پاسخ `/health` یا لاگ درگاه ببینید؛ معمولاً Keycloak هنوز بالا نیامده یا رمز Service Account با Realm یکی نیست. |
+| خطای SSL روی آدرس Keycloak | پورت در اختیار برنامه دیگری است یا گواهی توسعه معتبر نیست (`dotnet dev-certs https --trust`). |
+| ‏`403 tenant.mismatch` | توکن از Realm سازمان دیگری است؛ سرآیند `X-Tenant-Id` را با سازمانی که توکن را صادر کرده یکی کنید. |
+| ‏`403 access.outside_schedule` | کاربر خارج از برنامه زمانی است؛ برنامه مؤثر را در صفحه کاربر در کنسول ببینید. |
+| کنسول پس از راه‌اندازی دوباره به صفحه ورود می‌رود | رفتار طراحی‌شده است: توکن‌ها فقط در حافظه کنسول نگه داشته می‌شوند. |
+| ‏Realm جدید Import نمی‌شود | ‏Keycloak فقط Realmهایی را Import می‌کند که هنوز وجود ندارند؛ برای بازسازی، Realm را حذف و Stack را دوباره اجرا کنید. |

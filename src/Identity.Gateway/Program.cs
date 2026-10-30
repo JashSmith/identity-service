@@ -6,6 +6,7 @@ using Identity.Contracts;
 using FluentValidation;
 using Identity.Gateway.Errors;
 using Scalar.AspNetCore;
+using Identity.Gateway.Bootstrap;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -27,9 +28,15 @@ builder.Services.AddValidatorsFromAssemblyContaining<ProvisioningOrchestrator>(i
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
+// One Keycloak realm per tenant (see Tenancy/Tenancy.cs); tokens of every tenant realm are accepted.
+var tenantRegistry = new Identity.Gateway.Tenancy.TenantRegistry(builder.Configuration);
+builder.Services.AddSingleton(tenantRegistry);
+builder.Services.AddSingleton<ITenantContext, Identity.Gateway.Tenancy.HttpTenantContext>();
 builder.Services.AddAvashAuthentication(options =>
 {
     options.Authority = authority;
+    options.AdditionalAuthorities = tenantRegistry.All.Where(t => !ReferenceEquals(t, tenantRegistry.Default))
+        .Select(tenantRegistry.Issuer).ToArray();
     options.Audience = audience;
     options.RequireHttpsMetadata = bool.TryParse(requireHttpsMetadata, out var result) && result;
 });
@@ -40,7 +47,6 @@ builder.Services.Configure<Identity.Infrastructure.Keycloak.KeycloakOptions>(
     builder.Configuration.GetSection("Identity:KeycloakAdmin"));
 builder.Services.AddSingleton<IAuditSink>(sp => new Identity.Infrastructure.NoopAuditSink());
 builder.Services.AddSingleton<ICacheInvalidationService, Identity.Infrastructure.Redis.RedisCacheInvalidator>();
-builder.Services.AddSingleton<IDatabaseDiagnosticsService, Identity.Infrastructure.Database.DatabaseDiagnosticsService>();
 
 // Directory, user sessions, roles & permissions — Keycloak is source of truth
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>();
@@ -54,19 +60,15 @@ builder.Services.AddSingleton<IRoleDirectory>(sp =>
 // so they reach token claims through the per-client oidc-usermodel-client-role-mapper.
 // Legacy realm-role path kept as fallback for tests / not-yet-migrated callers.
 // Mirroring is best-effort and never blocks registration or startup.
-builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakRoleProvisioner>();
-builder.Services.AddSingleton<IKeycloakRoleProvisioner>(sp =>
-    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakRoleProvisioner>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakClientRoleProvisioner>();
-builder.Services.AddSingleton<IKeycloakClientRoleProvisioner>(sp =>
+builder.Services.AddTransient<IKeycloakClientRoleProvisioner>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakClientRoleProvisioner>());
-builder.Services.AddSingleton<InMemoryPermissionRegistry>();
-builder.Services.AddSingleton<IPermissionRegistry>(sp => new KeycloakSyncingPermissionRegistry(
-    sp.GetRequiredService<InMemoryPermissionRegistry>(),
-    sp.GetRequiredService<IKeycloakRoleProvisioner>(),
-    sp.GetRequiredService<IKeycloakClientRoleProvisioner>(),
-    sp.GetRequiredService<ILogger<KeycloakSyncingPermissionRegistry>>()));
-builder.Services.AddSingleton<PermissionRegistrationService>();
+// Applications and their permission catalog (clients and client roles in Keycloak).
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>();
+builder.Services.AddTransient<Identity.Application.Permissions.IApplicationCatalog>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>());
+builder.Services.AddTransient<Identity.Application.Permissions.IPermissionCatalog>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>());
 
 // Dynamic roles/scope infrastructure
 builder.Services.AddMemoryCache();
@@ -84,8 +86,7 @@ builder.Services
 builder.Services.AddSingleton<Identity.Application.Scope.IScopeValueValidatorRegistry,
     Identity.Application.Scope.ScopeValueValidatorRegistry>();
 builder.Services.AddSingleton<Identity.Application.Scope.ScopeAssignmentValidator>();
-// Primary (Keycloak) scope registry — backed by the dedicated Group iam-scope-registry + authz.* attributes.
-// EF fallbacks kept as secondary registrations (tests / migration window) but not the default resolution.
+// Scope registry backed by the reserved group iam-scope-registry.
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>();
 builder.Services.AddSingleton<Identity.Application.Scope.IScopeDefinitionLookup>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
@@ -109,6 +110,22 @@ builder.Services.AddSingleton<IScopedAccessStore>(sp =>
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();
 builder.Services.AddSingleton<IUserProvisioningService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
+builder.Services.Configure<Identity.Infrastructure.Keycloak.AdminConsoleClientOptions>(
+    builder.Configuration.GetSection("Identity:AdminConsole"));
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminConsoleClient>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>();
+builder.Services.AddSingleton<Identity.Application.Settings.IAuthSettingsService>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>();
+builder.Services.AddSingleton<Identity.Application.Schedules.IAccessScheduleStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>());
+builder.Services.AddSingleton(builder.Configuration.GetSection("Identity:Schedules").Get<Identity.Application.Schedules.AccessScheduleOptions>()
+    ?? new Identity.Application.Schedules.AccessScheduleOptions());
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<Identity.Application.Schedules.AccessScheduleService>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserLifecycleAdapter>();
+builder.Services.AddSingleton<IUserLifecycleService>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserLifecycleAdapter>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>();
 builder.Services.AddSingleton<IUserRoleMapping>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>());
@@ -119,9 +136,15 @@ builder.Services.AddScoped<ProvisioningOrchestrator>(sp =>
         sp.GetRequiredService<IBusinessRoleStore>(),
         sp.GetRequiredService<IUserRoleMapping>(),
         sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>(),
-        sp.GetRequiredService<IUserProfileRequirements>()));
+        sp.GetRequiredService<IUserProfileRequirements>(),
+        sp.GetRequiredService<DelegationGuard>(),
+        sp.GetRequiredService<Identity.Application.Scope.IScopeDefinitionLookup>()));
+builder.Services.AddScoped<ICurrentAdministrator, HttpCurrentAdministrator>();
+builder.Services.AddScoped<DelegationGuard>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
+builder.Services.AddTransient<Identity.Infrastructure.Keycloak.Scope.IScopeAttributeProvisioner,
+    Identity.Infrastructure.Keycloak.Scope.ScopeAttributeProvisioner>();
 // Singleton so the cached required-profile attributes are shared by every endpoint and the
 // orchestrator; AddHttpClient alone would register it transient and defeat the cache.
 builder.Services.AddSingleton<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>(sp =>
@@ -134,10 +157,13 @@ builder.Services.AddSingleton<Identity.Infrastructure.Keycloak.KeycloakUserProfi
         sp.GetRequiredService<ILogger<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>>()));
 builder.Services.AddSingleton<IUserProfileRequirements>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>());
-builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.GatewayPermissionRegistrar>();
+builder.Services.AddTransient<Identity.Infrastructure.Keycloak.GatewayPermissionRegistrar>();
 
 
 builder.Services.AddHealthChecks();
+// Prepares Keycloak (scope registry, claim mappers, gateway permissions, super-admins) with retries;
+// the gateway reports unhealthy until that has succeeded.
+builder.Services.AddKeycloakBootstrap();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi("v1", o =>
@@ -190,9 +216,9 @@ if (app.Environment.IsDevelopment())
 app.MapOpenApi();
 // No HTTPS endpoint exists in Development/compose (plain HTTP on 5080), so a redirect here would 307 every request.
 if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
-app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseMiddleware<Identity.Gateway.Tenancy.TenantResolutionMiddleware>();
 app.UseAuthentication();
+app.UseMiddleware<Identity.Gateway.Tenancy.TenantIssuerMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");
 app.MapOidcProxy();
@@ -208,104 +234,21 @@ app.MapGet("/api/identity/me", (ICurrentUserContext current) =>
 app.MapAuth();
 app.MapUsers();
 app.MapUserManagement();
+app.MapUserLifecycle();
+app.MapSchedules();
+app.MapSettings();
+app.MapGet("/api/identity/tenants", (Identity.Gateway.Tenancy.TenantRegistry tenants) =>
+        Results.Ok(tenants.All.Select(tenants.ToDto).ToArray()))
+    .RequireAuthorization(IamPermissions.SystemRead).WithTags("Tenants").WithName("ListTenants")
+    .Produces<Identity.Gateway.Tenancy.TenantDto[]>(200);
 app.MapBusinessRoles();
 app.MapScopeAdmin();
 app.MapAccessContext();
 app.MapPermissions();
-app.MapGet("/api/system/database-info", async (IDatabaseDiagnosticsService dbService, CancellationToken ct) =>
-    Results.Ok(await dbService.CheckStatusAsync(ct)))
-    .RequireAuthorization(IamPermissions.SystemRead)
-    .WithName("GetDatabaseInfo")
-    .WithTags("System")
-    .Produces<Identity.Contracts.Diagnostics.DatabaseStatusDto>(200);
 app.MapGrpcService<Avash.Identity.Grpc.IdentityGrpcService>();
-// Seed gateway-owned permissions through the existing registry so they are mirrored to Keycloak.
-try
-{
-    using var scope = app.Services.CreateScope();
-    var registrar =
-        scope.ServiceProvider.GetRequiredService<Identity.Infrastructure.Keycloak.GatewayPermissionRegistrar>();
-    var asm = typeof(Program).Assembly;
-    // Use a short timeout for seeding; don't block startup on Keycloak availability.
-    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-    await registrar.RegisterAsync(asm, cts.Token);
-}
-catch
-{
-    /* best-effort */
-}
-
-try
-{
-    using var scopeAdmin = app.Services.CreateScope();
-    var clientProvisioner = scopeAdmin.ServiceProvider
-        .GetRequiredService<IKeycloakClientRoleProvisioner>();
-    using var ctsAdmin = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-    // Super-admin role must ALWAYS exist (CLAUDE.md requirement): ensure group + all permissions.
-    await clientProvisioner.EnsureSuperAdminGroupAsync(ctsAdmin.Token);
-}
-catch
-{
-    /* best-effort */
-}
-
-try
-{
-    using var scope2 = app.Services.CreateScope();
-    var mapper = scope2.ServiceProvider
-        .GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
-    using var cts2 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-    await mapper.EnsureAsync(cts2.Token);
-}
-catch
-{
-    /* best-effort */
-}
-
-try
-{
-    using var scopeReg = app.Services.CreateScope();
-    var registryStore = scopeReg.ServiceProvider
-        .GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>();
-    using var ctsReg = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-    await registryStore.EnsureRegistryAsync(ctsReg.Token);
-}
-catch
-{
-    /* best-effort */
-}
-
-try
-{
-    using var scope4 = app.Services.CreateScope();
-    var scopeMapper = scope4.ServiceProvider
-        .GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
-    using var cts4 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-    await scopeMapper.EnsureAsync(cts4.Token);
-}
-catch
-{
-    /* best-effort */
-}
-
-try
-{
-    using var scope5 = app.Services.CreateScope();
-    var hardening = scope5.ServiceProvider
-        .GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>();
-    using var cts5 = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-    await hardening.EnsureAsync(cts5.Token);
-}
-catch
-{
-    /* best-effort */
-}
-
-app.MapGet("/dashboard", () => Results.Redirect("/"));
-// Unknown API routes answer with a 404 problem instead of the dashboard page.
+// Unknown API routes answer with a 404 problem.
 app.MapFallback("/api/{**path}", () =>
     Error.NotFound("route.not_found", "No API endpoint matches this path.").ToProblem());
-app.MapFallbackToFile("index.html");
 app.Run();
 
 public partial class Program;

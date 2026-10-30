@@ -20,6 +20,9 @@ public interface IUserDirectory
     /// <summary>Realm and client roles mapped directly to the user.</summary>
     Task<Result<IReadOnlyCollection<RoleDto>>> GetUserRolesAsync(string id, CancellationToken ct);
 
+    /// <summary>True when the user is a member of the super-admins group.</summary>
+    Task<Result<bool>> IsSuperAdminAsync(string id, CancellationToken ct);
+
     /// <summary>Effective permissions: direct and group roles with realm and client composites expanded.</summary>
     Task<Result<IReadOnlyCollection<PermissionDto>>> GetUserPermissionsAsync(string id, CancellationToken ct);
 }

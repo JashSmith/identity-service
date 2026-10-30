@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.Json;
 using Identity.Application;
 using Microsoft.Extensions.Logging;
@@ -17,7 +16,7 @@ namespace Identity.Infrastructure.Keycloak;
 /// scope key (<c>authz.scope.&lt;key&gt;</c>, multivalued) plus the legacy <c>iam.scoped_access</c>,
 /// each with <c>view/edit = admin</c> so users cannot self-grant scopes through the Account API.
 /// </para>
-/// Must be re-run whenever a scope is added to the registry. Best-effort; never blocks startup.
+/// Must be re-run whenever a scope is added to the registry; failures are returned, not hidden.
 /// </summary>
 public sealed class KeycloakUserProfileHardening(
     HttpClient http,
@@ -25,8 +24,8 @@ public sealed class KeycloakUserProfileHardening(
     KeycloakAdminTokenProvider tokenProvider,
     ILogger<KeycloakUserProfileHardening> logger) : IUserProfileRequirements
 {
-    private readonly KeycloakOptions _o = opts.Value;
-    private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
+    private const string Resource = "user_profile";
+    private readonly KeycloakAdminApi _api = new(http, opts.Value, tokenProvider, logger);
     private const string ScopeAttrPrefix = "authz.scope.";
     private const string LegacyAttributeName = "iam.scoped_access";
     private static readonly TimeSpan RequirementsCacheTtl = TimeSpan.FromMinutes(5);
@@ -37,27 +36,14 @@ public sealed class KeycloakUserProfileHardening(
     /// Profile attributes Keycloak marks required for the <c>user</c> role (e.g. email,
     /// firstName). Creating a user without them succeeds but locks them out of login.
     /// </summary>
-    public async Task<IReadOnlyCollection<string>> GetRequiredAttributesAsync(CancellationToken ct)
+    public async Task<Result<IReadOnlyCollection<string>>> GetRequiredAttributesAsync(CancellationToken ct)
     {
-        if (DateTimeOffset.UtcNow - _requirementsCachedAt < RequirementsCacheTtl) return _requiredAttributes;
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) return Array.Empty<string>(); // fail-open: do not block user creation
-        try
-        {
-            var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/users/profile");
-            req.Headers.Add("Authorization", $"Bearer {token}");
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return Array.Empty<string>();
-            var root = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct)).RootElement;
-            _requiredAttributes = ExtractRequiredAttributes(root);
-            _requirementsCachedAt = DateTimeOffset.UtcNow;
-            return _requiredAttributes;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not read required profile attributes");
-            return Array.Empty<string>();
-        }
+        if (DateTimeOffset.UtcNow - _requirementsCachedAt < RequirementsCacheTtl) return Result<IReadOnlyCollection<string>>.Success(_requiredAttributes);
+        var profile = await _api.GetAsync("users/profile", Resource, ct);
+        if (!profile.IsSuccess) return profile.Error!;
+        _requiredAttributes = ExtractRequiredAttributes(profile.Value);
+        _requirementsCachedAt = DateTimeOffset.UtcNow;
+        return Result<IReadOnlyCollection<string>>.Success(_requiredAttributes);
     }
 
     /// <summary>
@@ -82,73 +68,31 @@ public sealed class KeycloakUserProfileHardening(
         return result;
     }
 
-    public async Task EnsureAsync(CancellationToken ct)
+    /// <summary>
+    /// Declares <c>authz.scope.&lt;key&gt;</c> for every given registry key (plus the legacy document
+    /// attribute) as admin-only. Without the declaration Keycloak silently drops the attribute on write.
+    /// </summary>
+    public async Task<Result> EnsureAsync(IReadOnlyCollection<string> scopeKeys, CancellationToken ct)
     {
-        var token = await tokenProvider.GetTokenAsync(ct);
-        if (string.IsNullOrEmpty(token)) { logger.LogDebug("Skipping User Profile hardening — token unavailable"); return; }
-        try
-        {
-            var getReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/users/profile");
-            getReq.Headers.Add("Authorization", $"Bearer {token}");
-            var getRes = await http.SendAsync(getReq, ct);
-            if (!getRes.IsSuccessStatusCode) { logger.LogDebug("User Profile GET failed: {Status}", getRes.StatusCode); return; }
-            var root = JsonDocument.Parse(await getRes.Content.ReadAsStringAsync(ct)).RootElement;
+        var profile = await _api.GetAsync("users/profile", Resource, ct);
+        if (!profile.IsSuccess) return profile.Error!;
 
-            var scopeKeys = await ResolveScopeKeysAsync(token, ct);
-            var patched = PatchProfile(root, scopeKeys);
-            if (patched is null) return; // already hardened — avoid churn
+        var patched = PatchProfile(profile.Value, scopeKeys);
+        if (patched is null) return Result.Success(); // already hardened — avoid churn
 
-            var putReq = new HttpRequestMessage(HttpMethod.Put, $"{AdminBase}/{_o.Realm}/users/profile")
-            { Content = JsonContent.Create(JsonDocument.Parse(patched).RootElement) };
-            putReq.Headers.Add("Authorization", $"Bearer {token}");
-            var putRes = await http.SendAsync(putReq, ct);
-            if (!putRes.IsSuccessStatusCode)
-                logger.LogWarning("User Profile PUT failed: {Status} {Body}", putRes.StatusCode, await putRes.Content.ReadAsStringAsync(ct));
-            else
-                logger.LogInformation("Hardened User Profile: {Count} authz.scope.* attributes admin-only", scopeKeys.Count);
-        }
-        catch (Exception ex) { logger.LogWarning(ex, "User Profile hardening failed"); }
-    }
-
-    /// <summary>Scope keys from the iam-scope-registry group, falling back to the well-known defaults.</summary>
-    private async Task<IReadOnlyCollection<string>> ResolveScopeKeysAsync(string token, CancellationToken ct)
-    {
-        var defaults = new[] { "region" };
-        try
-        {
-            var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search=iam-scope-registry");
-            req.Headers.Add("Authorization", $"Bearer {token}");
-            var res = await http.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode) return defaults;
-            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return defaults;
-            foreach (var el in doc.RootElement.EnumerateArray())
-            {
-                if (el.TryGetProperty("name", out var n) && n.GetString() != "iam-scope-registry") continue;
-                var id = el.TryGetProperty("id", out var gid) ? gid.GetString() : null;
-                JsonElement target = el;
-                if (!string.IsNullOrEmpty(id))
-                {
-                    var gReq = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups/{Uri.EscapeDataString(id)}");
-                    gReq.Headers.Add("Authorization", $"Bearer {token}");
-                    var gRes = await http.SendAsync(gReq, ct);
-                    if (gRes.IsSuccessStatusCode) target = JsonDocument.Parse(await gRes.Content.ReadAsStringAsync(ct)).RootElement;
-                }
-                if (!target.TryGetProperty("attributes", out var attrs) || attrs.ValueKind != JsonValueKind.Object) return defaults;
-                var keys = new List<string>();
-                foreach (var p in attrs.EnumerateObject())
-                    if (p.Name.StartsWith("scope.", StringComparison.Ordinal)) keys.Add(p.Name.Substring("scope.".Length));
-                return keys.Count > 0 ? keys : defaults;
-            }
-        }
-        catch (Exception ex) { logger.LogDebug(ex, "Could not resolve scope keys for profile hardening"); }
-        return defaults;
+        using var document = JsonDocument.Parse(patched);
+        var written = await _api.SendWithoutResultAsync(HttpMethod.Put, "users/profile", document.RootElement.Clone(), Resource, ct);
+        if (written.IsSuccess)
+            logger.LogInformation("Declared {Count} admin-only authz.scope.* attributes in the user profile", scopeKeys.Count);
+        return written;
     }
 
     /// <summary>Returns the patched profile JSON, or null when every required attribute already exists.</summary>
     public static string? PatchProfile(JsonElement root, IReadOnlyCollection<string> scopeKeys)
     {
-        var required = scopeKeys.Select(k => ScopeAttrPrefix + k).Append(LegacyAttributeName).ToArray();
+        // access.schedule is a user-level schedule override (see WeeklySchedule); admin-only like the scopes.
+        var required = scopeKeys.Select(k => ScopeAttrPrefix + k).Append(LegacyAttributeName)
+            .Append(Identity.Contracts.WeeklySchedule.AttributeName).ToArray();
 
         var existing = new HashSet<string>(StringComparer.Ordinal);
         if (root.TryGetProperty("attributes", out var attrs) && attrs.ValueKind == JsonValueKind.Array)

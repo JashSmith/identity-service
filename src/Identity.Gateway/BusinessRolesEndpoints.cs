@@ -35,7 +35,8 @@ public static class BusinessRolesEndpoints
         g.MapPost("", async (CreateBusinessRoleRequest req, ProvisioningOrchestrator orch,
                 IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
-                var created = await orch.CreateBusinessRoleAsync(req.Name, req.Description, req.Permissions ?? [], ct);
+                var policy = new RoleScopePolicy(req.RequiredScopes ?? [], req.AllowedScopes ?? []);
+                var created = await orch.CreateBusinessRoleAsync(req.Name, req.Description, req.Permissions ?? [], policy, ct);
                 if (created.IsSuccess) scopeCache.Invalidate();
                 return created.ToHttpResult(role =>
                     Results.Created($"/api/identity/business-roles/{Uri.EscapeDataString(role.Name)}", role));
@@ -45,20 +46,10 @@ public static class BusinessRolesEndpoints
             .WithName("CreateBusinessRole")
             .Produces<BusinessRoleDto>(201).ProducesProblem(400).ProducesProblem(409);
 
-        g.MapPut("/{name}", async (string name, UpdateBusinessRoleRequest req, IBusinessRoleStore store,
+        g.MapPut("/{name}", async (string name, UpdateBusinessRoleRequest req, ProvisioningOrchestrator orch,
                 IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
-                var updated = await store.UpdateAsync(name, req.Description, ct);
-                if (!updated.IsSuccess) return updated.Error!.ToProblem();
-
-                if (req.Permissions is not null)
-                {
-                    var permissions = await store.SetPermissionsAsync(name, req.Permissions, ct);
-                    scopeCache.Invalidate();
-                    if (!permissions.IsSuccess) return permissions.Error!.ToProblem();
-                    updated = await store.GetAsync(name, ct);
-                }
-
+                var updated = await orch.UpdateBusinessRoleAsync(name, req, ct);
                 scopeCache.Invalidate();
                 return updated.ToHttpResult(role => Results.Ok(role));
             })
@@ -79,11 +70,10 @@ public static class BusinessRolesEndpoints
             .Produces(204).ProducesProblem(404).ProducesProblem(409);
 
         g.MapPost("/{name}/permissions", async (string name, AssignPermissionsRequest req, IBusinessRoleStore store,
-                IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
+                ProvisioningOrchestrator orch, IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
-                // Existence is checked against Keycloak itself (the source of truth); the in-memory
-                // registry is empty after a restart until services re-register.
-                var added = await store.AddPermissionsAsync(name, req.Permissions, ct);
+                // Existence is checked against Keycloak itself (the source of truth).
+                var added = await orch.AddRolePermissionsAsync(name, req.Permissions, ct);
                 if (!added.IsSuccess) return added.Error!.ToProblem();
                 scopeCache.Invalidate();
                 return (await store.GetAsync(name, ct)).ToHttpResult(role => Results.Ok(role));

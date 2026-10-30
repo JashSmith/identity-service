@@ -18,4 +18,10 @@ public sealed class IdentityAuthenticationOptions
     /// validates.
     /// </summary>
     public bool AcceptIssuerFromDiscovery { get; set; }
+
+    /// <summary>
+    /// Further token issuers (one Keycloak realm per tenant), e.g. <c>https://kc/realms/acme</c>. Each gets its own
+    /// bearer scheme; a request is validated by the scheme of its token's issuer, strictly against that issuer.
+    /// </summary>
+    public string[] AdditionalAuthorities { get; set; } = [];
 }

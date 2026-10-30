@@ -119,7 +119,7 @@ public sealed class ClaimsPrincipalAccessContext : ICurrentAccessContext
 
         try
         {
-            var doc = System.Text.Json.JsonDocument.Parse(combined);
+            using var doc = System.Text.Json.JsonDocument.Parse(combined);
             if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
                 return System.Text.Json.JsonSerializer.Deserialize<ScopedRoleAssignment[]>(
@@ -132,7 +132,10 @@ public sealed class ClaimsPrincipalAccessContext : ICurrentAccessContext
                     .ToArray() ?? Array.Empty<ScopedRoleAssignment>();
             }
         }
-        catch { }
+        catch (System.Text.Json.JsonException)
+        {
+            // A malformed claim grants nothing: no assignments means no scoped access (deny by default).
+        }
 
         return Array.Empty<ScopedRoleAssignment>();
     }

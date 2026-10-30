@@ -1,0 +1,181 @@
+@page "/roles/new"
+@page "/roles/{Name}"
+@inherits ConsolePage
+
+<PageTitle>@(IsNew ? "نقش جدید" : $"نقش {Name}") | کنسول مدیریت هویت</PageTitle>
+
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
+    <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">@(IsNew ? "نقش جدید" : Name)</RadzenText>
+    <RadzenButton Icon="arrow_forward" Text="بازگشت" ButtonStyle="ButtonStyle.Light" Click="@(() => Navigation.NavigateTo("/roles"))" />
+</RadzenStack>
+
+<RadzenRow Gap="1rem">
+    <RadzenColumn Size="12" SizeLG="5">
+        <RadzenStack Gap="1rem">
+            @if (IsNew)
+            {
+                <RadzenFormField Text="نام نقش" Style="width: 100%;"><RadzenTextBox @bind-Value="name" /></RadzenFormField>
+            }
+            <RadzenFormField Text="توضیح" Style="width: 100%;"><RadzenTextArea @bind-Value="description" Rows="2" Disabled="@(!canManage)" /></RadzenFormField>
+            <RadzenFormField Text="محدوده‌های الزامی برای دارنده نقش" Style="width: 100%;">
+                <RadzenDropDown TValue="IEnumerable<string>" Multiple="true" Chips="true" AllowClear="true" Data="@scopes"
+                                TextProperty="DisplayName" ValueProperty="Key" @bind-Value="requiredScopes" Disabled="@(!canManage)" />
+            </RadzenFormField>
+            <RadzenFormField Text="محدوده‌های مجاز (خالی یعنی همه)" Style="width: 100%;">
+                <RadzenDropDown TValue="IEnumerable<string>" Multiple="true" Chips="true" AllowClear="true" Data="@scopes"
+                                TextProperty="DisplayName" ValueProperty="Key" @bind-Value="allowedScopes" Disabled="@(!canManage)" />
+            </RadzenFormField>
+            <RadzenText TextStyle="TextStyle.Caption">
+                مثال: «مدیر تهران» استان و شهر را الزامی دارد و منطقه اختیاری است؛ هنگام ساخت کاربر با این نقش، مقدار محدوده‌های الزامی باید مشخص باشد.
+            </RadzenText>
+
+            @if (!IsNew && canReadSchedules)
+            {
+                <RadzenCard Variant="Variant.Outlined">
+                    <RadzenText TextStyle="TextStyle.Subtitle1">برنامه زمانی نقش</RadzenText>
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-mb-2">
+                        <RadzenSwitch @bind-Value="hasSchedule" Disabled="@(!canSchedule)" /> <RadzenText class="rz-m-0">برنامه اختصاصی (در غیر این صورت پیش‌فرض سازمان)</RadzenText>
+                    </RadzenStack>
+                    @if (hasSchedule)
+                    {
+                        <ScheduleEditor @ref="scheduleEditor" Value="@schedule" ReadOnly="@(!canSchedule)" />
+                    }
+                    @if (canSchedule)
+                    {
+                        <RadzenButton Text="ذخیره برنامه" Icon="save" ButtonStyle="ButtonStyle.Secondary" class="rz-mt-2" Click="@SaveScheduleAsync" />
+                    }
+                </RadzenCard>
+            }
+        </RadzenStack>
+    </RadzenColumn>
+
+    <RadzenColumn Size="12" SizeLG="7">
+        <RadzenCard Variant="Variant.Outlined">
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" Wrap="FlexWrap.Wrap" Gap="0.5rem">
+                <RadzenText TextStyle="TextStyle.Subtitle1" class="rz-m-0">دسترسی‌ها (@SelectedPermissions.Count())</RadzenText>
+                @if (canManage)
+                {
+                    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+                        <RadzenDropDown TValue="string" Data="@tree.Applications" TextProperty="DisplayName" ValueProperty="Application"
+                                        @bind-Value="readApplication" Placeholder="اپلیکیشن" Style="width: 180px;" />
+                        <RadzenButton Text="همه دسترسی‌های خواندنی" Icon="visibility" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Secondary"
+                                      Disabled="@(readApplication is null)" Click="@SelectReadOfApplication" />
+                    </RadzenStack>
+                }
+            </RadzenStack>
+            <RadzenTree AllowCheckBoxes="@canManage" @bind-CheckedValues="@checkedValues" Data="@tree.Applications" Style="width: 100%; max-height: 60vh; overflow: auto;">
+                <RadzenTreeLevel TextProperty="DisplayName" ChildrenProperty="Modules" />
+                <RadzenTreeLevel TextProperty="Module" ChildrenProperty="Resources" />
+                <RadzenTreeLevel TextProperty="Resource" ChildrenProperty="Actions" />
+                <RadzenTreeLevel HasChildren="@(_ => false)">
+                    <Template>
+                        @if (context.Value is CatalogPermissionDto permission)
+                        {
+                            <span>@(permission.DisplayName ?? permission.Action)</span>@:&nbsp;<span class="ltr">@permission.Action</span>
+                        }
+                    </Template>
+                </RadzenTreeLevel>
+            </RadzenTree>
+            <RadzenText TextStyle="TextStyle.Caption">با تیک زدن هر سطح (اپلیکیشن، ماژول یا منبع) همه دسترسی‌های زیر آن انتخاب می‌شوند.</RadzenText>
+        </RadzenCard>
+    </RadzenColumn>
+</RadzenRow>
+
+@if (canManage)
+{
+    <RadzenButton Text="@(IsNew ? "ایجاد نقش" : "ذخیره نقش")" Icon="save" class="rz-mt-4" IsBusy="@Busy" Click="@SaveAsync" />
+}
+
+@code {
+    [Parameter] public string? Name { get; set; }
+
+    private bool IsNew => string.IsNullOrEmpty(Name);
+    private string? name, description, readApplication;
+    private IEnumerable<string> requiredScopes = [], allowedScopes = [];
+    private List<ScopeDefinitionView> scopes = [];
+    private PermissionTreeDto tree = new([]);
+    private IEnumerable<object> checkedValues = [];
+    private IReadOnlyCollection<string> heldOutsideTree = [];
+    private bool canManage, canSchedule, canReadSchedules, hasSchedule;
+    private WeeklyScheduleDto? schedule;
+    private ScheduleEditor? scheduleEditor;
+
+    private IEnumerable<CatalogPermissionDto> Leaves =>
+        tree.Applications.SelectMany(a => a.Modules).SelectMany(m => m.Resources).SelectMany(r => r.Actions);
+
+    // A checked application, module or resource stands for all permissions below it, also while it is collapsed
+    // (the tree only adds the children of expanded nodes to CheckedValues).
+    private IEnumerable<string> SelectedPermissions =>
+        checkedValues.SelectMany(Expand).Select(p => p.Name).Concat(heldOutsideTree).Distinct(StringComparer.Ordinal);
+
+    private static IEnumerable<CatalogPermissionDto> Expand(object node) => node switch
+    {
+        CatalogPermissionDto permission => [permission],
+        PermissionTreeResource resource => resource.Actions,
+        PermissionTreeModule module => module.Resources.SelectMany(r => r.Actions),
+        PermissionTreeApplication application => application.Modules.SelectMany(m => m.Resources).SelectMany(r => r.Actions),
+        _ => [],
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.RolesManage);
+        canSchedule = await Can(Permissions.SchedulesManage);
+        canReadSchedules = await Can(Permissions.SchedulesRead);
+        await RunAsync(async () =>
+        {
+            scopes = (await Api.GetAsync<List<ScopeDefinitionView>>("api/identity/scopes")).Where(s => s.IsActive).ToList();
+            tree = await Api.GetAsync<PermissionTreeDto>("api/identity/permissions/tree");
+            if (IsNew) return;
+
+            var role = await Api.GetAsync<BusinessRoleDto>($"api/identity/business-roles/{Uri.EscapeDataString(Name!)}");
+            description = role.Description;
+            requiredScopes = role.RequiredScopes ?? [];
+            // The allowed list always contains the required keys; show only the extra ones.
+            allowedScopes = (role.AllowedScopes ?? []).Except(requiredScopes).ToArray();
+            var held = role.Permissions.ToHashSet(StringComparer.Ordinal);
+            checkedValues = Leaves.Where(p => held.Contains(p.Name)).Cast<object>().ToList();
+            // Deprecated or unknown permissions are not in the tree; keep them unless removed elsewhere.
+            heldOutsideTree = held.Except(Leaves.Select(p => p.Name)).ToArray();
+        });
+        if (!IsNew && canReadSchedules)
+            await RunAsync(async () =>
+            {
+                schedule = (await Api.GetAsync<ScheduleSettingDto>($"api/identity/schedules/roles/{Uri.EscapeDataString(Name!)}")).Value;
+                hasSchedule = schedule is not null;
+            });
+    }
+
+    private static bool IsReadAction(string action) =>
+        action.StartsWith("Read", StringComparison.OrdinalIgnoreCase) || action.StartsWith("View", StringComparison.OrdinalIgnoreCase) ||
+        action.StartsWith("List", StringComparison.OrdinalIgnoreCase) || action.Equals("Get", StringComparison.OrdinalIgnoreCase);
+
+    private void SelectReadOfApplication()
+    {
+        var reads = Leaves.Where(p => p.Application == readApplication && IsReadAction(p.Action));
+        checkedValues = checkedValues.Concat(reads).Distinct().ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        var permissions = SelectedPermissions.ToArray();
+        var allowed = allowedScopes.Any() ? allowedScopes.Concat(requiredScopes).Distinct().ToArray() : [];
+        if (IsNew)
+        {
+            if (await RunAsync(() => Api.SendAsync(HttpMethod.Post, "api/identity/business-roles",
+                    new CreateBusinessRoleRequest(name ?? "", description, permissions, requiredScopes.ToArray(), allowed)), "نقش ایجاد شد"))
+                Navigation.NavigateTo($"/roles/{Uri.EscapeDataString(name!.Trim())}");
+            return;
+        }
+        await RunAsync(() => Api.SendAsync(HttpMethod.Put, $"api/identity/business-roles/{Uri.EscapeDataString(Name!)}",
+            new UpdateBusinessRoleRequest(description, permissions, requiredScopes.ToArray(), allowed)), "نقش ذخیره شد");
+    }
+
+    private Task SaveScheduleAsync()
+    {
+        var path = $"api/identity/schedules/roles/{Uri.EscapeDataString(Name!)}";
+        return hasSchedule && scheduleEditor is not null
+            ? RunAsync(() => Api.SendAsync(HttpMethod.Put, path, scheduleEditor.Current), "برنامه زمانی ذخیره شد")
+            : RunAsync(() => Api.SendAsync(HttpMethod.Delete, path), "نقش از برنامه پیش‌فرض پیروی می‌کند");
+    }
+}

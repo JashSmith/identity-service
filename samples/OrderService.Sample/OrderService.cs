@@ -6,21 +6,27 @@ namespace SampleApp;
 /// Sample consumer service demonstrating the permission-registration flow:
 /// every action is annotated with <c>[RequirePermission]</c>; on startup the service
 /// discovers those permissions and pushes a manifest to the Identity Gateway, which
-/// mirrors them into Keycloak realm roles so they appear in token claims.
+/// stores them as client roles of the order-service application, so they appear in tokens as
+/// <c>order-service:Module:Resource:Action</c>.
 /// Exactly ten distinct permissions are declared — see <c>Identity.Sample.Tests</c>.
 /// </summary>
 public static class OrderPermissions
 {
-    public const string ViewOrders = "Orders.View";
-    public const string CreateOrders = "Orders.Create";
-    public const string EditOrders = "Orders.Edit";
-    public const string CancelOrders = "Orders.Cancel";
-    public const string ViewInvoices = "Orders.Invoices.View";
-    public const string IssueInvoices = "Orders.Invoices.Issue";
-    public const string ViewShipments = "Orders.Shipments.View";
-    public const string ScheduleShipments = "Orders.Shipments.Schedule";
-    public const string ApproveRefunds = "Orders.Refunds.Approve";
-    public const string ExportReports = "Orders.Reports.Export";
+    public const string Application = "order-service";
+
+    /// <summary>The name as it appears in tokens.</summary>
+    public static string Full(string local) => $"{Application}:{local}";
+
+    public const string ViewOrders = "Orders:Order:View";
+    public const string CreateOrders = "Orders:Order:Create";
+    public const string EditOrders = "Orders:Order:Edit";
+    public const string CancelOrders = "Orders:Order:Cancel";
+    public const string ViewInvoices = "Orders:Invoice:View";
+    public const string IssueInvoices = "Orders:Invoice:Issue";
+    public const string ViewShipments = "Orders:Shipment:View";
+    public const string ScheduleShipments = "Orders:Shipment:Schedule";
+    public const string ApproveRefunds = "Orders:Refund:Approve";
+    public const string ExportReports = "Orders:Report:Export";
 }
 
 public sealed record OrderDto(string Id, string CustomerUsername, decimal Total, string Status, string Region = "global");

@@ -1,13 +1,12 @@
 using Identity.Application.Scope;
 using Identity.Contracts;
-using Identity.Application;
 using Identity.Gateway.Errors;
 
 namespace Identity.Gateway;
 
 /// <summary>
-/// Scope-registry admin endpoints. The Keycloak <c>iam-scope-registry</c> group is the
-/// source of truth (no Oracle scope tables); all reads/writes go through IScopeRegistryAdmin.
+/// Scope-registry admin endpoints. The Keycloak <c>iam-scope-registry</c> group is the source of truth;
+/// creating a scope also declares its user attribute and token claim (or fails and leaves nothing behind).
 /// </summary>
 public static class ScopeAdminEndpoints
 {
@@ -16,131 +15,77 @@ public static class ScopeAdminEndpoints
         var g = app.MapGroup("/api/identity/scopes").WithTags("Scopes");
 
         g.MapGet("", async (IScopeRegistryAdmin registry, CancellationToken ct) =>
-                Results.Ok(await registry.ListScopesAsync(ct)))
+                (await registry.ListScopesAsync(ct)).ToHttpResult(scopes => Results.Ok(scopes)))
             .RequireAuthorization(IamPermissions.ScopesRead)
             .WithName("ListScopes")
             .Produces<IReadOnlyCollection<ScopeDefinitionDto>>(200);
 
         g.MapGet("/resources/list", async (IScopeRegistryAdmin registry, CancellationToken ct) =>
-                Results.Ok(await registry.ListResourcesAsync(ct)))
+                (await registry.ListResourcesAsync(ct)).ToHttpResult(resources => Results.Ok(resources)))
             .RequireAuthorization(IamPermissions.ScopesRead)
             .WithName("ListResources")
             .Produces<IReadOnlyCollection<ResourceScopeMappingDto>>(200);
 
         g.MapGet("/{key}", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
-            {
-                var s = await registry.GetScopeAsync(key, ct);
-                return s is null
-                    ? Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem()
-                    : Results.Ok(s);
-            })
+                (await registry.GetScopeAsync(key, ct)).ToHttpResult(scope => Results.Ok(scope)))
             .RequireAuthorization(IamPermissions.ScopesRead)
             .WithName("GetScope")
-            .Produces<ScopeDefinitionDto>(200);
+            .Produces<ScopeDefinitionDto>(200).ProducesProblem(404);
 
         g.MapGet("/{key}/resources", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
-            {
-                if (await registry.GetScopeAsync(key, ct) is null)
-                    return Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem();
-                var resources = await registry.GetResourcesForScopeAsync(key, ct);
-                return Results.Ok(new { scope = key, resources });
-            })
+                (await registry.GetResourcesForScopeAsync(key, ct)).ToHttpResult(resources => Results.Ok(new { scope = key, resources })))
             .RequireAuthorization(IamPermissions.ScopesRead)
             .WithName("GetScopeResources")
-            .Produces<object>(200);
+            .Produces<object>(200).ProducesProblem(404);
 
-        g.MapPost("", async (CreateScopeRequest req, IScopeRegistryAdmin registry,
-                Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper claimMapper,
-                Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening profileHardening, CancellationToken ct) =>
-            {
-                if (string.IsNullOrWhiteSpace(req.Key))
-                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["key"] = ["Key is required."] });
-                try
-                {
-                    var created = await registry.CreateScopeAsync(req.Key.Trim(), req.DisplayName, req.Description, ct);
-                    if (created is null)
-                        return Error.Conflict("resource.conflict", $"Scope '{req.Key}' already exists.").ToProblem();
-                    if (req.TargetResources is not null && req.TargetResources.Count > 0)
-                    {
-                        try { await registry.SetScopeResourcesAsync(created.Key, req.TargetResources, ct); } catch { /* best-effort */ }
-                    }
-                    // Provision the authz.scope.<key> claim mapper now so new tokens carry the
-                    // claim without a restart. Best-effort: startup EnsureAsync also reconciles.
-                    using var mapperCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    mapperCts.CancelAfter(TimeSpan.FromSeconds(10));
-                    try { await claimMapper.EnsureAsync(mapperCts.Token); } catch { /* best-effort */ }
-                    // Declare authz.scope.<key> in the User Profile — Keycloak silently discards
-                    // undeclared attributes, so without this the new scope could never be written.
-                    try { await profileHardening.EnsureAsync(mapperCts.Token); } catch { /* best-effort */ }
-                    return Results.Created($"/api/identity/scopes/{Uri.EscapeDataString(created.Key)}", created);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Error.Validation("request.invalid", ex.Message).ToProblem();
-                }
-            })
+        g.MapPost("", async (CreateScopeRequest req, IScopeRegistryAdmin registry, CancellationToken ct) =>
+                (await registry.CreateScopeAsync(req.Key.Trim(), req.DisplayName, req.Description, req.TargetResources, req.Parent, ct))
+                .ToHttpResult(created => Results.Created($"/api/identity/scopes/{Uri.EscapeDataString(created.Key)}", created)))
+            .WithValidation<CreateScopeRequest>()
             .RequireAuthorization(IamPermissions.ScopesManage)
             .WithName("CreateScope")
-            .Produces<ScopeDefinitionDto>(201);
+            .Produces<ScopeDefinitionDto>(201).ProducesProblem(400).ProducesProblem(409);
 
         g.MapPut("/{key}", async (string key, UpdateScopeRequest req, IScopeRegistryAdmin registry, CancellationToken ct) =>
-            {
-                try
-                {
-                    var updated = await registry.UpdateScopeAsync(key, req.DisplayName, req.Description, req.IsActive, ct);
-                    if (updated is null)
-                        return Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem();
-                    if (req.TargetResources is not null)
-                    {
-                        try { await registry.SetScopeResourcesAsync(key, req.TargetResources, ct); } catch { /* best-effort */ }
-                    }
-                    return Results.Ok(updated);
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Error.Validation("request.invalid", ex.Message).ToProblem();
-                }
-            })
+                (await registry.UpdateScopeAsync(key, req.DisplayName, req.Description, req.IsActive, req.TargetResources, req.Parent, ct))
+                .ToHttpResult(updated => Results.Ok(updated)))
+            .WithValidation<UpdateScopeRequest>()
             .RequireAuthorization(IamPermissions.ScopesManage)
             .WithName("UpdateScope")
-            .Produces<ScopeDefinitionDto>(200);
+            .Produces<ScopeDefinitionDto>(200).ProducesProblem(400).ProducesProblem(404);
 
         g.MapPut("/{key}/resources", async (string key, SetScopeResourcesRequest req, IScopeRegistryAdmin registry, CancellationToken ct) =>
-            {
-                var s = await registry.GetScopeAsync(key, ct);
-                if (s is null)
-                    return Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem();
-                var ok = await registry.SetScopeResourcesAsync(key, req.Resources ?? [], ct);
-                return ok
-                    ? Results.Ok(new { scope = key, resources = req.Resources ?? [] })
-                    : Error.Validation("scope.resources_update_failed", "Failed to update resources").ToProblem();
-            })
+                (await registry.SetScopeResourcesAsync(key, req.Resources ?? [], ct))
+                .ToHttpResult(() => Results.Ok(new { scope = key, resources = req.Resources ?? [] })))
+            .WithValidation<SetScopeResourcesRequest>()
             .RequireAuthorization(IamPermissions.ScopesManage)
             .WithName("SetScopeResources")
-            .Produces<object>(200);
+            .Produces<object>(200).ProducesProblem(400).ProducesProblem(404);
+
+        g.MapGet("/{key}/values", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
+                (await registry.GetValuesAsync(key, ct)).ToHttpResult(values => Results.Ok(values)))
+            .RequireAuthorization(IamPermissions.ScopesRead)
+            .WithName("GetScopeValues")
+            .Produces<IReadOnlyCollection<ScopeValueDto>>(200).ProducesProblem(404);
+
+        g.MapPut("/{key}/values", async (string key, SetScopeValuesRequest req, IScopeRegistryAdmin registry,
+                IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
+            {
+                var set = await registry.SetValuesAsync(key, req.Values, ct);
+                scopeCache.Invalidate();
+                return set.ToHttpResult(() => Results.Ok(req.Values));
+            })
+            .WithValidation<SetScopeValuesRequest>()
+            .RequireAuthorization(IamPermissions.ScopesManage)
+            .WithName("SetScopeValues")
+            .Produces<IReadOnlyCollection<ScopeValueDto>>(200).ProducesProblem(400).ProducesProblem(404);
 
         g.MapDelete("/{key}", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
-            {
-                try
-                {
-                    var ok = await registry.DeleteScopeAsync(key, ct);
-                    return ok
-                        ? Results.NoContent()
-                        : Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem();
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Error.Validation("request.invalid", ex.Message).ToProblem();
-                }
-            })
+                (await registry.DeleteScopeAsync(key, ct)).ToHttpResult(() => Results.NoContent()))
             .RequireAuthorization(IamPermissions.ScopesManage)
             .WithName("DeleteScope")
-            .Produces(204).ProducesProblem(400);
+            .Produces(204).ProducesProblem(404);
 
         return g;
     }
 }
-
-public sealed record CreateScopeRequest(string Key, string? DisplayName, string? Description, IReadOnlyCollection<string>? TargetResources = null);
-public sealed record UpdateScopeRequest(string? DisplayName, string? Description, bool? IsActive, IReadOnlyCollection<string>? TargetResources = null);
-public sealed record SetScopeResourcesRequest(IReadOnlyCollection<string> Resources);

@@ -21,15 +21,23 @@ public static class UserManagementEndpoints
             .WithName("CreateUserWithAccess")
             .Produces<UserDto>(201).ProducesProblem(400).ProducesProblem(409);
 
-        g.MapPut("/{id}", async (string id, UpdateUserRequest req, IUserProvisioningService svc, CancellationToken ct) =>
-                (await svc.UpdateUserAsync(id, req, ct)).ToHttpResult(user => Results.Ok(user)))
+        g.MapPut("/{id}", async (string id, UpdateUserRequest req, IUserProvisioningService svc, ProvisioningOrchestrator orch, CancellationToken ct) =>
+            {
+                var allowed = await orch.EnsureCanManageUserAsync(id, ct);
+                if (!allowed.IsSuccess) return allowed.Error!.ToProblem();
+                return (await svc.UpdateUserAsync(id, req, ct)).ToHttpResult(user => Results.Ok(user));
+            })
             .WithValidation<UpdateUserRequest>()
             .RequireAuthorization(IamPermissions.UsersManage)
             .WithName("UpdateUserWithAccess")
             .Produces<UserDto>(200).ProducesProblem(400).ProducesProblem(404).ProducesProblem(409);
 
-        g.MapDelete("/{id}", async (string id, IUserProvisioningService svc, CancellationToken ct) =>
-                (await svc.DeleteUserAsync(id, ct)).ToHttpResult(() => Results.NoContent()))
+        g.MapDelete("/{id}", async (string id, IUserProvisioningService svc, ProvisioningOrchestrator orch, CancellationToken ct) =>
+            {
+                var allowed = await orch.EnsureCanManageUserAsync(id, ct);
+                if (!allowed.IsSuccess) return allowed.Error!.ToProblem();
+                return (await svc.DeleteUserAsync(id, ct)).ToHttpResult(() => Results.NoContent());
+            })
             .RequireAuthorization(IamPermissions.UsersManage)
             .WithName("DeleteUser")
             .Produces(204).ProducesProblem(404);
@@ -38,8 +46,12 @@ public static class UserManagementEndpoints
         foreach (var (method, name) in new[] { ("PUT", "ResetUserPassword"), ("POST", "ResetUserPasswordPost") })
         {
             g.MapMethods("/{id}/reset-password", [method], async (string id, ResetPasswordRequest req,
-                        IUserProvisioningService svc, CancellationToken ct) =>
-                    (await svc.ResetPasswordAsync(id, req.Password, req.Temporary, ct)).ToHttpResult(() => Results.NoContent()))
+                        IUserProvisioningService svc, ProvisioningOrchestrator orch, CancellationToken ct) =>
+                {
+                    var allowed = await orch.EnsureCanManageUserAsync(id, ct);
+                    if (!allowed.IsSuccess) return allowed.Error!.ToProblem();
+                    return (await svc.ResetPasswordAsync(id, req.Password, req.Temporary, ct)).ToHttpResult(() => Results.NoContent());
+                })
                 .WithValidation<ResetPasswordRequest>()
                 .RequireAuthorization(IamPermissions.UsersManage)
                 .WithName(name)
@@ -49,18 +61,21 @@ public static class UserManagementEndpoints
         g.MapGet("/{id}/sessions", async (string id, IUserSessionService sessionService, CancellationToken ct) =>
                 (await sessionService.GetUserSessionsAsync(id, ct)).ToHttpResult(sessions => Results.Ok(sessions)))
             .RequireAuthorization(IamPermissions.UsersManage)
+            .ForManageableUser()
             .WithName("GetUserSessions")
             .Produces<IReadOnlyCollection<UserSessionDto>>(200).ProducesProblem(404);
 
         g.MapPost("/{id}/revoke", async (string id, RevokeUserTokensRequest? req, IUserSessionService sessionService, CancellationToken ct) =>
                 (await sessionService.RevokeUserTokensAsync(id, req?.Reason, ct)).ToHttpResult(revoked => Results.Ok(revoked)))
             .RequireAuthorization(IamPermissions.UsersManage)
+            .ForManageableUser()
             .WithName("RevokeUserTokens")
             .Produces<RevokeUserTokensResponse>(200).ProducesProblem(404);
 
         g.MapGet("/{id}/scoped-access", async (string id, IScopedAccessStore store, CancellationToken ct) =>
                 (await store.GetAsync(id, ct))
                 .ToHttpResult(doc => Results.Ok(new ScopedAccessResponse(id, doc.Assignments.ToArray())))).RequireAuthorization(IamPermissions.ScopesRead)
+            .ForManageableUser()
             .WithName("GetScopedAccess")
             .Produces<ScopedAccessResponse>(200);
 

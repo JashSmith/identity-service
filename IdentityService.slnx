@@ -3,9 +3,8 @@
         <File Path="scripts/smoke-test.sh"/>
     </Folder>
     <Folder Name="/docs/">
+        <File Path="docs/api.md"/>
         <File Path="docs/architecture.md"/>
-        <File Path="docs/engineering-report.md"/>
-        <File Path="docs/integration-guide.html"/>
         <File Path="docs/running.md"/>
     </Folder>
     <Folder Name="/samples/">
@@ -22,6 +21,7 @@
         <Project Path="src/Identity.Domain/Identity.Domain.csproj"/>
     </Folder>
     <Folder Name="/src/Host/">
+        <Project Path="src/Identity.Admin/Identity.Admin.csproj"/>
         <Project Path="src/Identity.AppHost/Identity.AppHost.csproj"/>
         <Project Path="src/Identity.Gateway/Identity.Gateway.csproj"/>
         <Project Path="src/Identity.ServiceDefaults/Identity.ServiceDefaults.csproj"/>
@@ -54,6 +54,7 @@
         <Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj"/>
         <Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj"/>
         <Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj"/>
+        <Project Path="tests/Identity.E2E.Tests/Identity.E2E.Tests.csproj"/>
         <Project Path="tests/Identity.Gateway.Tests/Identity.Gateway.Tests.csproj"/>
         <Project Path="tests/Identity.Sample.Tests/Identity.Sample.Tests.csproj"/>
     </Folder>
