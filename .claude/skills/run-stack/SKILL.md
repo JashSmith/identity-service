@@ -6,6 +6,7 @@ description: Start, verify and stop the Identity Gateway stack (Aspire AppHost w
 # Run the Identity Gateway stack
 
 ## Start
+0. A running stack locks the DLLs in `bin/`: always stop it (see below) before `dotnet build`.
 1. Make sure Docker is running: `docker version --format '{{.Server.Version}}'`.
 2. Build first so the run can use `--no-build`: `dotnet build IdentityService.slnx`.
 3. Start the AppHost **in the background**, logging to the scratchpad:
@@ -28,8 +29,9 @@ sample `http://localhost:5081`.
 
 ## Stop and clean up
 1. Stop the background task (TaskStop).
-2. Killing the process orphans the session containers. Remove them:
+2. Killing the process orphans the session containers and the project processes. Remove them:
    `docker ps --format '{{.Names}}' | grep -E '^(keycloak|redis)-' | xargs -r docker rm -f`
+   `powershell -NoProfile -Command "Get-Process Identity.Gateway,OrderService.Sample -ErrorAction SilentlyContinue | Stop-Process -Force"`
 3. Leave `postgres-*` running; it is a persistent container holding the Keycloak database.
    Smoke-test data (roles `smoke-accountant-*`, users `smoke-user-*`) stays in that database.
 

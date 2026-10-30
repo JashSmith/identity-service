@@ -91,12 +91,24 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - VS Code's C# language server locks `bin/obj`; move tracked files with per-file `git mv`
   instead of renaming whole directories.
 - Remote is GitHub (`origin`, SSH). `gh` may be unauthenticated: push the branch and give the
-  owner the compare link, or ask them to run `gh auth login`.
+  owner the compare link, or ask them to run `gh auth login`. GitHub's default base is `master`;
+  PRs must target `develop`.
+- After stashing/unstashing source files, rebuild with `--no-incremental`; otherwise tests can run
+  against stale binaries.
+
+## Known open issues (found during phase 2, not yet fixed)
+- Permission registration from services fails with 403: the `order-service` service-account token
+  carries no `permissions` claim, so it cannot pass `identity.permissions.register` (phase 4).
+- The permission catalog (`GET /api/identity/permissions`) is in-memory and empty after a restart
+  (phase 4).
+- `/api/system/database-info` reports the Keycloak database as unreachable under Aspire (phase 3).
+- The developer exception page echoes request headers, including bearer tokens (Development only).
+- Super-admin permissions exist twice (realm roles and identity-gateway client roles) (phase 3/4).
 
 ## Roadmap
-1. Foundation: cleanup, rename, Aspire, agent knowledge (done, in review)
+1. Foundation: cleanup, rename, Aspire, agent knowledge (done)
 2. Security hotfixes: login-proxy secret injection, `super-admins` escalation, scope bypass via
-   `PUT /users`, anonymous diagnostics, bearer token logging, `realm-admin` bypass
+   `PUT /users`, anonymous diagnostics, bearer token logging, `realm-admin` bypass (done, in review)
 3. Keycloak core: one tenant-aware admin client with a cached service-account token, Result +
    ProblemDetails error model, no swallowed errors
 4. Applications and permissions (new format, persistent sync v2)
