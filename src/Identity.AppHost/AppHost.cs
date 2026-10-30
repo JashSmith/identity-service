@@ -76,8 +76,6 @@ var gateway = builder.AddProject<Projects.Identity_Gateway>("identity-gateway")
     .WithEnvironment("Identity__AdminConsole__BaseUrl", AdminConsoleUrl)
     .WithEnvironment("Identity__AdminConsole__ClientSecret", adminConsoleClientSecret)
     .WithEnvironment("Identity__Redis__Configuration", redis.Resource.ConnectionStringExpression)
-    .WithEnvironment("Database__Provider", "postgres")
-    .WithEnvironment("Database__ConnectionStrings__postgres", keycloakDb.Resource.ConnectionStringExpression)
     .WithHttpHealthCheck("/health/live")
     .WaitFor(keycloak)
     .WaitFor(redis);
