@@ -182,62 +182,6 @@ public sealed class OpenApiTests
     }
 }
 
-public sealed class CompositeResolutionTests
-{
-    private sealed class FakeBusinessRoleStore : IBusinessRoleStore
-    {
-        private readonly Dictionary<string, BusinessRoleDto> _roles = new(StringComparer.Ordinal);
-        public Task<BusinessRoleDto?> GetAsync(string name, CancellationToken ct) => Task.FromResult(_roles.TryGetValue(name, out var v) ? v : null);
-        public Task<IReadOnlyCollection<BusinessRoleDto>> ListAsync(CancellationToken ct) => Task.FromResult((IReadOnlyCollection<BusinessRoleDto>)_roles.Values.ToArray());
-        public Task<BusinessRoleDto> CreateAsync(string name, string? desc, IReadOnlyCollection<string> perms, CancellationToken ct)
-        {
-            if (_roles.ContainsKey(name)) throw new InvalidOperationException("exists");
-            var dto = new BusinessRoleDto(name, desc, true, perms.ToArray());
-            _roles[name] = dto; return Task.FromResult(dto);
-        }
-        public Task<BusinessRoleDto?> UpdateAsync(string name, string? desc, CancellationToken ct)
-        {
-            if (!_roles.TryGetValue(name, out var cur)) return Task.FromResult<BusinessRoleDto?>(null);
-            var next = cur with { Description = desc }; _roles[name]=next; return Task.FromResult<BusinessRoleDto?>(next);
-        }
-        public Task<bool> DeleteAsync(string name, CancellationToken ct) => Task.FromResult(_roles.Remove(name));
-        public Task<IReadOnlyCollection<string>> GetEffectivePermissionsAsync(string name, CancellationToken ct)
-            => Task.FromResult(_roles.TryGetValue(name,out var r) ? r.Permissions : (IReadOnlyCollection<string>)Array.Empty<string>());
-        public Task AddPermissionsAsync(string name, IReadOnlyCollection<string> perms, CancellationToken ct)
-        {
-            if (!_roles.TryGetValue(name, out var cur)) throw new KeyNotFoundException(name);
-            _roles[name] = cur with { Permissions = cur.Permissions.Concat(perms).Distinct(StringComparer.Ordinal).ToArray() };
-            return Task.CompletedTask;
-        }
-        public Task RemovePermissionAsync(string name, string perm, CancellationToken ct)
-        {
-            if (_roles.TryGetValue(name,out var cur)) _roles[name]=cur with{Permissions=cur.Permissions.Where(p=>p!=perm).ToArray()};
-            return Task.CompletedTask;
-        }
-    }
-
-    [Fact]
-    public async Task CreateAndResolve_EffectivePermissions()
-    {
-        IBusinessRoleStore store = new FakeBusinessRoleStore();
-        await store.CreateAsync("RegionalManager", null, ["Orders.View","Orders.Create"], CancellationToken.None);
-        var eff = await store.GetEffectivePermissionsAsync("RegionalManager", CancellationToken.None);
-        Assert.Contains("Orders.View", eff);
-        Assert.Contains("Orders.Create", eff);
-    }
-
-    [Fact]
-    public async Task AddAndRemove_Permission()
-    {
-        IBusinessRoleStore store = new FakeBusinessRoleStore();
-        await store.CreateAsync("R", null, ["Orders.View"], CancellationToken.None);
-        await store.AddPermissionsAsync("R", ["Orders.Create"], CancellationToken.None);
-        Assert.Contains("Orders.Create", await store.GetEffectivePermissionsAsync("R", CancellationToken.None));
-        await store.RemovePermissionAsync("R", "Orders.View", CancellationToken.None);
-        Assert.DoesNotContain("Orders.View", await store.GetEffectivePermissionsAsync("R", CancellationToken.None));
-    }
-}
-
 public sealed class GatewayPermissionsRegistrationTests
 {
     [Fact]

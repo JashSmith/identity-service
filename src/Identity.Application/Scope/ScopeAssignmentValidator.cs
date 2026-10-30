@@ -10,8 +10,7 @@ public sealed class ScopeAssignmentValidator(IScopeDefinitionLookup lookup, ISco
         int idx = 0;
         foreach (var a in assignments)
         {
-            var roleExists = await roles.GetAsync(a.Role, ct);
-            if (roleExists is null) Add(errors, $"assignments[{idx}].role", $"Role '{a.Role}' does not exist.");
+            if (!await roles.ExistsAsync(a.Role, ct)) Add(errors, $"assignments[{idx}].role", $"Role '{a.Role}' does not exist.");
             foreach (var kv in a.Scopes)
             {
                 var scopeKey = kv.Key;

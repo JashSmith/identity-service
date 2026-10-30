@@ -159,8 +159,8 @@ public static class UserManagementEndpoints
             {
                 if (await dir.GetUserAsync(id, ct) is null)
                     return Error.NotFound("resource.not_found", $"user '{id}' not found").ToProblem();
-                if (await roles.GetAsync(role, ct) is null)
-                    return Error.Validation("request.invalid", $"Role '{role}' does not exist.").ToProblem();
+                if (!await roles.ExistsAsync(role, ct))
+                    return Error.Validation("role.not_found", $"Role '{role}' does not exist.").ToProblem();
                 try
                 {
                     var dict = (IReadOnlyDictionary<string, IReadOnlyCollection<string>>)(scopes ?? new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.Ordinal));

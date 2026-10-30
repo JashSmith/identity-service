@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics;
+using Identity.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Identity.Gateway.Errors;
@@ -16,6 +17,14 @@ public sealed class GlobalExceptionHandler(
     {
         var problem = exception switch
         {
+            // Errors raised by code that does not return results yet keep their status and code.
+            ErrorException carried => new ProblemDetails
+            {
+                Status = carried.Error.Kind.StatusCode(),
+                Title = "The request could not be completed.",
+                Detail = carried.Error.Message,
+                Extensions = { ["code"] = carried.Error.Code },
+            },
             BadHttpRequestException bad => new ProblemDetails
             {
                 Status = bad.StatusCode,

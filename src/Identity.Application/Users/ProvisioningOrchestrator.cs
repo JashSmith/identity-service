@@ -62,8 +62,8 @@ public sealed class ProvisioningOrchestrator(
             {
                 foreach (var a in request.Assignments)
                 {
-                    var role = await roles.GetAsync(a.Role, ct);
-                    if (role is null) throw new InvalidOperationException($"Role '{a.Role}' does not exist.");
+                    if (!await roles.ExistsAsync(a.Role, ct))
+                        throw new InvalidOperationException($"Role '{a.Role}' does not exist.");
                 }
             }
         }
@@ -97,8 +97,8 @@ public sealed class ProvisioningOrchestrator(
         }
         else
         {
-            var role = await roles.GetAsync(assignment.Role, ct);
-            if (role is null) throw new InvalidOperationException($"Role '{assignment.Role}' does not exist.");
+            if (!await roles.ExistsAsync(assignment.Role, ct))
+                throw new InvalidOperationException($"Role '{assignment.Role}' does not exist.");
         }
         await scopedStore.AddAssignmentAsync(userId, assignment, ct);
         await SafeMapRoleAsync(userId, assignment.Role, ct);
@@ -117,8 +117,8 @@ public sealed class ProvisioningOrchestrator(
         {
             foreach (var a in assignments)
             {
-                var role = await roles.GetAsync(a.Role, ct);
-                if (role is null) throw new InvalidOperationException($"Role '{a.Role}' does not exist.");
+                if (!await roles.ExistsAsync(a.Role, ct))
+                    throw new InvalidOperationException($"Role '{a.Role}' does not exist.");
             }
         }
         var previous = await scopedStore.GetAsync(userId, ct);
@@ -139,19 +139,16 @@ public sealed class ProvisioningOrchestrator(
             await SafeUnmapRoleAsync(userId, role, ct);
     }
 
-    public async Task<bool> DeleteBusinessRoleSafeAsync(string roleName, CancellationToken ct)
-    {
-        var usersWithRole = await roleMapping.GetUsersWithRealmRoleAsync(roleName, ct);
-        if (usersWithRole.Count > 0) throw new InvalidOperationException($"Cannot delete business role '{roleName}': still assigned to {usersWithRole.Count} user(s). Remove scoped assignments first.");
-        return await roles.DeleteAsync(roleName, ct);
-    }
+    /// <summary>Deletes the role; the store refuses while users still hold it (role.in_use).</summary>
+    public Task<Result> DeleteBusinessRoleSafeAsync(string roleName, CancellationToken ct) =>
+        roles.DeleteAsync(roleName, ct);
 
-    public async Task<BusinessRoleDto> CreateBusinessRoleAsync(string name, string? description, IReadOnlyCollection<string> permissions, CancellationToken ct)
+    public Task<Result<BusinessRoleDto>> CreateBusinessRoleAsync(string name, string? description, IReadOnlyCollection<string> permissions, CancellationToken ct)
     {
         // Permission existence is validated by the role store against Keycloak (source of truth).
         // The in-memory registry is deliberately not consulted: it is empty after a restart
         // until services re-register, which would reject valid permissions.
-        return await roles.CreateAsync(name.Trim(), description, permissions ?? Array.Empty<string>(), ct);
+        return roles.CreateAsync(name.Trim(), description, permissions ?? Array.Empty<string>(), ct);
     }
 
     private static ScopedAccessDocument ToDocument(IReadOnlyCollection<ScopedRoleAssignmentDto> dtos)

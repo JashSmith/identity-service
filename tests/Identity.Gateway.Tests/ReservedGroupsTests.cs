@@ -79,10 +79,12 @@ public sealed class ReservedGroupsTests
         var kc = new FakeKeycloak();
         var store = Store(kc);
 
-        Assert.Null(await store.GetAsync(name, CancellationToken.None));
-        Assert.Null(await store.UpdateAsync(name, "hijacked", CancellationToken.None));
-        Assert.False(await store.DeleteAsync(name, CancellationToken.None));
-        Assert.Empty(await store.GetEffectivePermissionsAsync(name, CancellationToken.None));
+        Assert.Equal("role.not_found", (await store.GetAsync(name, CancellationToken.None)).Error?.Code);
+        Assert.Equal("role.not_found", (await store.UpdateAsync(name, "hijacked", CancellationToken.None)).Error?.Code);
+        Assert.Equal("role.not_found", (await store.DeleteAsync(name, CancellationToken.None)).Error?.Code);
+        Assert.Equal("role.not_found", (await store.GetEffectivePermissionsAsync(name, CancellationToken.None)).Error?.Code);
+        Assert.Equal("role.not_found", (await store.AddPermissionsAsync(name, ["orders.read"], CancellationToken.None)).Error?.Code);
+        Assert.Equal("role.not_found", (await store.SetPermissionsAsync(name, [], CancellationToken.None)).Error?.Code);
         Assert.False(kc.AnyWrite);
     }
 
@@ -91,7 +93,8 @@ public sealed class ReservedGroupsTests
     {
         var roles = await Store(new FakeKeycloak()).ListAsync(CancellationToken.None);
 
-        Assert.DoesNotContain(roles, r => ReservedGroups.IsReserved(r.Name));
+        Assert.True(roles.IsSuccess);
+        Assert.DoesNotContain(roles.Value, r => ReservedGroups.IsReserved(r.Name));
     }
 
     [Fact]
@@ -99,10 +102,9 @@ public sealed class ReservedGroupsTests
     {
         var kc = new FakeKeycloak();
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            Store(kc).CreateAsync("super-admins", null, ["identity.users.manage"], CancellationToken.None));
+        var created = await Store(kc).CreateAsync("super-admins", null, ["identity.users.manage"], CancellationToken.None);
 
-        Assert.Contains("reserved", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("role.reserved", created.Error?.Code);
         Assert.False(kc.AnyWrite);
     }
 
