@@ -61,18 +61,21 @@ public static class UserManagementEndpoints
         g.MapGet("/{id}/sessions", async (string id, IUserSessionService sessionService, CancellationToken ct) =>
                 (await sessionService.GetUserSessionsAsync(id, ct)).ToHttpResult(sessions => Results.Ok(sessions)))
             .RequireAuthorization(IamPermissions.UsersManage)
+            .ForManageableUser()
             .WithName("GetUserSessions")
             .Produces<IReadOnlyCollection<UserSessionDto>>(200).ProducesProblem(404);
 
         g.MapPost("/{id}/revoke", async (string id, RevokeUserTokensRequest? req, IUserSessionService sessionService, CancellationToken ct) =>
                 (await sessionService.RevokeUserTokensAsync(id, req?.Reason, ct)).ToHttpResult(revoked => Results.Ok(revoked)))
             .RequireAuthorization(IamPermissions.UsersManage)
+            .ForManageableUser()
             .WithName("RevokeUserTokens")
             .Produces<RevokeUserTokensResponse>(200).ProducesProblem(404);
 
         g.MapGet("/{id}/scoped-access", async (string id, IScopedAccessStore store, CancellationToken ct) =>
                 (await store.GetAsync(id, ct))
                 .ToHttpResult(doc => Results.Ok(new ScopedAccessResponse(id, doc.Assignments.ToArray())))).RequireAuthorization(IamPermissions.ScopesRead)
+            .ForManageableUser()
             .WithName("GetScopedAccess")
             .Produces<ScopedAccessResponse>(200);
 

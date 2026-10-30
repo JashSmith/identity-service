@@ -80,14 +80,52 @@ public sealed class DelegationGuard(ICurrentAdministrator admin, IUserScopeReade
         var target = await scopes.GetEffectiveAsync(userId, ct);
         if (!target.IsSuccess) return target.Error!;
 
-        foreach (var (key, allowed) in limits.Value)
+        var outside = FirstKeyOutside(limits.Value, target.Value);
+        return outside is null
+            ? Result.Success()
+            : Denied("delegation.user_outside_admin", $"This user is outside your '{outside}' scope.");
+    }
+
+    /// <summary>True when the administrator is limited by delegation (not a super-admin and not system work).</summary>
+    public async Task<Result<bool>> IsRestrictedAsync(CancellationToken ct)
+    {
+        var unrestricted = await IsUnrestrictedAsync(ct);
+        return unrestricted.IsSuccess ? !unrestricted.Value : unrestricted.Error!;
+    }
+
+    /// <summary>The subset of <paramref name="userIds"/> the administrator may manage, in the given order.</summary>
+    public async Task<Result<IReadOnlyCollection<string>>> FilterManageableAsync(IReadOnlyCollection<string> userIds, CancellationToken ct)
+    {
+        var unrestricted = await IsUnrestrictedAsync(ct);
+        if (!unrestricted.IsSuccess) return unrestricted.Error!;
+        if (unrestricted.Value) return Result<IReadOnlyCollection<string>>.Success(userIds);
+
+        var limits = await AdminLimitsAsync(ct);
+        if (!limits.IsSuccess) return limits.Error!;
+        var manageable = new List<string>();
+        foreach (var id in userIds)
         {
-            var values = target.Value.GetValueOrDefault(key) ?? [];
-            // A user without values for a key is not restricted on it, so it is outside a restricted admin's scope.
-            if (values.Count == 0 || values.Contains(ScopeAssignmentValidator.Wildcard) || values.Any(v => !allowed.Contains(v)))
-                return Denied("delegation.user_outside_admin", $"This user is outside your '{key}' scope.");
+            var target = await scopes.GetEffectiveAsync(id, ct);
+            if (!target.IsSuccess) return target.Error!;
+            if (FirstKeyOutside(limits.Value, target.Value) is null) manageable.Add(id);
         }
-        return Result.Success();
+        return manageable;
+    }
+
+    /// <summary>
+    /// The first key on which the user is outside the limits. A user without values for a key (or with "*")
+    /// is not restricted on it, so it is outside a restricted administrator's scope.
+    /// </summary>
+    private static string? FirstKeyOutside(IReadOnlyDictionary<string, HashSet<string>> limits,
+        IReadOnlyDictionary<string, IReadOnlyCollection<string>> target)
+    {
+        foreach (var (key, allowed) in limits)
+        {
+            var values = target.GetValueOrDefault(key) ?? [];
+            if (values.Count == 0 || values.Contains(ScopeAssignmentValidator.Wildcard) || values.Any(v => !allowed.Contains(v)))
+                return key;
+        }
+        return null;
     }
 
     private async Task<Result<bool>> IsUnrestrictedAsync(CancellationToken ct) =>

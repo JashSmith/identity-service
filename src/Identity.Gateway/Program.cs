@@ -105,6 +105,9 @@ builder.Services.AddSingleton<IScopedAccessStore>(sp =>
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();
 builder.Services.AddSingleton<IUserProvisioningService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserLifecycleAdapter>();
+builder.Services.AddSingleton<IUserLifecycleService>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserLifecycleAdapter>());
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>();
 builder.Services.AddSingleton<IUserRoleMapping>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>());
@@ -213,6 +216,7 @@ app.MapGet("/api/identity/me", (ICurrentUserContext current) =>
 app.MapAuth();
 app.MapUsers();
 app.MapUserManagement();
+app.MapUserLifecycle();
 app.MapBusinessRoles();
 app.MapScopeAdmin();
 app.MapAccessContext();

@@ -118,6 +118,19 @@ public sealed class DelegationGuardTests
     }
 
     [Fact]
+    public async Task User_lists_are_filtered_to_the_admins_scope()
+    {
+        var (guard, _) = Create(TehranAdmin());
+        var (superGuard, _) = Create(new Admin("root", true));
+        string[] ids = ["shiraz-user", "tehran-user", "unscoped-user"];
+
+        Assert.Equal(["tehran-user"], (await guard.FilterManageableAsync(ids, Ct)).Value);
+        Assert.Equal(ids, (await superGuard.FilterManageableAsync(ids, Ct)).Value);
+        Assert.True((await guard.IsRestrictedAsync(Ct)).Value);
+        Assert.False((await superGuard.IsRestrictedAsync(Ct)).Value);
+    }
+
+    [Fact]
     public async Task Orchestrator_does_not_create_a_user_outside_the_admins_scope()
     {
         var (guard, _) = Create(TehranAdmin());
