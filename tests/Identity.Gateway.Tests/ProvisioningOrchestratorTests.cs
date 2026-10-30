@@ -42,18 +42,14 @@ public sealed class ProvisioningOrchestratorTests
     {
         public Dictionary<string, ScopedAccessDocument> Docs { get; } = new();
 
-        public Task<ScopedAccessDocument> GetAsync(string userId, CancellationToken ct) =>
-            Task.FromResult(Docs.GetValueOrDefault(userId, ScopedAccessDocument.Empty));
+        public Task<Result<ScopedAccessDocument>> GetAsync(string userId, CancellationToken ct) =>
+            Task.FromResult(Result<ScopedAccessDocument>.Success(Docs.GetValueOrDefault(userId, ScopedAccessDocument.Empty)));
 
-        public Task SetAsync(string userId, ScopedAccessDocument document, CancellationToken ct)
+        public Task<Result> SetAsync(string userId, ScopedAccessDocument document, CancellationToken ct)
         {
             Docs[userId] = document;
-            return Task.CompletedTask;
+            return Task.FromResult(Result.Success());
         }
-
-        public Task AddAssignmentAsync(string userId, ScopedRoleAssignmentDto assignment, CancellationToken ct) => throw new NotSupportedException();
-        public Task UpdateAssignmentAsync(string userId, string role, IReadOnlyDictionary<string, IReadOnlyCollection<string>> scopes, CancellationToken ct) => Task.CompletedTask;
-        public Task RemoveAssignmentAsync(string userId, string role, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private sealed class Membership : IUserRoleMapping
