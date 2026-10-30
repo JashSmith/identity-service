@@ -44,6 +44,8 @@ var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin
     .WithRealmImport("./Keycloak/Realms")
     // Custom themes (e.g. "avash": Persian RTL login); Keycloak's built-in themes live in its jars, not in this folder.
     .WithBindMount("./Keycloak/Themes", "/opt/keycloak/themes", isReadOnly: true)
+    // Extensions built by scripts/build-keycloak-extensions.sh (e.g. the weekly-schedule authenticator).
+    .WithBindMount("./Keycloak/Providers", "/opt/keycloak/providers", isReadOnly: true)
     .WithEnvironment("KC_DB", "postgres")
     .WithEnvironment("KC_DB_URL", ReferenceExpression.Create(
         $"jdbc:postgresql://{postgres.Resource.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}/{keycloakDb.Resource.DatabaseName}"))

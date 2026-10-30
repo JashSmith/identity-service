@@ -114,6 +114,7 @@ builder.Services.AddSingleton<IUserProvisioningService>(sp =>
 builder.Services.Configure<Identity.Infrastructure.Keycloak.AdminConsoleClientOptions>(
     builder.Configuration.GetSection("Identity:AdminConsole"));
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminConsoleClient>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScheduleAuthenticatorSetup>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>();
 builder.Services.AddSingleton<Identity.Application.Settings.IAuthSettingsService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>());

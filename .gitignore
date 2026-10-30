@@ -496,3 +496,6 @@ identity-signing-keys.json
 .claude-sync/conflicts/
 
 .tmp*
+# Keycloak extensions: Maven output and the built jar
+keycloak/extensions/target/
+src/Identity.AppHost/Keycloak/Providers/*.jar
