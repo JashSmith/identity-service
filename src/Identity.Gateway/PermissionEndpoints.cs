@@ -1,6 +1,7 @@
 #pragma warning disable ASPDEPR002
 using Identity.Application;
 using Identity.Contracts;
+using Identity.Gateway.Errors;
 
 namespace Identity.Gateway;
 
@@ -22,10 +23,10 @@ public static class PermissionEndpoints
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", ex.Message).ToProblem();
                 }
             }).RequireAuthorization("Identity.Permissions.Register")
-            .WithName("RegisterPermissions").Produces<ManifestRegistrationResponse>(200).Produces<ProblemResponse>(400)
+            .WithName("RegisterPermissions").Produces<ManifestRegistrationResponse>(200).ProducesProblem(400)
             .WithOpenApi(o =>
             {
                 o.Summary = "Register/refresh a service permission manifest";
@@ -53,7 +54,7 @@ public static class PermissionEndpoints
             ) =>
             {
                 if (string.IsNullOrWhiteSpace(req.Name))
-                    return Results.BadRequest(new ProblemResponse("validation_error", "permission name is required", Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", "permission name is required").ToProblem();
 
                 var permName = req.Name.Trim();
                 var desc = string.IsNullOrWhiteSpace(req.Description) ? $"Permission {permName}" : req.Description.Trim();
@@ -77,12 +78,12 @@ public static class PermissionEndpoints
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", ex.Message).ToProblem();
                 }
             }).RequireAuthorization("Identity.Permissions.Register")
             .WithName("CreatePermission")
             .Produces<PermissionDto>(201)
-            .Produces<ProblemResponse>(400)
+            .ProducesProblem(400)
             .WithOpenApi(o =>
             {
                 o.Summary = "Manually register a single permission";

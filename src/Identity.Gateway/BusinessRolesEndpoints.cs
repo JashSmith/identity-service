@@ -2,6 +2,7 @@
 using Avash.Identity.Abstractions;
 using Identity.Application;
 using Identity.Contracts;
+using Identity.Gateway.Errors;
 
 namespace Identity.Gateway;
 
@@ -22,7 +23,7 @@ public static class BusinessRolesEndpoints
             {
                 var dto = await store.GetAsync(name, ct);
                 return dto is null
-                    ? Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")))
+                    ? Error.NotFound("resource.not_found", $"business role '{name}' not found").ToProblem()
                     : Results.Ok(dto);
             }).RequireAuthorization(IamPermissions.RolesRead)
             .WithName("GetBusinessRole")
@@ -32,7 +33,7 @@ public static class BusinessRolesEndpoints
                 async (string name, IBusinessRoleStore store, CancellationToken ct) =>
                 {
                     var dto = await store.GetAsync(name, ct);
-                    if (dto is null) return Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")));
+                    if (dto is null) return Error.NotFound("resource.not_found", $"business role '{name}' not found").ToProblem();
                     var perms = await store.GetEffectivePermissionsAsync(name, ct);
                     return Results.Ok(new EffectivePermissionsResponse(name, perms));
                 }).RequireAuthorization(IamPermissions.RolesRead)
@@ -43,7 +44,7 @@ public static class BusinessRolesEndpoints
                 Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 if (string.IsNullOrWhiteSpace(req.Name))
-                    return Results.BadRequest(new ProblemResponse("validation_error", "name is required", Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", "name is required").ToProblem();
                 try
                 {
                     var dto = await orch.CreateBusinessRoleAsync(req.Name, req.Description, req.Permissions ?? Array.Empty<string>(), ct);
@@ -52,22 +53,22 @@ public static class BusinessRolesEndpoints
                 }
                 catch (InvalidOperationException ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
                 {
-                    return Results.Conflict(new ProblemResponse("conflict", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Conflict("resource.conflict", ex.Message).ToProblem();
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", ex.Message).ToProblem();
                 }
             }).RequireAuthorization(IamPermissions.RolesManage)
             .WithName("CreateBusinessRole")
-            .Produces<BusinessRoleDto>(201).Produces<ProblemResponse>(400).Produces<ProblemResponse>(409);
+            .Produces<BusinessRoleDto>(201).ProducesProblem(400).ProducesProblem(409);
 
         g.MapPut("/{name}", async (string name, UpdateBusinessRoleRequest req, IBusinessRoleStore store,
                 Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 var dto = await store.UpdateAsync(name, req.Description, ct);
                 if (dto is null)
-                    return Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")));
+                    return Error.NotFound("resource.not_found", $"business role '{name}' not found").ToProblem();
 
                 if (req.Permissions is not null)
                 {
@@ -101,21 +102,21 @@ public static class BusinessRolesEndpoints
                     var ok = await orch.DeleteBusinessRoleSafeAsync(name, ct);
                     if (ok) scopeCache.Invalidate();
                     return ok ? Results.NoContent()
-                        : Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")));
+                        : Error.NotFound("resource.not_found", $"business role '{name}' not found").ToProblem();
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", ex.Message).ToProblem();
                 }
             }).RequireAuthorization(IamPermissions.RolesManage)
             .WithName("DeleteBusinessRole")
-            .Produces(204).Produces<ProblemResponse>(400);
+            .Produces(204).ProducesProblem(400);
 
         g.MapPost("/{name}/permissions", async (string name, AssignPermissionsRequest req, IBusinessRoleStore store,
                 Identity.Application.Scope.IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
             {
                 if (req.Permissions is null || req.Permissions.Count == 0)
-                    return Results.BadRequest(new ProblemResponse("validation_error", "permissions are required", Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", "permissions are required").ToProblem();
                 // Existence is validated against Keycloak itself (the source of truth) inside
                 // AddPermissionsAsync — the in-memory registry is empty after a gateway restart
                 // until services re-register, so it must not reject valid permissions.
@@ -125,12 +126,12 @@ public static class BusinessRolesEndpoints
                     scopeCache.Invalidate();
                     var dto = await store.GetAsync(name, ct);
                     return dto is null
-                        ? Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")))
+                        ? Error.NotFound("resource.not_found", $"business role '{name}' not found").ToProblem()
                         : Results.Ok(dto);
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", ex.Message).ToProblem();
                 }
             }).RequireAuthorization(IamPermissions.RolesManage)
             .WithName("AddPermissionsToBusinessRole")
@@ -145,12 +146,12 @@ public static class BusinessRolesEndpoints
                     scopeCache.Invalidate();
                     var dto = await store.GetAsync(name, ct);
                     return dto is null
-                        ? Results.NotFound(new ProblemResponse("not_found", $"business role '{name}' not found", Guid.NewGuid().ToString("N")))
+                        ? Error.NotFound("resource.not_found", $"business role '{name}' not found").ToProblem()
                         : Results.Ok(dto);
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", ex.Message).ToProblem();
                 }
             }).RequireAuthorization(IamPermissions.RolesManage)
             .WithName("RemovePermissionFromBusinessRole")

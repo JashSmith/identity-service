@@ -9,11 +9,3 @@ namespace Identity.Contracts;
 /// <param name="PageSize">The page size limit requested.</param>
 /// <param name="Total">The total count of items matching the query, if available.</param>
 public sealed record PagedResponse<T>(IReadOnlyCollection<T> Items, int Page, int PageSize, int? Total = null);
-
-/// <summary>
-/// Standard problem details representation returned on HTTP errors.
-/// </summary>
-/// <param name="Code">A machine-readable error classification code (e.g., 'not_found', 'validation_error').</param>
-/// <param name="Message">A human-readable explanation of the error.</param>
-/// <param name="CorrelationId">A unique request tracing ID to correlate in logs.</param>
-public sealed record ProblemResponse(string Code, string Message, string CorrelationId);
