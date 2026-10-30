@@ -22,7 +22,7 @@ public sealed class KeycloakClientRoleProvisioner(
 {
     private readonly KeycloakOptions _o = opts.Value;
     private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
-    private const string SuperAdminGroupName = "super-admins";
+    private const string SuperAdminGroupName = ReservedGroups.SuperAdmins;
     private const string MapperName = "permission-client-role-mapper";
 
     private async Task<string> TokenAsync(CancellationToken ct) => await tokenProvider.GetTokenAsync(ct) ?? string.Empty;
