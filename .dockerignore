@@ -14,8 +14,6 @@
 *.db
 *.db-shm
 *.db-wal
-identity.db
-identity_keys.db
 identity-signing-keys.json
 identity-data-protection-keys
 deploy/.env

@@ -5,11 +5,9 @@
         <File Path="deploy/Keycloak.Dockerfile"/>
         <File Path="deploy/realm-company.json"/>
         <File Path="deploy/OrderService.Sample.Dockerfile"/>
-        <File Path="deploy/migrate-oracle-to-keycloak.sh"/>
     </Folder>
     <Folder Name="/docs/">
         <File Path="docs/architecture.md"/>
-        <File Path="docs/key-lifecycle.md"/>
         <File Path="docs/engineering-report.md"/>
         <File Path="docs/integration-guide.html"/>
         <File Path="docs/running.md"/>
