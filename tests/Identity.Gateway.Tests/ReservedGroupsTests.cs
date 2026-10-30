@@ -113,9 +113,9 @@ public sealed class ReservedGroupsTests
     {
         var kc = new FakeKeycloak();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            Membership(kc).MapRealmRoleAsync("user-1", "super-admins", CancellationToken.None));
+        var assigned = await Membership(kc).AssignRoleAsync("user-1", "super-admins", CancellationToken.None);
 
+        Assert.Equal("role.not_found", assigned.Error?.Code);
         Assert.False(kc.AnyWrite);
     }
 
@@ -124,8 +124,9 @@ public sealed class ReservedGroupsTests
     {
         var kc = new FakeKeycloak();
 
-        await Membership(kc).UnmapRealmRoleAsync("real-super-admin", "super-admins", CancellationToken.None);
+        var removed = await Membership(kc).UnassignRoleAsync("real-super-admin", "super-admins", CancellationToken.None);
 
+        Assert.Equal("role.not_found", removed.Error?.Code);
         Assert.False(kc.AnyWrite);
     }
 }

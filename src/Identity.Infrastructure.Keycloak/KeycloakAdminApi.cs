@@ -27,7 +27,30 @@ public sealed class KeycloakAdminApi(
     /// the JSON body, or null when Keycloak answered without one. <paramref name="resource"/> prefixes error codes.
     /// </summary>
     public async Task<Result<JsonElement?>> SendAsync(
-        HttpMethod method, string path, object? body, string resource, CancellationToken ct)
+        HttpMethod method, string path, object? body, string resource, CancellationToken ct,
+        bool includeKeycloakMessage = false)
+    {
+        var response = await SendRawAsync(method, path, body, resource, ct, includeKeycloakMessage);
+        if (!response.IsSuccess) return response.Error!;
+        using var ok = response.Value;
+        return await ReadJsonAsync(ok, method, path, ct);
+    }
+
+    /// <summary>POSTs a new resource and returns the id from the Location header Keycloak answers with.</summary>
+    public async Task<Result<string>> CreateAsync(
+        string path, object body, string resource, CancellationToken ct, bool includeKeycloakMessage = false)
+    {
+        var response = await SendRawAsync(HttpMethod.Post, path, body, resource, ct, includeKeycloakMessage);
+        if (!response.IsSuccess) return response.Error!;
+        using var created = response.Value;
+        var id = created.Headers.Location?.AbsolutePath.Split('/').LastOrDefault(s => s.Length > 0);
+        if (!string.IsNullOrEmpty(id)) return Uri.UnescapeDataString(id);
+        logger.LogError("Keycloak created {Path} without a Location header", path);
+        return InvalidResponse;
+    }
+
+    private async Task<Result<HttpResponseMessage>> SendRawAsync(
+        HttpMethod method, string path, object? body, string resource, CancellationToken ct, bool includeKeycloakMessage)
     {
         var token = await tokens.GetTokenResultAsync(ct);
         if (!token.IsSuccess) return token.Error!;
@@ -47,23 +70,24 @@ public sealed class KeycloakAdminApi(
             return KeycloakErrors.Unreachable;
         }
 
+        if (response.IsSuccessStatusCode) return response;
         using (response)
-        {
-            if (!response.IsSuccessStatusCode)
-                return await KeycloakErrors.FromResponseAsync(response, resource, logger, ct);
+            return await KeycloakErrors.FromResponseAsync(response, resource, logger, ct, includeKeycloakMessage);
+    }
 
-            var text = await response.Content.ReadAsStringAsync(ct);
-            if (string.IsNullOrWhiteSpace(text)) return (JsonElement?)null;
-            try
-            {
-                using var document = JsonDocument.Parse(text);
-                return (JsonElement?)document.RootElement.Clone();
-            }
-            catch (JsonException ex)
-            {
-                logger.LogError(ex, "Keycloak returned invalid JSON for {Method} {Path}", method, path);
-                return InvalidResponse;
-            }
+    private async Task<Result<JsonElement?>> ReadJsonAsync(HttpResponseMessage response, HttpMethod method, string path, CancellationToken ct)
+    {
+        var text = await response.Content.ReadAsStringAsync(ct);
+        if (string.IsNullOrWhiteSpace(text)) return (JsonElement?)null;
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return (JsonElement?)document.RootElement.Clone();
+        }
+        catch (JsonException ex)
+        {
+            logger.LogError(ex, "Keycloak returned invalid JSON for {Method} {Path}", method, path);
+            return InvalidResponse;
         }
     }
 
@@ -100,9 +124,10 @@ public sealed class KeycloakAdminApi(
     }
 
     public async Task<Result> SendWithoutResultAsync(
-        HttpMethod method, string path, object? body, string resource, CancellationToken ct)
+        HttpMethod method, string path, object? body, string resource, CancellationToken ct,
+        bool includeKeycloakMessage = false)
     {
-        var result = await SendAsync(method, path, body, resource, ct);
+        var result = await SendAsync(method, path, body, resource, ct, includeKeycloakMessage);
         return result.IsSuccess ? Result.Success() : result.Error!;
     }
 

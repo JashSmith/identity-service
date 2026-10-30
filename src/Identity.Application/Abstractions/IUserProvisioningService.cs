@@ -3,42 +3,19 @@ using Identity.Contracts;
 namespace Identity.Application;
 
 /// <summary>
-/// Provisioning interface for creating, updating, and deleting user accounts in Keycloak.
+/// Writes users in the identity provider. Failures are errors: user.not_found, user.conflict
+/// (username or email taken), user.rejected (e.g. password policy), or a Keycloak availability error.
 /// </summary>
 public interface IUserProvisioningService
 {
-    /// <summary>
-    /// Creates a new user in Keycloak with the requested credentials and profile.
-    /// </summary>
-    /// <param name="request">The creation parameters.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The created UserDto.</returns>
-    Task<UserDto> CreateUserAsync(CreateUserRequest request, CancellationToken ct);
+    Task<Result<UserDto>> GetAsync(string userId, CancellationToken ct);
 
-    /// <summary>
-    /// Updates an existing user's profile information in Keycloak.
-    /// </summary>
-    /// <param name="userId">The Keycloak user ID.</param>
-    /// <param name="request">The update payload.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>The updated UserDto, or null if user was not found.</returns>
-    Task<UserDto?> UpdateUserAsync(string userId, UpdateUserRequest request, CancellationToken ct);
+    Task<Result<UserDto>> CreateUserAsync(CreateUserRequest request, CancellationToken ct);
 
-    /// <summary>
-    /// Deletes a user account from Keycloak.
-    /// </summary>
-    /// <param name="userId">The Keycloak user ID.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>True if deleted or already absent; false on failure.</returns>
-    Task<bool> DeleteUserAsync(string userId, CancellationToken ct);
+    /// <summary>Applies the non-null fields of <paramref name="request"/> and keeps everything else.</summary>
+    Task<Result<UserDto>> UpdateUserAsync(string userId, UpdateUserRequest request, CancellationToken ct);
 
-    /// <summary>
-    /// Resets a user's password in Keycloak.
-    /// </summary>
-    /// <param name="userId">The Keycloak user ID.</param>
-    /// <param name="newPassword">The new password.</param>
-    /// <param name="temporary">Whether the password is temporary and must be changed on next login.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>True if reset succeeded; false otherwise.</returns>
-    Task<bool> ResetPasswordAsync(string userId, string newPassword, bool temporary, CancellationToken ct);
+    Task<Result> DeleteUserAsync(string userId, CancellationToken ct);
+
+    Task<Result> ResetPasswordAsync(string userId, string newPassword, bool temporary, CancellationToken ct);
 }

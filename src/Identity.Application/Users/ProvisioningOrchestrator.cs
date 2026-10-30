@@ -3,6 +3,11 @@ using Identity.Contracts;
 
 namespace Identity.Application;
 
+/// <summary>
+/// Creates users with their business roles and runtime scopes, and changes those assignments, keeping
+/// scope attributes and role membership consistent: when a later step fails, the earlier steps are
+/// undone instead of leaving a user with half of the access that was asked for.
+/// </summary>
 public sealed class ProvisioningOrchestrator(
     IUserProvisioningService users,
     IScopedAccessStore scopedStore,
@@ -11,132 +16,88 @@ public sealed class ProvisioningOrchestrator(
     ScopeAssignmentValidator? scopeValidator = null,
     IUserProfileRequirements? profileRequirements = null)
 {
-    /// <summary>
-    /// Maps a Keycloak profile attribute name to the value carried by <see cref="CreateUserRequest"/>.
-    /// </summary>
-    private static string? RequestValue(CreateUserRequest r, string attribute) => attribute switch
-    {
-        "username" => r.Username,
-        "email" => r.Email,
-        "firstName" => r.FirstName,
-        "lastName" => r.LastName,
-        _ => null, // unknown attribute — not something the gateway can supply or judge
-    };
-
-    private async Task ValidateProfileAsync(CreateUserRequest request, CancellationToken ct)
-    {
-        if (profileRequirements is null) return;
-        var required = await profileRequirements.GetRequiredAttributesAsync(ct);
-        if (required.Count == 0) return; // provider unreachable or nothing required
-        var errors = new Dictionary<string, string[]>();
-        foreach (var attr in required)
-        {
-            if (!string.IsNullOrWhiteSpace(RequestValue(request, attr))) continue;
-            var field = attr switch
-            {
-                "username" => "username",
-                "email" => "email",
-                "firstName" => "firstName",
-                "lastName" => "lastName",
-                _ => attr,
-            };
-            errors[field] = [$"'{attr}' is required by the identity provider's user profile; without it the user cannot sign in."];
-        }
-        if (errors.Count > 0) throw new Scope.ScopedValidationException(errors);
-    }
-
-    public async Task<(UserDto User, ScopedAccessDocument Scoped)> CreateUserWithAssignmentsAsync(
+    public async Task<Result<(UserDto User, ScopedAccessDocument Scoped)>> CreateUserWithAssignmentsAsync(
         CreateUserRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await ValidateProfileAsync(request, ct);
-        if (request.Assignments is not null)
-        {
-            foreach (var a in request.Assignments) ScopedAccessSerializer.Validate(a);
-            if (scopeValidator is not null)
-            {
-                var errors = await scopeValidator.ValidateAsync(request.Assignments, roles, ct);
-                if (errors.Count > 0) throw new Scope.ScopedValidationException(errors);
-            }
-            else
-            {
-                foreach (var a in request.Assignments)
-                {
-                    if (!await roles.ExistsAsync(a.Role, ct))
-                        throw new InvalidOperationException($"Role '{a.Role}' does not exist.");
-                }
-            }
-        }
-        UserDto created;
-        try { created = await users.CreateUserAsync(request, ct); }
-        catch (Exception ex) { throw new InvalidOperationException($"Failed to create user '{request.Username}': {ex.Message}", ex); }
-        if (request.Assignments is null || request.Assignments.Count == 0) return (created, ScopedAccessDocument.Empty);
-        try
-        {
-            var doc = ToDocument(request.Assignments);
-            // scopedStore persists both authz.scope.* attributes and the legacy blob in one PUT.
-            await scopedStore.SetAsync(created.Id, doc, ct);
-            foreach (var a in request.Assignments) await SafeMapRoleAsync(created.Id, a.Role, ct);
-            return (created, doc);
-        }
-        catch (Scope.ScopedValidationException) { try { await users.DeleteUserAsync(created.Id, ct); } catch { } throw; }
-        catch (Exception ex)
-        {
-            try { await users.DeleteUserAsync(created.Id, ct); } catch { }
-            throw new InvalidOperationException($"User '{request.Username}' was not created because scoped assignment failed: {ex.Message}", ex);
-        }
+        var assignments = request.Assignments ?? [];
+        var invalid = await ValidateProfileAsync(request, ct) ?? await ValidateAssignmentsAsync(assignments, ct);
+        if (invalid is not null) return invalid;
+
+        var created = await users.CreateUserAsync(request, ct);
+        if (!created.IsSuccess) return created.Error!;
+        if (assignments.Count == 0) return (created.Value, ScopedAccessDocument.Empty);
+
+        var document = ToDocument(assignments);
+        var applied = await ApplyAsync(created.Value.Id, ScopedAccessDocument.Empty, document, ct);
+        if (applied.IsSuccess) return (created.Value, document);
+
+        // A user without the access the admin asked for must not stay behind.
+        var removed = await users.DeleteUserAsync(created.Value.Id, ct);
+        return removed.IsSuccess
+            ? applied.Error!
+            : applied.Error! with { Message = $"{applied.Error!.Message} The new user '{request.Username}' could not be removed again ({removed.Error!.Code})." };
     }
 
-    public async Task<ScopedAccessDocument> AddScopedAssignmentAsync(string userId, ScopedRoleAssignmentDto assignment, CancellationToken ct)
+    public async Task<Result<ScopedAccessDocument>> AddScopedAssignmentAsync(
+        string userId, ScopedRoleAssignmentDto assignment, CancellationToken ct)
     {
-        ScopedAccessSerializer.Validate(assignment);
-        if (scopeValidator is not null)
-        {
-            var errors = await scopeValidator.ValidateAsync(new[] { assignment }, roles, ct);
-            if (errors.Count > 0) throw new Scope.ScopedValidationException(errors);
-        }
-        else
-        {
-            if (!await roles.ExistsAsync(assignment.Role, ct))
-                throw new InvalidOperationException($"Role '{assignment.Role}' does not exist.");
-        }
-        await scopedStore.AddAssignmentAsync(userId, assignment, ct);
-        await SafeMapRoleAsync(userId, assignment.Role, ct);
-        return await scopedStore.GetAsync(userId, ct);
+        var user = await users.GetAsync(userId, ct);
+        if (!user.IsSuccess) return user.Error!;
+        var invalid = await ValidateAssignmentsAsync([assignment], ct);
+        if (invalid is not null) return invalid;
+
+        var current = await ReadScopesAsync(userId, ct);
+        if (!current.IsSuccess) return current.Error!;
+        var others = current.Value.Assignments
+            .Where(a => !string.Equals(a.Role, assignment.Role.Trim(), StringComparison.Ordinal));
+        var next = new ScopedAccessDocument(others.Concat(ToDocument([assignment]).Assignments)
+            .OrderBy(a => a.Role, StringComparer.Ordinal).ToArray());
+
+        var applied = await ApplyAsync(userId, current.Value, next, ct);
+        return applied.IsSuccess ? await ReadScopesAsync(userId, ct) : applied.Error!;
     }
 
-    public async Task<ScopedAccessDocument> ReplaceAssignmentsAsync(string userId, IReadOnlyCollection<ScopedRoleAssignmentDto> assignments, CancellationToken ct)
+    public async Task<Result<ScopedAccessDocument>> ReplaceAssignmentsAsync(
+        string userId, IReadOnlyCollection<ScopedRoleAssignmentDto> assignments, CancellationToken ct)
     {
-        foreach (var a in assignments) ScopedAccessSerializer.Validate(a);
-        if (scopeValidator is not null)
-        {
-            var errors = await scopeValidator.ValidateAsync(assignments, roles, ct);
-            if (errors.Count > 0) throw new Scope.ScopedValidationException(errors);
-        }
-        else
-        {
-            foreach (var a in assignments)
-            {
-                if (!await roles.ExistsAsync(a.Role, ct))
-                    throw new InvalidOperationException($"Role '{a.Role}' does not exist.");
-            }
-        }
-        var previous = await scopedStore.GetAsync(userId, ct);
-        var previousRoles = previous.Assignments.Select(a => a.Role).ToHashSet(StringComparer.Ordinal);
-        var nextRoles = assignments.Select(a => a.Role.Trim()).ToHashSet(StringComparer.Ordinal);
-        var doc = ToDocument(assignments);
-        await scopedStore.SetAsync(userId, doc, ct);
-        foreach (var r in nextRoles.Except(previousRoles, StringComparer.Ordinal)) await SafeMapRoleAsync(userId, r, ct);
-        foreach (var r in previousRoles.Except(nextRoles, StringComparer.Ordinal)) await SafeUnmapRoleAsync(userId, r, ct);
-        return doc;
+        var user = await users.GetAsync(userId, ct);
+        if (!user.IsSuccess) return user.Error!;
+        var invalid = await ValidateAssignmentsAsync(assignments, ct);
+        if (invalid is not null) return invalid;
+
+        var current = await ReadScopesAsync(userId, ct);
+        if (!current.IsSuccess) return current.Error!;
+        var next = ToDocument(assignments);
+
+        var applied = await ApplyAsync(userId, current.Value, next, ct);
+        return applied.IsSuccess ? next : applied.Error!;
     }
 
-    public async Task RemoveScopedAssignmentAsync(string userId, string role, CancellationToken ct)
+    public async Task<Result<ScopedAccessDocument>> UpdateScopedAssignmentAsync(
+        string userId, string role, IReadOnlyDictionary<string, IReadOnlyCollection<string>> scopes, CancellationToken ct)
     {
-        await scopedStore.RemoveAssignmentAsync(userId, role, ct);
-        var still = await scopedStore.GetAsync(userId, ct);
-        if (!still.Assignments.Any(a => string.Equals(a.Role, role, StringComparison.Ordinal)))
-            await SafeUnmapRoleAsync(userId, role, ct);
+        var user = await users.GetAsync(userId, ct);
+        if (!user.IsSuccess) return user.Error!;
+        var invalid = await ValidateAssignmentsAsync([new ScopedRoleAssignmentDto(role, scopes)], ct);
+        if (invalid is not null) return invalid;
+
+        var updated = await CallScopeStoreAsync(() => scopedStore.UpdateAssignmentAsync(userId, role, scopes, ct));
+        return updated.IsSuccess ? await ReadScopesAsync(userId, ct) : updated.Error!;
+    }
+
+    public async Task<Result> RemoveScopedAssignmentAsync(string userId, string role, CancellationToken ct)
+    {
+        var user = await users.GetAsync(userId, ct);
+        if (!user.IsSuccess) return user.Error!;
+
+        var current = await ReadScopesAsync(userId, ct);
+        if (!current.IsSuccess) return current.Error!;
+        var next = new ScopedAccessDocument(current.Value.Assignments
+            .Where(a => !string.Equals(a.Role, role, StringComparison.Ordinal)).ToArray());
+
+        var applied = await ApplyAsync(userId, current.Value, next, ct);
+        return applied.IsSuccess ? Result.Success() : applied.Error!;
     }
 
     /// <summary>Deletes the role; the store refuses while users still hold it (role.in_use).</summary>
@@ -151,6 +112,128 @@ public sealed class ProvisioningOrchestrator(
         return roles.CreateAsync(name.Trim(), description, permissions ?? Array.Empty<string>(), ct);
     }
 
+    /// <summary>
+    /// Moves a user from <paramref name="current"/> to <paramref name="next"/>: writes the scope attributes,
+    /// then adds and removes role memberships. On the first failure every completed step is reverted.
+    /// </summary>
+    private async Task<Result> ApplyAsync(string userId, ScopedAccessDocument current, ScopedAccessDocument next, CancellationToken ct)
+    {
+        var currentRoles = current.Assignments.Select(a => a.Role).ToHashSet(StringComparer.Ordinal);
+        var nextRoles = next.Assignments.Select(a => a.Role).ToHashSet(StringComparer.Ordinal);
+
+        var written = await CallScopeStoreAsync(() => scopedStore.SetAsync(userId, next, ct));
+        if (!written.IsSuccess) return written;
+
+        var done = new List<(string Role, bool Added)>();
+        var changes = nextRoles.Except(currentRoles).Select(r => (Role: r, Add: true))
+            .Concat(currentRoles.Except(nextRoles).Select(r => (Role: r, Add: false)));
+        foreach (var (role, add) in changes)
+        {
+            var changed = add
+                ? await roleMapping.AssignRoleAsync(userId, role, ct)
+                : await roleMapping.UnassignRoleAsync(userId, role, ct);
+            if (changed.IsSuccess)
+            {
+                done.Add((role, add));
+                continue;
+            }
+
+            var undone = await UndoAsync(userId, current, done, ct);
+            return undone
+                ? changed
+                : changed.Error! with { Message = $"{changed.Error!.Message} Earlier changes could not all be reverted; check the user's roles and scopes." };
+        }
+        return Result.Success();
+    }
+
+    private async Task<bool> UndoAsync(string userId, ScopedAccessDocument previous, List<(string Role, bool Added)> done, CancellationToken ct)
+    {
+        var ok = true;
+        for (var i = done.Count - 1; i >= 0; i--)
+        {
+            var (role, added) = done[i];
+            var reverted = added
+                ? await roleMapping.UnassignRoleAsync(userId, role, ct)
+                : await roleMapping.AssignRoleAsync(userId, role, ct);
+            ok &= reverted.IsSuccess;
+        }
+        ok &= (await CallScopeStoreAsync(() => scopedStore.SetAsync(userId, previous, ct))).IsSuccess;
+        return ok;
+    }
+
+    private async Task<Result<ScopedAccessDocument>> ReadScopesAsync(string userId, CancellationToken ct)
+    {
+        ScopedAccessDocument document = ScopedAccessDocument.Empty;
+        var read = await CallScopeStoreAsync(async () => document = await scopedStore.GetAsync(userId, ct));
+        return read.IsSuccess ? document : read.Error!;
+    }
+
+    /// <summary>
+    /// The scope store still reports problems as exceptions; turn the expected ones into errors.
+    /// </summary>
+    private static async Task<Result> CallScopeStoreAsync(Func<Task> call)
+    {
+        try
+        {
+            await call();
+            return Result.Success();
+        }
+        catch (ScopedValidationException ex)
+        {
+            return Error.Validation("scope.invalid", "One or more scope values are invalid.", ex.Errors);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Error.Validation("scope.rejected", ex.Message);
+        }
+    }
+
+    private async Task<Error?> ValidateAssignmentsAsync(IReadOnlyCollection<ScopedRoleAssignmentDto> assignments, CancellationToken ct)
+    {
+        try
+        {
+            foreach (var a in assignments) ScopedAccessSerializer.Validate(a);
+        }
+        catch (ArgumentException ex)
+        {
+            return Error.Validation("scope.invalid", ex.Message);
+        }
+
+        if (scopeValidator is not null)
+        {
+            var errors = await scopeValidator.ValidateAsync(assignments, roles, ct);
+            return errors.Count == 0 ? null : Error.Validation("scope.invalid", "One or more assignments are invalid.", errors);
+        }
+
+        foreach (var a in assignments)
+            if (!await roles.ExistsAsync(a.Role, ct))
+                return Error.Validation("role.not_found", $"Role '{a.Role}' does not exist.");
+        return null;
+    }
+
+    /// <summary>Attributes the identity provider's user profile requires and the request does not carry.</summary>
+    private async Task<Error?> ValidateProfileAsync(CreateUserRequest request, CancellationToken ct)
+    {
+        if (profileRequirements is null) return null;
+        var required = await profileRequirements.GetRequiredAttributesAsync(ct);
+        var missing = required.Where(attr => string.IsNullOrWhiteSpace(RequestValue(request, attr))).ToArray();
+        if (missing.Length == 0) return null;
+
+        return Error.Validation("user.profile_incomplete", "The identity provider requires more profile fields.",
+            missing.ToDictionary(attr => attr,
+                attr => new[] { $"'{attr}' is required by the identity provider's user profile; without it the user cannot sign in." }));
+    }
+
+    /// <summary>Maps a Keycloak profile attribute name to the value carried by <see cref="CreateUserRequest"/>.</summary>
+    private static string? RequestValue(CreateUserRequest r, string attribute) => attribute switch
+    {
+        "username" => r.Username,
+        "email" => r.Email,
+        "firstName" => r.FirstName,
+        "lastName" => r.LastName,
+        _ => null, // unknown attribute — not something the gateway can supply or judge
+    };
+
     private static ScopedAccessDocument ToDocument(IReadOnlyCollection<ScopedRoleAssignmentDto> dtos)
     {
         var normalized = dtos.Select(dto =>
@@ -163,7 +246,4 @@ public sealed class ProvisioningOrchestrator(
         }).OrderBy(a => a.Role, StringComparer.Ordinal).ToArray();
         return new ScopedAccessDocument(normalized);
     }
-
-    private async Task SafeMapRoleAsync(string userId, string roleName, CancellationToken ct) { try { await roleMapping.MapRealmRoleAsync(userId, roleName, ct); } catch { } }
-    private async Task SafeUnmapRoleAsync(string userId, string roleName, CancellationToken ct) { try { await roleMapping.UnmapRealmRoleAsync(userId, roleName, ct); } catch { } }
 }

@@ -18,12 +18,17 @@ public static class KeycloakErrors
     public static readonly Error Unreachable = Error.Unavailable(
         "keycloak.unreachable", "Keycloak could not be reached.");
 
+    private const int MaxExposedMessageLength = 200;
+
     /// <summary>
     /// Maps a non-success Keycloak response for <paramref name="resource"/> (e.g. "role", "user") to an error
-    /// whose code starts with that resource name.
+    /// whose code starts with that resource name. With <paramref name="includeKeycloakMessage"/>, the
+    /// <c>errorMessage</c> Keycloak writes for admins on 400/409 (e.g. a password policy violation) is
+    /// appended; nothing else of the body is ever returned.
     /// </summary>
     public static async Task<Error> FromResponseAsync(
-        HttpResponseMessage response, string resource, ILogger logger, CancellationToken ct)
+        HttpResponseMessage response, string resource, ILogger logger, CancellationToken ct,
+        bool includeKeycloakMessage = false)
     {
         ArgumentNullException.ThrowIfNull(response);
         ArgumentException.ThrowIfNullOrWhiteSpace(resource);
@@ -33,16 +38,41 @@ public static class KeycloakErrors
         logger.LogWarning("Keycloak answered {Status} for {Method} {Path}: {Body}",
             (int)response.StatusCode, response.RequestMessage?.Method, response.RequestMessage?.RequestUri?.AbsolutePath, body);
 
+        var reason = includeKeycloakMessage ? AdminMessage(body) : null;
         return response.StatusCode switch
         {
             HttpStatusCode.NotFound => Error.NotFound($"{resource}.not_found", $"The {resource} was not found."),
-            HttpStatusCode.Conflict => Error.Conflict($"{resource}.conflict", $"The {resource} conflicts with existing data."),
-            HttpStatusCode.BadRequest => Error.Validation($"{resource}.rejected", $"Keycloak rejected the {resource} request."),
+            HttpStatusCode.Conflict => Error.Conflict($"{resource}.conflict",
+                reason is null ? $"The {resource} conflicts with existing data." : $"The {resource} conflicts with existing data: {reason}"),
+            HttpStatusCode.BadRequest => Error.Validation($"{resource}.rejected",
+                reason is null ? $"Keycloak rejected the {resource} request." : $"Keycloak rejected the {resource} request: {reason}"),
             HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => Error.Upstream(
                 "keycloak.access_denied", "The gateway is not allowed to perform this Keycloak operation."),
             >= HttpStatusCode.InternalServerError => Error.Unavailable(
                 "keycloak.error", "Keycloak failed to process the request."),
             _ => Error.Upstream("keycloak.unexpected_status", "Keycloak returned an unexpected response."),
         };
+    }
+
+    /// <summary>The admin-facing errorMessage field of a Keycloak error body, if any.</summary>
+    private static string? AdminMessage(string body)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            foreach (var field in new[] { "errorMessage", "error_description" })
+            {
+                if (document.RootElement.TryGetProperty(field, out var value) &&
+                    value.ValueKind == System.Text.Json.JsonValueKind.String &&
+                    value.GetString() is { Length: > 0 } message)
+                    return message.Length > MaxExposedMessageLength ? message[..MaxExposedMessageLength] : message;
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Not JSON: nothing safe to expose.
+        }
+        return null;
     }
 }
