@@ -344,13 +344,12 @@ public sealed class KeycloakAuthorizationTests
         var tokenProv = new KeycloakAdminTokenProvider(Client(handler), Options.Create(KcOpts()));
         var adapter = new KeycloakDirectoryAdapter(Client(handler), Options.Create(KcOpts()), tokenProv);
         
-        var isOnline = await adapter.IsUserOnlineAsync("u-1", CancellationToken.None);
         var sessions = await adapter.GetUserSessionsAsync("u-1", CancellationToken.None);
 
-        Assert.True(isOnline);
-        Assert.Single(sessions);
-        Assert.Equal("sess-1", sessions.First().Id);
-        Assert.Equal("192.168.1.1", sessions.First().IpAddress);
+        Assert.True(sessions.IsSuccess);
+        var session = Assert.Single(sessions.Value);
+        Assert.Equal("sess-1", session.Id);
+        Assert.Equal("192.168.1.1", session.IpAddress);
     }
 
     [Fact]
@@ -377,8 +376,8 @@ public sealed class KeycloakAuthorizationTests
         var result = await adapter.RevokeUserTokensAsync("u-1", "Admin revocation", CancellationToken.None);
 
         Assert.True(logoutCalled);
-        Assert.True(result.Success);
-        Assert.Equal("u-1", result.UserId);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("u-1", result.Value.UserId);
     }
 
     [Fact]

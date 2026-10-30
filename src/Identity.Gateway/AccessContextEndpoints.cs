@@ -2,6 +2,7 @@
 using Identity.Application;
 using Identity.Application.Scope;
 using Identity.Contracts;
+using Identity.Gateway.Errors;
 
 namespace Identity.Gateway;
 
@@ -14,12 +15,13 @@ public static class AccessContextEndpoints
             {
                 if (current.UserId is null) return Results.Unauthorized();
                 var perms = await dirs.GetUserPermissionsAsync(current.UserId, ct);
+                if (!perms.IsSuccess) return perms.Error!.ToProblem();
                 // Keycloak is the single source of truth: effective scopes = group ∪ user attributes.
                 var doc = await scopes.GetAsync(current.UserId, ct);
                 var effectiveScopes = await scopes.GetEffectiveAsync(current.UserId, ct);
                 var resp = new AccessContextResponse(
                     current.UserId, current.Username,
-                    perms.Select(p => p.Name).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.Ordinal).ToArray(),
+                    perms.Value.Select(p => p.Name).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.Ordinal).ToArray(),
                     doc.Assignments.ToArray(),
                     effectiveScopes);
                 return Results.Ok(resp);

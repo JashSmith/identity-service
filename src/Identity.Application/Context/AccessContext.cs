@@ -53,7 +53,8 @@ public sealed class CurrentAccessContext : IApplicationAccessContext
         CancellationToken ct)
     {
         var perms = await users.GetUserPermissionsAsync(userId, ct);
-        var permNames = perms.Select(p => p.Name).ToArray();
+        if (!perms.IsSuccess) throw new ErrorException(perms.Error!);
+        var permNames = perms.Value.Select(p => p.Name).ToArray();
         var doc = await store.GetAsync(userId, ct);
         return new CurrentAccessContext(permNames, doc.Assignments.ToArray());
     }

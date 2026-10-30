@@ -960,7 +960,7 @@
   // 1. Users Loader
   async function loadUsers() {
     try {
-      const res = await apiFetch('/api/identity/users?page=1&pageSize=100');
+      const res = await apiFetch('/api/identity/users?page=1&pageSize=100&includeSessions=true');
       if (res.ok) {
         const paged = await res.json();
         state.users = paged.items || [];

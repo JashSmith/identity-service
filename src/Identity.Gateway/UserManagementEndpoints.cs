@@ -46,32 +46,22 @@ public static class UserManagementEndpoints
                 .Produces(204).ProducesProblem(400).ProducesProblem(404);
         }
 
-        g.MapGet("/{id}/sessions", async (string id, IUserSessionService sessionService, IUserDirectory dir, CancellationToken ct) =>
-            {
-                var user = await dir.GetUserAsync(id, ct);
-                if (user is null)
-                    return Error.NotFound("resource.not_found", $"user '{id}' not found").ToProblem();
-                var sessions = await sessionService.GetUserSessionsAsync(id, ct);
-                return Results.Ok(sessions);
-            }).RequireAuthorization(IamPermissions.UsersManage)
+        g.MapGet("/{id}/sessions", async (string id, IUserSessionService sessionService, CancellationToken ct) =>
+                (await sessionService.GetUserSessionsAsync(id, ct)).ToHttpResult(sessions => Results.Ok(sessions)))
+            .RequireAuthorization(IamPermissions.UsersManage)
             .WithName("GetUserSessions")
-            .Produces<IReadOnlyCollection<UserSessionDto>>(200);
+            .Produces<IReadOnlyCollection<UserSessionDto>>(200).ProducesProblem(404);
 
-        g.MapPost("/{id}/revoke", async (string id, RevokeUserTokensRequest? req, IUserSessionService sessionService, IUserDirectory dir, CancellationToken ct) =>
-            {
-                var user = await dir.GetUserAsync(id, ct);
-                if (user is null)
-                    return Error.NotFound("resource.not_found", $"user '{id}' not found").ToProblem();
-                var res = await sessionService.RevokeUserTokensAsync(id, req?.Reason, ct);
-                return Results.Ok(res);
-            }).RequireAuthorization(IamPermissions.UsersManage)
+        g.MapPost("/{id}/revoke", async (string id, RevokeUserTokensRequest? req, IUserSessionService sessionService, CancellationToken ct) =>
+                (await sessionService.RevokeUserTokensAsync(id, req?.Reason, ct)).ToHttpResult(revoked => Results.Ok(revoked)))
+            .RequireAuthorization(IamPermissions.UsersManage)
             .WithName("RevokeUserTokens")
-            .Produces<RevokeUserTokensResponse>(200);
+            .Produces<RevokeUserTokensResponse>(200).ProducesProblem(404);
 
-        g.MapGet("/{id}/scoped-access", async (string id, IScopedAccessStore store, IUserDirectory dir, CancellationToken ct) =>
+        g.MapGet("/{id}/scoped-access", async (string id, IScopedAccessStore store, IUserProvisioningService users, CancellationToken ct) =>
             {
-                var user = await dir.GetUserAsync(id, ct);
-                if (user is null) return Error.NotFound("resource.not_found", $"user '{id}' not found").ToProblem();
+                var user = await users.GetAsync(id, ct);
+                if (!user.IsSuccess) return user.Error!.ToProblem();
                 var doc = await store.GetAsync(id, ct);
                 return Results.Ok(new ScopedAccessResponse(id, doc.Assignments.ToArray()));
             }).RequireAuthorization(IamPermissions.ScopesRead)
