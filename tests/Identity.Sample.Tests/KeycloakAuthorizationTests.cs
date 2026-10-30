@@ -44,14 +44,22 @@ public sealed class KeycloakAuthorizationTests
     private sealed class FakeRoleStore(params string[] roles) : IBusinessRoleStore
     {
         private readonly HashSet<string> _roles = new(roles, StringComparer.Ordinal);
-        public Task<BusinessRoleDto?> GetAsync(string name, CancellationToken ct) => Task.FromResult(_roles.Contains(name) ? new BusinessRoleDto(name, null, true, Array.Empty<string>()) : null);
-        public Task<IReadOnlyCollection<BusinessRoleDto>> ListAsync(CancellationToken ct) => Task.FromResult((IReadOnlyCollection<BusinessRoleDto>)_roles.Select(r => new BusinessRoleDto(r, null, true, Array.Empty<string>())).ToArray());
-        public Task<BusinessRoleDto> CreateAsync(string name, string? desc, IReadOnlyCollection<string> perms, CancellationToken ct) { _roles.Add(name); return Task.FromResult(new BusinessRoleDto(name, desc, true, perms.ToArray())); }
-        public Task<BusinessRoleDto?> UpdateAsync(string name, string? desc, CancellationToken ct) => Task.FromResult<BusinessRoleDto?>(null);
-        public Task<bool> DeleteAsync(string name, CancellationToken ct) => Task.FromResult(_roles.Remove(name));
-        public Task<IReadOnlyCollection<string>> GetEffectivePermissionsAsync(string name, CancellationToken ct) => Task.FromResult((IReadOnlyCollection<string>)Array.Empty<string>());
-        public Task AddPermissionsAsync(string name, IReadOnlyCollection<string> perms, CancellationToken ct) => Task.CompletedTask;
-        public Task RemovePermissionAsync(string name, string perm, CancellationToken ct) => Task.CompletedTask;
+        private static BusinessRoleDto Dto(string name) => new(name, null, true, Array.Empty<string>());
+        private static Error Missing(string name) => Error.NotFound("role.not_found", name);
+        public Task<Result<BusinessRoleDto>> GetAsync(string name, CancellationToken ct) =>
+            Task.FromResult(_roles.Contains(name) ? Result<BusinessRoleDto>.Success(Dto(name)) : Missing(name));
+        public Task<Result<IReadOnlyCollection<BusinessRoleDto>>> ListAsync(CancellationToken ct) =>
+            Task.FromResult(Result<IReadOnlyCollection<BusinessRoleDto>>.Success(_roles.Select(Dto).ToArray()));
+        public Task<Result<BusinessRoleDto>> CreateAsync(string name, string? desc, IReadOnlyCollection<string> perms, CancellationToken ct)
+        { _roles.Add(name); return Task.FromResult(Result<BusinessRoleDto>.Success(Dto(name))); }
+        public Task<Result<BusinessRoleDto>> UpdateAsync(string name, string? desc, CancellationToken ct) => GetAsync(name, ct);
+        public Task<Result> DeleteAsync(string name, CancellationToken ct) =>
+            Task.FromResult(_roles.Remove(name) ? Result.Success() : Result.Failure(Missing(name)));
+        public Task<Result<IReadOnlyCollection<string>>> GetEffectivePermissionsAsync(string name, CancellationToken ct) =>
+            Task.FromResult(Result<IReadOnlyCollection<string>>.Success(Array.Empty<string>()));
+        public Task<Result> AddPermissionsAsync(string name, IReadOnlyCollection<string> perms, CancellationToken ct) => Task.FromResult(Result.Success());
+        public Task<Result> RemovePermissionAsync(string name, string perm, CancellationToken ct) => Task.FromResult(Result.Success());
+        public Task<Result> SetPermissionsAsync(string name, IReadOnlyCollection<string> perms, CancellationToken ct) => Task.FromResult(Result.Success());
     }
 
     private static HttpResponseMessage Json(object obj, HttpStatusCode code = HttpStatusCode.OK)
