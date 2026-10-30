@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using Identity.Application;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -33,6 +34,13 @@ public sealed class KeycloakAdminTokenProvider(
 
         var key = $"{_o.BaseUrl.TrimEnd('/')}|{_o.Realm}|{_o.AdminClientId}";
         return await _cache.GetOrRefreshAsync(key, _time, RequestTokenAsync, ct);
+    }
+
+    /// <summary>Like <see cref="GetTokenAsync"/>, but reports a missing token as an error.</summary>
+    public async Task<Result<string>> GetTokenResultAsync(CancellationToken ct)
+    {
+        var token = await GetTokenAsync(ct);
+        return string.IsNullOrEmpty(token) ? KeycloakErrors.AdminTokenUnavailable : token;
     }
 
     private async Task<AdminToken?> RequestTokenAsync(CancellationToken ct)

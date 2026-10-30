@@ -3,6 +3,8 @@ using Avash.Identity.Authorization.AspNetCore;
 using Identity.Gateway;
 using Identity.Application;
 using Identity.Contracts;
+using FluentValidation;
+using Identity.Gateway.Errors;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +20,10 @@ if (builder.Environment.IsDevelopment())
 }
 
 builder.Services.AddSingleton(TimeProvider.System);
+// One error contract: RFC 9457 problem details with a stable "code" (see Errors/ErrorResults).
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<Identity.Gateway.Errors.GlobalExceptionHandler>();
+builder.Services.AddValidatorsFromAssemblyContaining<ProvisioningOrchestrator>(includeInternalTypes: true);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
@@ -168,6 +174,10 @@ builder.Services.AddOpenApi("v1", o =>
 });
 
 var app = builder.Build();
+// Registered before everything else so no exception reaches the developer page, which would
+// echo request headers (including bearer tokens) back to the caller.
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 app.MapDefaultEndpoints();
 if (app.Environment.IsDevelopment())
 {
@@ -294,6 +304,9 @@ catch
 }
 
 app.MapGet("/dashboard", () => Results.Redirect("/"));
+// Unknown API routes answer with a 404 problem instead of the dashboard page.
+app.MapFallback("/api/{**path}", () =>
+    Error.NotFound("route.not_found", "No API endpoint matches this path.").ToProblem());
 app.MapFallbackToFile("index.html");
 app.Run();
 
