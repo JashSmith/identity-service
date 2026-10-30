@@ -54,57 +54,10 @@ public static class AuthEndpoints
             return Results.BadRequest(new ProblemResponse("validation_error", "username and password required",
                 Correlation(ctx)));
 
-        // Automatically default client_id and client_secret if missing or admin-cli
-        if (!form.ContainsKey("client_id") || string.IsNullOrWhiteSpace(form["client_id"]) ||
-            string.Equals(form["client_id"], "admin-cli", StringComparison.OrdinalIgnoreCase))
-        {
-            form["client_id"] = cfg["Identity:Keycloak:ClientId"] ?? "identity-gateway";
-        }
-        if (string.Equals(form["client_id"], "identity-gateway", StringComparison.OrdinalIgnoreCase) &&
-            (!form.ContainsKey("client_secret") || string.IsNullOrWhiteSpace(form["client_secret"])))
-        {
-            form["client_secret"] = cfg["Identity:Keycloak:ClientSecret"] ?? "gateway-development-only";
-        }
+        var rejected = ApplyClientCredentials(form, cfg, ctx);
+        if (rejected is not null) return rejected;
 
-        var realm = Realm(cfg);
-        var baseUrl = BaseUrl(cfg);
-        using var http = httpFactory.CreateClient();
-        var res = await http.PostAsync($"{baseUrl}/realms/{realm}/protocol/openid-connect/token",
-            new FormUrlEncodedContent(form), ct);
-        var body = await res.Content.ReadAsStringAsync(ct);
-
-        // Dev resilience for admin user:
-        // Keycloak realm import defaults the 'admin' password to 'admin', whereas Keycloak master uses 'admin-development-only'.
-        // If login fails with invalid_grant for user 'admin', retry with the alternative common dev password.
-        if (!res.IsSuccessStatusCode &&
-            body.Contains("invalid_grant", StringComparison.OrdinalIgnoreCase) &&
-            form.TryGetValue("username", out var u) &&
-            string.Equals(u, "admin", StringComparison.OrdinalIgnoreCase) &&
-            form.TryGetValue("password", out var p))
-        {
-            var altPassword = string.Equals(p, "admin", StringComparison.Ordinal)
-                ? "admin-development-only"
-                : string.Equals(p, "admin-development-only", StringComparison.Ordinal)
-                    ? "admin"
-                    : null;
-
-            if (altPassword is not null)
-            {
-                var altForm = new Dictionary<string, string>(form, StringComparer.Ordinal)
-                {
-                    ["password"] = altPassword
-                };
-                var altRes = await http.PostAsync($"{baseUrl}/realms/{realm}/protocol/openid-connect/token",
-                    new FormUrlEncodedContent(altForm), ct);
-                if (altRes.IsSuccessStatusCode)
-                {
-                    var altBody = await altRes.Content.ReadAsStringAsync(ct);
-                    return Results.Content(altBody, "application/json", System.Text.Encoding.UTF8, (int)altRes.StatusCode);
-                }
-            }
-        }
-
-        return Results.Content(body, "application/json", System.Text.Encoding.UTF8, (int)res.StatusCode);
+        return await ProxyTokenAsync(cfg, httpFactory, form, ct, ctx);
     }
 
     private static async Task<IResult> Refresh(HttpContext ctx, IConfiguration cfg, IHttpClientFactory httpFactory,
@@ -112,6 +65,9 @@ public static class AuthEndpoints
     {
         var form = await ReadFormAsync(ctx, ct);
         form["grant_type"] = "refresh_token";
+        var rejected = ApplyClientCredentials(form, cfg, ctx);
+        if (rejected is not null) return rejected;
+
         return await ProxyTokenAsync(cfg, httpFactory, form, ct, ctx);
     }
 
@@ -147,6 +103,9 @@ public static class AuthEndpoints
         var baseUrl = BaseUrl(cfg);
         // Keycloak logout = token revocation; accept refresh_token or token.
         if (!form.ContainsKey("refresh_token") && form.TryGetValue("token", out var tok)) form["refresh_token"] = tok;
+        var rejected = ApplyClientCredentials(form, cfg, ctx);
+        if (rejected is not null) return rejected;
+
         using var http = httpFactory.CreateClient();
         var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/realms/{realm}/protocol/openid-connect/logout")
             { Content = new FormUrlEncodedContent(form) };
@@ -176,6 +135,26 @@ public static class AuthEndpoints
         var body = await res.Content.ReadAsStringAsync(ct);
         // Never log body (contains tokens). Redaction is enforced at caller logging boundaries.
         return Results.Content(body, "application/json", System.Text.Encoding.UTF8, (int)res.StatusCode);
+    }
+
+    /// <summary>Returns an error result when the request must not be forwarded, otherwise null.</summary>
+    private static IResult? ApplyClientCredentials(Dictionary<string, string> form, IConfiguration cfg, HttpContext ctx)
+    {
+        var outcome = GatewayClientCredentials.Apply(form,
+            cfg["Identity:Keycloak:ClientId"] ?? "identity-gateway",
+            cfg["Identity:Keycloak:ClientSecret"]);
+
+        return outcome switch
+        {
+            GatewayClientCredentials.Outcome.ClientCredentialsNotAllowed => Results.BadRequest(
+                new ProblemResponse("unauthorized_client",
+                    "client_credentials requires the caller's own client_id and client_secret", Correlation(ctx))),
+            GatewayClientCredentials.Outcome.MissingGatewaySecret => Results.Problem(
+                title: "Gateway client is not configured",
+                detail: "Identity:Keycloak:ClientSecret is missing.",
+                statusCode: StatusCodes.Status503ServiceUnavailable),
+            _ => null
+        };
     }
 
     private static string Realm(IConfiguration c) =>

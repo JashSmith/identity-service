@@ -37,12 +37,17 @@ var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin
     .WithEnvironment("KC_DB_PASSWORD", postgres.Resource.PasswordParameter)
     .WaitFor(keycloakDb);
 
+// Secret of the realm's confidential identity-gateway client. Its value must match the realm
+// export, so it comes from configuration (Parameters:gateway-client-secret), never from code.
+var gatewayClientSecret = builder.AddParameter("gateway-client-secret", secret: true);
+
 var keycloakHttp = keycloak.GetEndpoint("http");
 
 var gateway = builder.AddProject<Projects.Identity_Gateway>("identity-gateway")
     .WithEnvironment("Identity__Authority", ReferenceExpression.Create($"{keycloakHttp}/realms/{KeycloakRealm}"))
     .WithEnvironment("Identity__Keycloak__BaseUrl", keycloakHttp)
     .WithEnvironment("Identity__Keycloak__Realm", KeycloakRealm)
+    .WithEnvironment("Identity__Keycloak__ClientSecret", gatewayClientSecret)
     .WithEnvironment("Identity__KeycloakAdmin__BaseUrl", keycloakHttp)
     .WithEnvironment("Identity__KeycloakAdmin__Realm", KeycloakRealm)
     .WithEnvironment("Identity__KeycloakAdmin__AdminUsername", keycloakAdmin)
