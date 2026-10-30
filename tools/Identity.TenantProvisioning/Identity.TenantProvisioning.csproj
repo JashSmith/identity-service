@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Identity.TenantProvisioning</RootNamespace>
+    <AssemblyName>identity-tenant-provisioning</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="tenant-realm-template.json" LogicalName="tenant-realm-template.json" />
+    <InternalsVisibleTo Include="Identity.TenantProvisioning.Tests" />
+  </ItemGroup>
+
+</Project>

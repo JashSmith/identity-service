@@ -82,21 +82,21 @@ docker ps --format '{{.Names}}' | grep -E '^(keycloak|redis)-' | xargs -r docker
 
 ## افزودن سازمان جدید
 
-هر سازمان یک Realm است و ساخت خودکار Realm هنوز پیاده‌سازی نشده است. مراحل:
+هر سازمان یک Realm است. ابزار `tools/Identity.TenantProvisioning` آن را از الگو می‌سازد. این ابزار را اپراتور با حساب Realm اصلی (`master`) اجرا می‌کند و خود درگاه هیچ‌وقت به Realm اصلی دسترسی ندارد.
 
-1. ‏Realm را با فایل Import یا با کنسول مدیریت Keycloak بسازید. فایل `src/Identity.AppHost/Keycloak/Realms/realm-acme.json` الگوی کاملی است: کلاینت‌های `identity-gateway-admin` (Service Account با نقش‌های realm-management) و `identity-gateway`، گروه‌های `super-admins` و `iam-scope-registry`، و Client Scopeهای `iam-access`، ‏`authz-scopes` و `iam-permissions`.
-2. سازمان را در تنظیمات درگاه اضافه کنید؛ رمزها را از پیکربندی امن بدهید، نه در فایل:
+1. ابزار را اجرا کنید. رمز حساب master از متغیر محیطی `KEYCLOAK_MASTER_PASSWORD` یا به‌صورت پنهان از ورودی خوانده می‌شود و هیچ‌وقت در خط فرمان نوشته نمی‌شود:
 
-   ```text
-   Identity__Tenants__1__Id=branch-north
-   Identity__Tenants__1__DisplayName=شعبه شمال
-   Identity__Tenants__1__Realm=branch-north
-   Identity__Tenants__1__AdminClientSecret=<secret>
-   Identity__Tenants__1__ClientSecret=<secret>
+   ```powershell
+   dotnet run --project tools/Identity.TenantProvisioning -- `
+     --keycloak https://keycloak.example --realm branch-north --display-name "شعبه شمال" --admin admin
    ```
 
-3. سازمان را در تنظیمات کنسول (`Console__Tenants__N__*`) اضافه کنید.
-4. درگاه را دوباره اجرا کنید. ‏Bootstrap برای Realm جدید رجیستری محدوده، Mapperها، گروه `super-admins`، دسترسی‌های درگاه و کلاینت کنسول را می‌سازد.
+   به‌جای کاربر master می‌توان از یک Service Account در master با نقش `create-realm` استفاده کرد (`--master-client-id` و رمز در `KEYCLOAK_MASTER_CLIENT_SECRET`). در Git Bash روی ویندوز نام‌های فارسی در آرگومان‌ها خراب می‌شوند؛ ابزار را در PowerShell اجرا کنید.
+
+2. ابزار Realm را با کلاینت‌های درگاه، گروه‌های `super-admins` و `iam-scope-registry`، ‏Client Scopeهای لازم و یک مدیر عضو `super-admins` می‌سازد. رمزهای تصادفی و رمز موقت مدیر را در فایل `branch-north.tenant.env` می‌نویسد. اگر Realm از قبل وجود داشته باشد یا فایل خروجی موجود باشد، کاری انجام نمی‌دهد.
+3. تنظیمات این فایل را به پیکربندی درگاه (`Identity__Tenants__N__*`) و کنسول (`Console__Tenants__N__*`) اضافه کنید و N را با شماره آزاد بعدی جایگزین کنید. رمزها را در محل امن نگه دارید و فایل را پاک کنید.
+4. درگاه و کنسول را دوباره اجرا کنید. ‏Bootstrap درگاه برای Realm جدید رجیستری محدوده، Mapperها، دسترسی‌های درگاه و کلاینت کنسول را می‌سازد.
+5. مدیر جدید با رمز موقت وارد می‌شود و Keycloak او را به تغییر رمز وادار می‌کند.
 
 ## عیب‌یابی
 
