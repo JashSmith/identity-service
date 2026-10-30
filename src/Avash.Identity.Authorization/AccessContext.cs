@@ -48,9 +48,6 @@ public sealed class ClaimsPrincipalAccessContext : ICurrentAccessContext
             .Select(c => c.Value)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        // Also include role claims as permissions for compatibility
-        var roles = principal.FindAll(ClaimTypes.Role).Concat(principal.FindAll("role")).Select(c => c.Value);
-        _permissions = _permissions.Concat(roles).Distinct(StringComparer.Ordinal).ToArray();
 
         _assignments = ParseAssignments(principal);
         _scopeIndex = BuildScopeIndex(_assignments);

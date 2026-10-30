@@ -27,17 +27,16 @@ public sealed class PermissionPolicyProvider(Microsoft.Extensions.Options.IOptio
 
 public sealed class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
+    // Only explicit permission claims count. Roles, including Keycloak's realm-admin, are not
+    // permissions: treating them as such let any realm administrator pass every policy.
+    // Matching stays case-insensitive until permission naming is unified.
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext ctx, PermissionRequirement req)
     {
-        var permissions = ctx.User.FindAll("permission")
+        var granted = ctx.User.FindAll("permission")
             .Concat(ctx.User.FindAll("permissions"))
-            .Select(x => x.Value).ToList();
-        
-        if (permissions.Contains(req.Permission, StringComparer.OrdinalIgnoreCase) ||
-            permissions.Contains("realm-admin", StringComparer.OrdinalIgnoreCase) ||
-            ctx.User.Claims.Any(c => (c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "roles" || c.Type == "role") &&
-                                     (string.Equals(c.Value, req.Permission, StringComparison.OrdinalIgnoreCase) ||
-                                      string.Equals(c.Value, "realm-admin", StringComparison.OrdinalIgnoreCase))))
+            .Any(c => string.Equals(c.Value, req.Permission, StringComparison.OrdinalIgnoreCase));
+
+        if (granted)
         {
             ctx.Succeed(req);
         }
