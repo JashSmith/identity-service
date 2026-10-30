@@ -27,9 +27,6 @@ public sealed class KeycloakGroupBusinessRoleStore(
     private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
     private const string AllowedScopesAttr = "authz.allowed-scopes";
 
-    /// <summary>Infrastructure groups that never surface as business roles.</summary>
-    private static readonly string[] InternalGroupNames = ["iam-scope-registry", "super-admins"];
-
     private sealed record GroupRef(string Id, string Name, string Path, Dictionary<string, string[]> Attributes);
 
     private static GroupRef MapGroup(JsonElement e)
@@ -53,6 +50,9 @@ public sealed class KeycloakGroupBusinessRoleStore(
 
     private async Task<GroupRef?> GetGroupByNameAsync(string name, string token, CancellationToken ct)
     {
+        // Reserved groups are not business roles: every public operation must treat them as absent.
+        if (ReservedGroups.IsReserved(name)) return null;
+
         // Keycloak groups search: GET /groups?search=name is substring; we filter exact.
         // briefRepresentation=false is required — the default brief form omits attributes,
         // which made description/authz.* lookups always empty.
@@ -187,7 +187,7 @@ public sealed class KeycloakGroupBusinessRoleStore(
             {
                 var g = MapGroup(el);
                 // Skip internal infrastructure groups — they are not business roles
-                if (InternalGroupNames.Contains(g.Name, StringComparer.OrdinalIgnoreCase)) continue;
+                if (ReservedGroups.IsReserved(g.Name)) continue;
                 var perms = await GetEffectivePermissionsAsync(g.Name, ct);
                 var desc = g.Attributes.TryGetValue("description", out var d) ? d.FirstOrDefault() : null;
                 result.Add(new BusinessRoleDto(g.Name, desc, true, perms));
@@ -205,6 +205,8 @@ public sealed class KeycloakGroupBusinessRoleStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         name = name.Trim();
+        if (ReservedGroups.IsReserved(name))
+            throw new InvalidOperationException($"Business role name '{name}' is reserved.");
         var token = await tokenProvider.GetTokenAsync(ct);
         if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("Keycloak admin token unavailable.");
 
@@ -271,6 +273,7 @@ public sealed class KeycloakGroupBusinessRoleStore(
 
     public async Task<bool> DeleteAsync(string name, CancellationToken ct)
     {
+        if (ReservedGroups.IsReserved(name)) return false;
         var token = await tokenProvider.GetTokenAsync(ct);
         if (string.IsNullOrEmpty(token)) return false;
         var group = await GetGroupByNameAsync(name, token, ct);

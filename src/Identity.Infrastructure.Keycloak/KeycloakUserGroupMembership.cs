@@ -23,6 +23,9 @@ public sealed class KeycloakUserGroupMembership(
 
     private async Task<string?> ResolveGroupIdAsync(string groupName, string token, CancellationToken ct)
     {
+        // Membership of reserved groups (e.g. super-admins) is never granted or revoked here.
+        if (ReservedGroups.IsReserved(groupName)) return null;
+
         // GET /groups?search=name — filter exact
         var req = new HttpRequestMessage(HttpMethod.Get, $"{AdminBase}/{_o.Realm}/groups?search={Uri.EscapeDataString(groupName)}");
         req.Headers.Add("Authorization", $"Bearer {token}");
