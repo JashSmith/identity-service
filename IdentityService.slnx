@@ -55,6 +55,7 @@
         <Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj"/>
         <Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj"/>
         <Project Path="tests/Identity.Domain.Tests/Identity.Domain.Tests.csproj"/>
+        <Project Path="tests/Identity.E2E.Tests/Identity.E2E.Tests.csproj"/>
         <Project Path="tests/Identity.Gateway.Tests/Identity.Gateway.Tests.csproj"/>
         <Project Path="tests/Identity.Sample.Tests/Identity.Sample.Tests.csproj"/>
     </Folder>

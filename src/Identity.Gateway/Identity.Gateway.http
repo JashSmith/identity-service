@@ -1,0 +1,108 @@
+# Identity Gateway API walkthrough (VS Code REST Client / Visual Studio / Rider).
+# Start the stack first: dotnet run --project src/Identity.AppHost --launch-profile http
+# Run the login request, then the others reuse its token. Dev credentials only (admin/admin from the realm import).
+
+@gateway = http://localhost:5080
+@tenant = company
+
+### Sign in (password grant through the gateway; Keycloak stays hidden)
+# @name login
+POST {{gateway}}/api/identity/auth/login
+X-Tenant-Id: {{tenant}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&username=admin&password=admin
+
+@token = {{login.response.body.access_token}}
+
+### Who am I, with my permissions and scoped assignments
+GET {{gateway}}/api/identity/access-context
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+
+### Tenants (one Keycloak realm each)
+GET {{gateway}}/api/identity/tenants
+Authorization: Bearer {{token}}
+
+### Applications
+GET {{gateway}}/api/identity/applications
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+
+### Permission tree (application > module > resource > action)
+GET {{gateway}}/api/identity/permissions/tree
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+
+### Scopes and the value catalog of one scope
+GET {{gateway}}/api/identity/scopes
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+
+### Create a scope with a parent (city inside province)
+POST {{gateway}}/api/identity/scopes
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+Content-Type: application/json
+
+{ "key": "city", "displayName": "City", "parent": "province" }
+
+### Business role with required scope keys (e.g. a Tehran manager needs province and city)
+POST {{gateway}}/api/identity/business-roles
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+Content-Type: application/json
+
+{
+  "name": "tehran-manager",
+  "description": "Manages users of Tehran",
+  "permissions": ["identity-gateway:Users:User:Read", "identity-gateway:Users:User:Manage", "order-service:Orders:Order:View"],
+  "requiredScopes": ["province", "city"],
+  "allowedScopes": ["district"]
+}
+
+### User with a scoped role assignment
+POST {{gateway}}/api/identity/users
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+Content-Type: application/json
+
+{
+  "username": "tehran.manager",
+  "email": "tehran.manager@company.local",
+  "firstName": "Tehran",
+  "lastName": "Manager",
+  "enabled": true,
+  "credentials": { "password": "Change-me-123", "temporary": true },
+  "assignments": [
+    { "role": "tehran-manager", "scopes": { "province": ["tehran"], "city": ["tehran-city"], "district": ["*"] } }
+  ]
+}
+
+### Users (delegated admins see only users inside their scope)
+GET {{gateway}}/api/identity/users?page=1&pageSize=20
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+
+### Default weekly schedule of the tenant (Saturday to Wednesday, 08:00-16:00)
+PUT {{gateway}}/api/identity/schedules/realm
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+Content-Type: application/json
+
+{ "unrestricted": false, "days": { "sat": ["08:00-16:00"], "sun": ["08:00-16:00"], "mon": ["08:00-16:00"], "tue": ["08:00-16:00"], "wed": ["08:00-16:00"] } }
+
+### Remove the default schedule again
+DELETE {{gateway}}/api/identity/schedules/realm
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+
+### Authentication settings
+GET {{gateway}}/api/identity/settings/otp
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
+
+### Required actions a user can be asked to complete
+GET {{gateway}}/api/identity/required-actions
+Authorization: Bearer {{token}}
+X-Tenant-Id: {{tenant}}
