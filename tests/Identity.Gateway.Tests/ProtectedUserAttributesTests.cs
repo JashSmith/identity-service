@@ -47,7 +47,7 @@ public sealed class ProtectedUserAttributesTests
     {
         var requests = new List<HttpMethod>();
         var handler = new RecordingHandler(requests);
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", AdminUsername = "a", AdminPassword = "a" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", AdminClientSecret = "s" });
         var provisioner = new KeycloakUserProvisioner(new HttpClient(handler), options,
             new KeycloakAdminTokenProvider(new HttpClient(handler), options));
         var request = new UpdateUserRequest(null, null, null, null,

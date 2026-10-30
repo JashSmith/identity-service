@@ -90,6 +90,25 @@
   ],
   "clients": [
     {
+      "clientId": "identity-gateway-admin",
+      "name": "Identity Gateway (admin service account)",
+      "description": "Service account the gateway uses for the Admin REST API. No user login flows.",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${GATEWAY_ADMIN_CLIENT_SECRET}",
+      "bearerOnly": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true,
+      "attributes": {
+        "client.secret.creation.time": "0"
+      }
+    },
+    {
       "clientId": "identity-gateway",
       "name": "Identity Gateway",
       "description": "Public gateway — proxy for login/refresh/introspect/logout",
@@ -307,6 +326,30 @@
     }
   ],
   "users": [
+    {
+      "username": "service-account-identity-gateway-admin",
+      "enabled": true,
+      "serviceAccountClientId": "identity-gateway-admin",
+      "email": "service-account-identity-gateway-admin@company.local",
+      "emailVerified": true,
+      "clientRoles": {
+        "realm-management": [
+          "view-realm",
+          "manage-realm",
+          "view-users",
+          "manage-users",
+          "query-users",
+          "query-groups",
+          "view-clients",
+          "manage-clients",
+          "query-clients",
+          "view-events",
+          "view-identity-providers",
+          "manage-identity-providers"
+        ]
+      },
+      "requiredActions": []
+    },
     {
       "username": "service-account-order-service",
       "enabled": true,
