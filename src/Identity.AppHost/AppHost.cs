@@ -32,6 +32,9 @@ var keycloakAdminPassword = builder.AddParameter(
 var gatewayClientSecret = ClientSecret("gateway-client-secret");
 var orderServiceClientSecret = ClientSecret("order-service-client-secret");
 var gatewayAdminClientSecret = ClientSecret("gateway-admin-client-secret");
+// Second, demo tenant (realm "acme") with its own gateway clients: shows one-realm-per-tenant locally.
+var acmeGatewayClientSecret = ClientSecret("acme-gateway-client-secret");
+var acmeGatewayAdminClientSecret = ClientSecret("acme-gateway-admin-client-secret");
 
 var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin, keycloakAdminPassword)
     .WithImageTag(KeycloakImageTag)
@@ -46,6 +49,8 @@ var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin
     .WithEnvironment("GATEWAY_CLIENT_SECRET", gatewayClientSecret)
     .WithEnvironment("ORDER_SERVICE_CLIENT_SECRET", orderServiceClientSecret)
     .WithEnvironment("GATEWAY_ADMIN_CLIENT_SECRET", gatewayAdminClientSecret)
+    .WithEnvironment("ACME_GATEWAY_CLIENT_SECRET", acmeGatewayClientSecret)
+    .WithEnvironment("ACME_GATEWAY_ADMIN_CLIENT_SECRET", acmeGatewayAdminClientSecret)
     .WaitFor(keycloakDb);
 
 var keycloakHttp = keycloak.GetEndpoint("http");
@@ -60,6 +65,11 @@ var gateway = builder.AddProject<Projects.Identity_Gateway>("identity-gateway")
     // The gateway uses its own service account in the tenant realm, never the master superuser.
     .WithEnvironment("Identity__KeycloakAdmin__AdminClientId", "identity-gateway-admin")
     .WithEnvironment("Identity__KeycloakAdmin__AdminClientSecret", gatewayAdminClientSecret)
+    .WithEnvironment("Identity__Tenants__0__Id", "acme")
+    .WithEnvironment("Identity__Tenants__0__DisplayName", "Acme (demo tenant)")
+    .WithEnvironment("Identity__Tenants__0__Realm", "acme")
+    .WithEnvironment("Identity__Tenants__0__AdminClientSecret", acmeGatewayAdminClientSecret)
+    .WithEnvironment("Identity__Tenants__0__ClientSecret", acmeGatewayClientSecret)
     .WithEnvironment("Identity__Redis__Configuration", redis.Resource.ConnectionStringExpression)
     .WithEnvironment("Database__Provider", "postgres")
     .WithEnvironment("Database__ConnectionStrings__postgres", keycloakDb.Resource.ConnectionStringExpression)

@@ -28,9 +28,15 @@ builder.Services.AddValidatorsFromAssemblyContaining<ProvisioningOrchestrator>(i
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
+// One Keycloak realm per tenant (see Tenancy/Tenancy.cs); tokens of every tenant realm are accepted.
+var tenantRegistry = new Identity.Gateway.Tenancy.TenantRegistry(builder.Configuration);
+builder.Services.AddSingleton(tenantRegistry);
+builder.Services.AddSingleton<ITenantContext, Identity.Gateway.Tenancy.HttpTenantContext>();
 builder.Services.AddAvashAuthentication(options =>
 {
     options.Authority = authority;
+    options.AdditionalAuthorities = tenantRegistry.All.Where(t => !ReferenceEquals(t, tenantRegistry.Default))
+        .Select(tenantRegistry.Issuer).ToArray();
     options.Audience = audience;
     options.RequireHttpsMetadata = bool.TryParse(requireHttpsMetadata, out var result) && result;
 });
@@ -210,7 +216,9 @@ app.MapOpenApi();
 if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseMiddleware<Identity.Gateway.Tenancy.TenantResolutionMiddleware>();
 app.UseAuthentication();
+app.UseMiddleware<Identity.Gateway.Tenancy.TenantIssuerMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health/live");
 app.MapOidcProxy();
@@ -229,6 +237,10 @@ app.MapUserManagement();
 app.MapUserLifecycle();
 app.MapSchedules();
 app.MapSettings();
+app.MapGet("/api/identity/tenants", (Identity.Gateway.Tenancy.TenantRegistry tenants) =>
+        Results.Ok(tenants.All.Select(tenants.ToDto).ToArray()))
+    .RequireAuthorization(IamPermissions.SystemRead).WithTags("Tenants").WithName("ListTenants")
+    .Produces<Identity.Gateway.Tenancy.TenantDto[]>(200);
 app.MapBusinessRoles();
 app.MapScopeAdmin();
 app.MapAccessContext();

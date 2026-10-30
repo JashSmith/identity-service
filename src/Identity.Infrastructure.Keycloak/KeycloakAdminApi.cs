@@ -20,7 +20,15 @@ public sealed class KeycloakAdminApi(
     /// <summary>Page size used when reading collections; Keycloak truncates silently without paging.</summary>
     public const int PageSize = 100;
 
-    private string RealmBase => $"{options.BaseUrl.TrimEnd('/')}/admin/realms/{Uri.EscapeDataString(options.Realm)}";
+    private string RealmBase
+    {
+        get
+        {
+            // The tenant's realm (see KeycloakTenant), or the configured one.
+            var o = KeycloakTenant.Resolve(options);
+            return $"{o.BaseUrl.TrimEnd('/')}/admin/realms/{Uri.EscapeDataString(o.Realm)}";
+        }
+    }
 
     /// <summary>
     /// Sends a request to <paramref name="path"/> (relative to the realm, e.g. "groups/{id}") and returns

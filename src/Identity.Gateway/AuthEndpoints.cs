@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Identity.Application;
 using Identity.Application.Schedules;
 using Identity.Gateway.Errors;
+using Identity.Gateway.Tenancy;
 
 namespace Identity.Gateway;
 
@@ -77,8 +78,8 @@ public static class AuthEndpoints
         CancellationToken ct)
     {
         var form = await ReadFormAsync(ctx, ct);
-        var realm = Realm(cfg);
-        var baseUrl = BaseUrl(cfg);
+        var realm = ctx.GetTenant().Realm;
+        var baseUrl = BaseUrl(ctx);
         var token = form.TryGetValue("token", out var t)
             ? t
             : ctx.Request.Headers.Authorization.ToString().Replace("Bearer ", "");
@@ -101,8 +102,8 @@ public static class AuthEndpoints
         CancellationToken ct)
     {
         var form = await ReadFormAsync(ctx, ct);
-        var realm = Realm(cfg);
-        var baseUrl = BaseUrl(cfg);
+        var realm = ctx.GetTenant().Realm;
+        var baseUrl = BaseUrl(ctx);
         // Keycloak logout = token revocation; accept refresh_token or token.
         if (!form.ContainsKey("refresh_token") && form.TryGetValue("token", out var tok)) form["refresh_token"] = tok;
         var rejected = ApplyClientCredentials(form, cfg, ctx);
@@ -129,8 +130,8 @@ public static class AuthEndpoints
     private static async Task<IResult> ProxyTokenAsync(IConfiguration cfg, IHttpClientFactory fac,
         Dictionary<string, string> form, CancellationToken ct, HttpContext ctx, AccessScheduleService schedules)
     {
-        var realm = Realm(cfg);
-        var baseUrl = BaseUrl(cfg);
+        var realm = ctx.GetTenant().Realm;
+        var baseUrl = BaseUrl(ctx);
         using var http = fac.CreateClient();
         var res = await http.PostAsync($"{baseUrl}/realms/{realm}/protocol/openid-connect/token",
             new FormUrlEncodedContent(form), ct);
@@ -181,8 +182,8 @@ public static class AuthEndpoints
     private static IResult? ApplyClientCredentials(Dictionary<string, string> form, IConfiguration cfg, HttpContext ctx)
     {
         var outcome = GatewayClientCredentials.Apply(form,
-            cfg["Identity:Keycloak:ClientId"] ?? "identity-gateway",
-            cfg["Identity:Keycloak:ClientSecret"]);
+            ctx.GetTenant().ClientId,
+            ctx.GetTenant().ClientSecret);
 
         return outcome switch
         {
@@ -195,11 +196,9 @@ public static class AuthEndpoints
         };
     }
 
-    private static string Realm(IConfiguration c) =>
-        c["Identity:Keycloak:Realm"] ?? c["Identity:KeycloakAdmin:Realm"] ?? "company";
-
-    private static string BaseUrl(IConfiguration c) =>
-        (c["Identity:Keycloak:BaseUrl"] ?? c["Identity:KeycloakAdmin:BaseUrl"] ?? "http://localhost:8080").TrimEnd('/');
+    /// <summary>Keycloak of the request's tenant (a very large tenant may have its own cluster).</summary>
+    private static string BaseUrl(HttpContext ctx) =>
+        ctx.RequestServices.GetRequiredService<TenantRegistry>().BaseUrl(ctx.GetTenant());
 
     private static async Task<Dictionary<string, string>> ReadFormAsync(HttpContext ctx, CancellationToken ct)
     {

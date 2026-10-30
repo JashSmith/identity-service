@@ -66,7 +66,8 @@ public static class AccessScheduleResolver
 }
 
 /// <summary>Resolves, caches and enforces users' schedules; administers schedule attributes.</summary>
-public sealed class AccessScheduleService(IAccessScheduleStore store, AccessScheduleOptions options, TimeProvider clock)
+public sealed class AccessScheduleService(IAccessScheduleStore store, AccessScheduleOptions options, TimeProvider clock,
+    ITenantContext? tenant = null)
 {
     private readonly ConcurrentDictionary<string, (DateTimeOffset Expires, AccessScheduleSnapshot Snapshot)> _cache = new(StringComparer.Ordinal);
     private readonly TimeZoneInfo _timeZone = TimeZoneInfo.FindSystemTimeZoneById(options.TimeZone);
@@ -76,7 +77,8 @@ public sealed class AccessScheduleService(IAccessScheduleStore store, AccessSche
     public async Task<Result<AccessScheduleSnapshot>> GetSnapshotAsync(string userId, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
-        if (_cache.TryGetValue(userId, out var cached) && cached.Expires > now) return cached.Snapshot;
+        var key = $"{tenant?.TenantId}|{userId}";
+        if (_cache.TryGetValue(key, out var cached) && cached.Expires > now) return cached.Snapshot;
 
         var sources = await store.GetSourcesAsync(userId, ct);
         if (!sources.IsSuccess) return sources.Error!;
@@ -85,7 +87,7 @@ public sealed class AccessScheduleService(IAccessScheduleStore store, AccessSche
         var snapshot = new AccessScheduleSnapshot(options.TimeZone, loginText,
             permissions.Where(p => p.Value.ToString() != loginText)
                 .ToDictionary(p => p.Key, p => p.Value.ToString(), StringComparer.Ordinal));
-        _cache[userId] = (now + options.CacheDuration, snapshot);
+        _cache[key] = (now + options.CacheDuration, snapshot);
         return snapshot;
     }
 

@@ -17,9 +17,46 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException("Identity authority is required.");
         var audiences = options.Audiences.Length > 0 ? options.Audiences :
             string.IsNullOrWhiteSpace(options.Audience) ? [] : [options.Audience];
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(jwt =>
+        var additional = options.AdditionalAuthorities.Where(a => !string.IsNullOrWhiteSpace(a))
+            .Select(a => a.TrimEnd('/')).Distinct(StringComparer.Ordinal).ToArray();
+        if (additional.Length == 0)
         {
-            jwt.Authority = options.Authority.TrimEnd('/');
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(jwt => ConfigureJwtBearer(jwt, options, options.Authority, audiences));
+            return services;
+        }
+
+        // Several issuers (one realm per tenant): "Bearer" forwards to the scheme of the token's issuer.
+        // The issuer is only peeked at here; the chosen scheme validates it (and the signature) strictly.
+        var authorities = new[] { options.Authority.TrimEnd('/') }.Concat(additional).ToArray();
+        var schemes = authorities.Select((a, i) => (Authority: a, Scheme: $"{JwtBearerDefaults.AuthenticationScheme}:{i}")).ToArray();
+        var builder = services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddPolicyScheme(JwtBearerDefaults.AuthenticationScheme, "Bearer (per issuer)", policy =>
+                policy.ForwardDefaultSelector = http =>
+                {
+                    var issuer = PeekIssuer(http.Request.Headers.Authorization.ToString());
+                    return schemes.FirstOrDefault(s => string.Equals(s.Authority, issuer, StringComparison.Ordinal)).Scheme
+                           ?? schemes[0].Scheme;
+                });
+        foreach (var (authority, scheme) in schemes)
+            builder.AddJwtBearer(scheme, jwt => ConfigureJwtBearer(jwt, options, authority, audiences, strictIssuer: true));
+        return services;
+    }
+
+    private static string? PeekIssuer(string authorization)
+    {
+        const string prefix = "Bearer ";
+        if (!authorization.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return null;
+        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var token = authorization[prefix.Length..].Trim();
+        return handler.CanReadToken(token) ? handler.ReadJwtToken(token).Issuer?.TrimEnd('/') : null;
+    }
+
+    private static void ConfigureJwtBearer(JwtBearerOptions jwt, IdentityAuthenticationOptions options, string authority,
+        string[] audiences, bool strictIssuer = false)
+    {
+        {
+            jwt.Authority = authority.TrimEnd('/');
             jwt.RequireHttpsMetadata = options.RequireHttpsMetadata;
             jwt.RefreshOnIssuerKeyNotFound = true;
             // Keycloak-centric gateway: keep OIDC claim names as issued ("sub", "preferred_username",
@@ -31,7 +68,7 @@ public static class ServiceCollectionExtensions
             jwt.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
-                ValidIssuer = options.AcceptIssuerFromDiscovery ? null : options.Authority.TrimEnd('/'),
+                ValidIssuer = options.AcceptIssuerFromDiscovery && !strictIssuer ? null : authority.TrimEnd('/'),
                 ValidateAudience = audiences.Length > 0, ValidAudiences = audiences,
                 ValidateLifetime = true, ValidateIssuerSigningKey = true,
                 ClockSkew = options.ClockSkew, ValidAlgorithms = options.ValidAlgorithms
@@ -58,7 +95,6 @@ public static class ServiceCollectionExtensions
                     return Task.CompletedTask;
                 }
             };
-        });
-        return services;
+        }
     }
 }

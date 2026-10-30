@@ -1,4 +1,6 @@
 using Identity.Application;
+using Identity.Gateway.Tenancy;
+using Identity.Infrastructure.Keycloak;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Identity.Gateway.Bootstrap;
@@ -10,7 +12,7 @@ namespace Identity.Gateway.Bootstrap;
 public sealed record BootstrapStep(string Name, Func<IServiceProvider, CancellationToken, Task<Result>> Run);
 
 /// <summary>
-/// Runs the bootstrap steps in order after startup and retries a failed step with exponential backoff
+/// Runs the bootstrap steps in order for every tenant realm after startup and retries a failed step with exponential backoff
 /// until it succeeds, logging every failure. Until all steps have succeeded the health check reports
 /// Unhealthy, so dependants (and orchestrators) wait for a gateway that is actually usable instead of
 /// one that silently started without its super-admins group or token mappers.
@@ -18,6 +20,7 @@ public sealed record BootstrapStep(string Name, Func<IServiceProvider, Cancellat
 public sealed class KeycloakBootstrapper(
     IServiceScopeFactory scopes,
     IEnumerable<BootstrapStep> steps,
+    TenantRegistry tenants,
     TimeProvider time,
     ILogger<KeycloakBootstrapper> logger) : BackgroundService, IHealthCheck
 {
@@ -29,24 +32,28 @@ public sealed class KeycloakBootstrapper(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        foreach (var step in steps)
+        foreach (var tenant in tenants.All)
         {
-            var delay = FirstRetryDelay;
-            while (true)
+            using var realm = KeycloakTenant.Use(tenants.KeycloakOptions(tenant));
+            foreach (var step in steps)
             {
-                _status = $"running {step.Name}";
-                var result = await RunAsync(step, stoppingToken);
-                if (result.IsSuccess)
+                var delay = FirstRetryDelay;
+                while (true)
                 {
-                    logger.LogInformation("Keycloak bootstrap step {Step} completed", step.Name);
-                    break;
-                }
+                    _status = $"{tenant.Id}: running {step.Name}";
+                    var result = await RunAsync(step, stoppingToken);
+                    if (result.IsSuccess)
+                    {
+                        logger.LogInformation("Keycloak bootstrap step {Step} completed for tenant {Tenant}", step.Name, tenant.Id);
+                        break;
+                    }
 
-                _status = $"{step.Name} failed: {result.Error!.Code}";
-                logger.LogWarning("Keycloak bootstrap step {Step} failed ({Code}: {Message}); retrying in {Delay}",
-                    step.Name, result.Error.Code, result.Error.Message, delay);
-                await Task.Delay(delay, time, stoppingToken);
-                delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, MaxRetryDelay.Ticks));
+                    _status = $"{tenant.Id}: {step.Name} failed: {result.Error!.Code}";
+                    logger.LogWarning("Keycloak bootstrap step {Step} failed for tenant {Tenant} ({Code}: {Message}); retrying in {Delay}",
+                        step.Name, tenant.Id, result.Error.Code, result.Error.Message, delay);
+                    await Task.Delay(delay, time, stoppingToken);
+                    delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, MaxRetryDelay.Ticks));
+                }
             }
         }
 

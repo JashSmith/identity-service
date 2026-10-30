@@ -36,7 +36,8 @@ public sealed class KeycloakScopeRegistryStore(
     private const string ValuePrefix = "value.";
     private const int MaxValueEntryBytes = 255;
     private const string AllowedScopesAttribute = "authz.allowed-scopes";
-    private const string RegistryCacheKey = "scopes:registry:kc:v2";
+    // One registry per realm: the key carries the tenant realm so tenants never share cached scopes.
+    private string RegistryCacheKey => $"scopes:registry:kc:v2:{KeycloakTenant.Resolve(opts.Value).Realm}";
     private const string RoleAllowedKey = "scopes:roleAllowed:kc:v2";
     private const string RedisPrefix = "identity:registry:";
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
