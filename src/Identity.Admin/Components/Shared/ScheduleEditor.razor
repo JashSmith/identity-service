@@ -1,0 +1,47 @@
+@* Weekly access schedule: "unrestricted", or time ranges per day (e.g. 08:00-16:00, 18:00-20:00).
+   A day left empty has no access. The gateway validates the ranges. *@
+
+<RadzenStack Gap="0.75rem">
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+        <RadzenSwitch @bind-Value="unrestricted" Disabled="@ReadOnly" />
+        <RadzenText TextStyle="TextStyle.Body1" class="rz-m-0">بدون محدودیت زمانی</RadzenText>
+    </RadzenStack>
+    @if (!unrestricted)
+    {
+        <RadzenText TextStyle="TextStyle.Caption">بازه‌ها را به شکل <span class="ltr">08:00-16:00</span> و با کاما جدا کنید؛ روز خالی یعنی بدون دسترسی.</RadzenText>
+        @foreach (var (key, name) in Days.All)
+        {
+            <RadzenRow AlignItems="AlignItems.Center" Gap="0.5rem">
+                <RadzenColumn Size="3" SizeMD="2"><RadzenText class="rz-m-0">@name</RadzenText></RadzenColumn>
+                <RadzenColumn Size="9" SizeMD="10">
+                    <RadzenTextBox @bind-Value="ranges[key]" Placeholder="مثلاً 08:00-16:00" Disabled="@ReadOnly" Style="width: 100%; direction: ltr;" />
+                </RadzenColumn>
+            </RadzenRow>
+        }
+    }
+</RadzenStack>
+
+@code {
+    [Parameter] public WeeklyScheduleDto? Value { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+
+    private bool unrestricted;
+    private readonly Dictionary<string, string> ranges = Days.All.ToDictionary(d => d.Key, _ => "");
+    private WeeklyScheduleDto? loaded;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(loaded, Value)) return;
+        loaded = Value;
+        unrestricted = Value?.Unrestricted ?? false;
+        foreach (var (key, _) in Days.All)
+            ranges[key] = Value?.Days is { } days && days.TryGetValue(key, out var r) ? string.Join(", ", r) : "";
+    }
+
+    /// <summary>The schedule as entered, in the gateway's API form.</summary>
+    public WeeklyScheduleDto Current => new(unrestricted, unrestricted
+        ? null
+        : ranges.Where(r => !string.IsNullOrWhiteSpace(r.Value))
+            .ToDictionary(r => r.Key, r => (IReadOnlyCollection<string>)r.Value
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)));
+}

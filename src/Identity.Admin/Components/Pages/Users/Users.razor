@@ -1,0 +1,79 @@
+@page "/users"
+@inherits ConsolePage
+
+<PageTitle>کاربران | کنسول مدیریت هویت</PageTitle>
+
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
+    <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">کاربران</RadzenText>
+    @if (canManage)
+    {
+        <RadzenButton Icon="person_add" Text="کاربر جدید" Click="@CreateAsync" />
+    }
+</RadzenStack>
+
+<RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mb-2">
+    <RadzenTextBox @bind-Value="search" Placeholder="جستجو در نام کاربری، نام یا ایمیل" Style="width: 320px;" />
+    <RadzenButton Icon="search" Text="جستجو" ButtonStyle="ButtonStyle.Secondary" Click="@(() => grid.FirstPage(true))" />
+</RadzenStack>
+
+<RadzenDataGrid @ref="grid" TItem="UserDto" Data="@users" Count="@count" LoadData="@LoadAsync" IsLoading="@Busy"
+                AllowPaging="true" PageSize="20" PagerHorizontalAlign="HorizontalAlign.Center"
+                EmptyText="کاربری یافت نشد">
+    <Columns>
+        <RadzenDataGridColumn Property="Username" Title="نام کاربری">
+            <Template Context="user"><span class="ltr">@user.Username</span></Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Property="DisplayName" Title="نام" />
+        <RadzenDataGridColumn Property="Enabled" Title="وضعیت" Width="120px">
+            <Template Context="user">
+                <RadzenBadge BadgeStyle="@(user.Enabled ? BadgeStyle.Success : BadgeStyle.Light)" Text="@(user.Enabled ? "فعال" : "غیرفعال")" />
+            </Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="" Width="120px" Sortable="false">
+            <Template Context="user">
+                <RadzenButton Icon="manage_accounts" Text="جزئیات" Size="ButtonSize.Small" Variant="Variant.Text"
+                              Click="@(() => Navigation.NavigateTo($"/users/{Uri.EscapeDataString(user.Id)}"))" />
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+@if (restricted)
+{
+    <RadzenText TextStyle="TextStyle.Caption">فقط کاربرانی که در محدوده دسترسی شما هستند نمایش داده می‌شوند.</RadzenText>
+}
+
+@code {
+    private RadzenDataGrid<UserDto> grid = default!;
+    // Null until the first load: the grid only calls LoadData by itself while Data is null.
+    private List<UserDto>? users;
+    private int count;
+    private string? search;
+    private bool canManage;
+
+    private bool restricted;
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.UsersManage);
+        // Only super-admins hold the system permission; everyone else sees the users of their own scope.
+        restricted = !await Can(Permissions.SystemRead);
+    }
+
+    private async Task LoadAsync(LoadDataArgs args)
+    {
+        var page = (args.Skip ?? 0) / Math.Max(1, args.Top ?? 20) + 1;
+        await RunAsync(async () =>
+        {
+            var result = await Api.GetAsync<PagedResponse<UserDto>>(
+                $"api/identity/users?page={page}&pageSize={args.Top ?? 20}&search={Uri.EscapeDataString(search ?? "")}");
+            users = result.Items.ToList();
+            count = result.Total ?? users.Count;
+        });
+    }
+
+    private async Task CreateAsync()
+    {
+        var created = await Dialogs.OpenAsync<UserCreateDialog>("کاربر جدید", options: new DialogOptions { Width = "720px" });
+        if (created is UserDto user) Navigation.NavigateTo($"/users/{Uri.EscapeDataString(user.Id)}");
+    }
+}

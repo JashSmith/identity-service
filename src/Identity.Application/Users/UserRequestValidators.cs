@@ -49,6 +49,29 @@ public sealed class ResetPasswordRequestValidator : AbstractValidator<ResetPassw
         RuleFor(r => r.Password).NotEmpty().WithMessage("Password is required.");
 }
 
+public sealed class SetRequiredActionsRequestValidator : AbstractValidator<SetRequiredActionsRequest>
+{
+    public SetRequiredActionsRequestValidator()
+    {
+        RuleFor(r => r.Actions).NotNull().WithMessage("Actions are required; send an empty list to clear them.");
+        RuleForEach(r => r.Actions).NotEmpty().MaximumLength(100);
+    }
+}
+
+public sealed class SendActionsEmailRequestValidator : AbstractValidator<SendActionsEmailRequest>
+{
+    public SendActionsEmailRequestValidator()
+    {
+        RuleFor(r => r.Actions).NotEmpty().WithMessage("At least one action is required.");
+        RuleForEach(r => r.Actions).NotEmpty().MaximumLength(100);
+        RuleFor(r => r.LifespanSeconds).InclusiveBetween(60, 7 * 24 * 3600).When(r => r.LifespanSeconds.HasValue);
+        RuleFor(r => r.ClientId).NotEmpty().When(r => !string.IsNullOrWhiteSpace(r.RedirectUri))
+            .WithMessage("A redirect URI needs the client it belongs to.");
+        RuleFor(r => r.RedirectUri).Must(u => Uri.TryCreate(u, UriKind.Absolute, out _))
+            .When(r => !string.IsNullOrWhiteSpace(r.RedirectUri)).WithMessage("Redirect URI must be absolute.");
+    }
+}
+
 public sealed class ScopedRoleAssignmentValidator : AbstractValidator<ScopedRoleAssignmentDto>
 {
     public ScopedRoleAssignmentValidator() =>

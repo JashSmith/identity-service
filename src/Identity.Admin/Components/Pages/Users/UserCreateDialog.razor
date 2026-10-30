@@ -1,0 +1,54 @@
+@inherits ConsolePage
+
+<RadzenStack Gap="1rem">
+    <RadzenRow Gap="1rem">
+        <RadzenColumn Size="12" SizeMD="6">
+            <RadzenFormField Text="نام کاربری" Style="width: 100%;"><RadzenTextBox @bind-Value="username" Style="direction: ltr;" /></RadzenFormField>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="6">
+            <RadzenFormField Text="ایمیل" Style="width: 100%;"><RadzenTextBox @bind-Value="email" Style="direction: ltr;" /></RadzenFormField>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="6">
+            <RadzenFormField Text="نام" Style="width: 100%;"><RadzenTextBox @bind-Value="firstName" /></RadzenFormField>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="6">
+            <RadzenFormField Text="نام خانوادگی" Style="width: 100%;"><RadzenTextBox @bind-Value="lastName" /></RadzenFormField>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="6">
+            <RadzenFormField Text="رمز عبور اولیه" Style="width: 100%;"><RadzenPassword @bind-Value="password" Style="direction: ltr;" /></RadzenFormField>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="6">
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" Style="height: 100%;">
+                <RadzenCheckBox @bind-Value="temporary" Name="temporary" />
+                <RadzenLabel Text="تغییر رمز در اولین ورود" Component="temporary" />
+            </RadzenStack>
+        </RadzenColumn>
+    </RadzenRow>
+
+    <RadzenText TextStyle="TextStyle.Subtitle1" class="rz-m-0">نقش‌ها و محدوده دسترسی</RadzenText>
+    <AssignmentsEditor Rows="@rows" Roles="@lookups.Roles" Scopes="@lookups.Scopes" Values="@lookups.Values" />
+
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.5rem">
+        <RadzenButton Text="انصراف" ButtonStyle="ButtonStyle.Light" Click="@(() => Dialogs.Close())" />
+        <RadzenButton Text="ایجاد کاربر" Icon="check" IsBusy="@Busy" Click="@SaveAsync" />
+    </RadzenStack>
+</RadzenStack>
+
+@code {
+    private string? username, email, firstName, lastName, password;
+    private bool temporary = true;
+    private readonly List<AssignmentsEditor.Row> rows = [];
+    private AccessLookups lookups = AccessLookups.Empty;
+
+    protected override Task OnInitializedAsync() => RunAsync(async () => lookups = await AccessLookups.LoadAsync(Api));
+
+    private async Task SaveAsync()
+    {
+        UserDto? created = null;
+        var request = new CreateUserRequest(username ?? "", email, firstName, lastName, true,
+            string.IsNullOrEmpty(password) ? null : new CredentialRequest(password, temporary),
+            rows.Where(r => !string.IsNullOrEmpty(r.Role)).Select(r => r.ToDto()).ToArray());
+        if (await RunAsync(async () => created = await Api.SendAsync<UserDto>(HttpMethod.Post, "api/identity/users", request), "کاربر ایجاد شد"))
+            Dialogs.Close(created);
+    }
+}

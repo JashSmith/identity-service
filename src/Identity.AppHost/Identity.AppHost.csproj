@@ -11,6 +11,7 @@
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="../Identity.Gateway/Identity.Gateway.csproj"/>
+        <ProjectReference Include="../Identity.Admin/Identity.Admin.csproj"/>
         <ProjectReference Include="../../samples/OrderService.Sample/OrderService.Sample.csproj"/>
     </ItemGroup>
 </Project>

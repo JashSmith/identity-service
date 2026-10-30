@@ -18,7 +18,11 @@ public interface IBusinessRoleStore
     /// Creates the role and assigns <paramref name="permissions"/>. Unknown permissions are rejected
     /// before anything is created; a failed assignment removes the new role again.
     /// </summary>
-    Task<Result<BusinessRoleDto>> CreateAsync(string name, string? description, IReadOnlyCollection<string> permissions, CancellationToken ct);
+    Task<Result<BusinessRoleDto>> CreateAsync(string name, string? description, IReadOnlyCollection<string> permissions,
+        RoleScopePolicy? scopePolicy, CancellationToken ct);
+
+    /// <summary>Replaces the scope keys the role requires and allows; other attributes are kept.</summary>
+    Task<Result> SetScopePolicyAsync(string name, RoleScopePolicy policy, CancellationToken ct);
 
     /// <summary>Changes the description and keeps every other attribute of the role.</summary>
     Task<Result<BusinessRoleDto>> UpdateAsync(string name, string? description, CancellationToken ct);
@@ -35,6 +39,12 @@ public interface IBusinessRoleStore
 
     /// <summary>Makes the role's assigned permissions exactly <paramref name="permissions"/>.</summary>
     Task<Result> SetPermissionsAsync(string name, IReadOnlyCollection<string> permissions, CancellationToken ct);
+}
+
+/// <summary>Scope keys a role requires (concrete values mandatory) and allows (empty = any registered key).</summary>
+public sealed record RoleScopePolicy(IReadOnlyCollection<string> Required, IReadOnlyCollection<string> Allowed)
+{
+    public static readonly RoleScopePolicy None = new([], []);
 }
 
 public static class BusinessRoleStoreExtensions

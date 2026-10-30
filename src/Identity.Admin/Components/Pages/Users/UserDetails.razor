@@ -1,0 +1,283 @@
+@page "/users/{Id}"
+@inherits ConsolePage
+
+<PageTitle>جزئیات کاربر | کنسول مدیریت هویت</PageTitle>
+
+@if (user is null)
+{
+    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+    return;
+}
+
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
+    <RadzenStack Gap="0">
+        <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">@(user.DisplayName ?? user.Username)</RadzenText>
+        <span class="ltr">@user.Username</span>
+    </RadzenStack>
+    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+        <RadzenButton Icon="arrow_forward" Text="بازگشت" ButtonStyle="ButtonStyle.Light" Click="@(() => Navigation.NavigateTo("/users"))" />
+        @if (canManage)
+        {
+            <RadzenButton Icon="delete" Text="حذف کاربر" ButtonStyle="ButtonStyle.Danger" Click="@DeleteAsync" />
+        }
+    </RadzenStack>
+</RadzenStack>
+
+<RadzenTabs RenderMode="TabRenderMode.Client">
+    <Tabs>
+        <RadzenTabsItem Text="مشخصات">
+            <RadzenRow Gap="1rem">
+                <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="نام" Style="width: 100%;"><RadzenTextBox @bind-Value="firstName" Disabled="@(!canManage)" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="نام خانوادگی" Style="width: 100%;"><RadzenTextBox @bind-Value="lastName" Disabled="@(!canManage)" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="ایمیل" Style="width: 100%;"><RadzenTextBox @bind-Value="email" Disabled="@(!canManage)" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="6">
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" Style="height: 100%;">
+                        <RadzenSwitch @bind-Value="enabled" Disabled="@(!canManage)" /> <RadzenText class="rz-m-0">حساب فعال است</RadzenText>
+                    </RadzenStack>
+                </RadzenColumn>
+            </RadzenRow>
+            @if (canManage)
+            {
+                <RadzenButton Text="ذخیره مشخصات" Icon="save" class="rz-mt-4" IsBusy="@Busy" Click="@SaveProfileAsync" />
+                <RadzenCard Variant="Variant.Outlined" class="rz-mt-4">
+                    <RadzenText TextStyle="TextStyle.Subtitle1">تعیین رمز عبور جدید</RadzenText>
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" Wrap="FlexWrap.Wrap">
+                        <RadzenPassword @bind-Value="newPassword" Placeholder="رمز عبور جدید" Style="direction: ltr;" />
+                        <RadzenCheckBox @bind-Value="temporaryPassword" Name="tmp" /> <RadzenLabel Text="تغییر در ورود بعدی" Component="tmp" />
+                        <RadzenButton Text="ثبت رمز" Icon="key" ButtonStyle="ButtonStyle.Secondary" Click="@ResetPasswordAsync" />
+                    </RadzenStack>
+                </RadzenCard>
+            }
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="نقش‌ها و محدوده">
+            <AssignmentsEditor Rows="@rows" Roles="@lookups.Roles" Scopes="@lookups.Scopes" Values="@lookups.Values" />
+            @if (canAssign)
+            {
+                <RadzenButton Text="ذخیره نقش‌ها" Icon="save" class="rz-mt-4" IsBusy="@Busy" Click="@SaveAssignmentsAsync" />
+            }
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="امنیت">
+            <RadzenStack Gap="1rem">
+                <RadzenCard Variant="Variant.Outlined">
+                    <RadzenText TextStyle="TextStyle.Subtitle1">قفل حساب</RadzenText>
+                    @if (lockout is not null)
+                    {
+                        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" Wrap="FlexWrap.Wrap">
+                            <RadzenBadge BadgeStyle="@(lockout.Locked ? BadgeStyle.Danger : BadgeStyle.Success)" Text="@(lockout.Locked ? "قفل است" : "آزاد")" />
+                            <RadzenText class="rz-m-0">تلاش ناموفق: @lockout.Failures</RadzenText>
+                            @if (lockout.LastFailureIp is not null)
+                            {
+                                <RadzenText class="rz-m-0">آخرین IP: <span class="ltr">@lockout.LastFailureIp</span></RadzenText>
+                            }
+                            @if (canManage && (lockout.Locked || lockout.Failures > 0))
+                            {
+                                <RadzenButton Text="رفع قفل" Icon="lock_open" ButtonStyle="ButtonStyle.Warning" Click="@UnlockAsync" />
+                            }
+                        </RadzenStack>
+                    }
+                </RadzenCard>
+
+                <RadzenCard Variant="Variant.Outlined">
+                    <RadzenText TextStyle="TextStyle.Subtitle1">اعتبارنامه‌ها</RadzenText>
+                    <RadzenDataGrid TItem="UserCredentialDto" Data="@credentials" EmptyText="اعتبارنامه‌ای ثبت نشده است">
+                        <Columns>
+                            <RadzenDataGridColumn Title="نوع"><Template Context="c">@CredentialName(c.Type)</Template></RadzenDataGridColumn>
+                            <RadzenDataGridColumn Property="Label" Title="برچسب" />
+                            <RadzenDataGridColumn Title="تاریخ ایجاد"><Template Context="c">@c.CreatedAt?.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</Template></RadzenDataGridColumn>
+                            <RadzenDataGridColumn Title="" Width="140px">
+                                <Template Context="c">
+                                    @if (canManage)
+                                    {
+                                        <RadzenButton Text="حذف" Icon="delete" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text"
+                                                      Click="@(() => DeleteCredentialAsync(c))" />
+                                    }
+                                </Template>
+                            </RadzenDataGridColumn>
+                        </Columns>
+                    </RadzenDataGrid>
+                    <RadzenText TextStyle="TextStyle.Caption">حذف «رمز یک‌بارمصرف» کاربر را وادار می‌کند در ورود بعدی دستگاه جدیدی ثبت کند.</RadzenText>
+                </RadzenCard>
+
+                <RadzenCard Variant="Variant.Outlined">
+                    <RadzenText TextStyle="TextStyle.Subtitle1">اقدامات الزامی در ورود بعدی</RadzenText>
+                    <RadzenDropDown TValue="IEnumerable<string>" Multiple="true" Chips="true" AllowClear="true" Data="@requiredActionCatalog"
+                                    TextProperty="Name" ValueProperty="Alias" @bind-Value="requiredActions" Disabled="@(!canManage)" Style="width: 100%;" />
+                    @if (canManage)
+                    {
+                        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mt-2">
+                            <RadzenButton Text="ذخیره اقدامات" Icon="save" ButtonStyle="ButtonStyle.Secondary" Click="@SaveRequiredActionsAsync" />
+                            <RadzenButton Text="ارسال ایمیل انجام اقدامات" Icon="mail" ButtonStyle="ButtonStyle.Light" Click="@SendActionsEmailAsync" />
+                        </RadzenStack>
+                    }
+                </RadzenCard>
+            </RadzenStack>
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="نشست‌ها">
+            <RadzenDataGrid TItem="UserSessionDto" Data="@sessions" EmptyText="نشست فعالی وجود ندارد">
+                <Columns>
+                    <RadzenDataGridColumn Title="IP"><Template Context="s"><span class="ltr">@s.IpAddress</span></Template></RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="شروع"><Template Context="s">@s.Start.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</Template></RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="آخرین فعالیت"><Template Context="s">@s.LastAccess.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</Template></RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="اپلیکیشن‌ها"><Template Context="s"><span class="ltr">@string.Join(", ", s.Clients.Values)</span></Template></RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+            @if (canManage)
+            {
+                <RadzenButton Text="خروج از همه نشست‌ها" Icon="logout" ButtonStyle="ButtonStyle.Warning" class="rz-mt-4" Click="@RevokeAsync" />
+            }
+        </RadzenTabsItem>
+
+        <RadzenTabsItem Text="برنامه زمانی">
+            <RadzenText TextStyle="TextStyle.Body2">برنامه زمانی کاربر بر برنامه نقش‌ها، دسترسی‌ها و پیش‌فرض سازمان مقدم است (مثلاً «بدون محدودیت» برای دورکاران).</RadzenText>
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-mb-2">
+                <RadzenSwitch @bind-Value="hasOwnSchedule" Disabled="@(!canSchedule)" /> <RadzenText class="rz-m-0">برنامه اختصاصی برای این کاربر</RadzenText>
+            </RadzenStack>
+            @if (hasOwnSchedule)
+            {
+                <ScheduleEditor @ref="scheduleEditor" Value="@schedule" ReadOnly="@(!canSchedule)" />
+            }
+            @if (canSchedule)
+            {
+                <RadzenButton Text="ذخیره برنامه" Icon="save" class="rz-mt-4" Click="@SaveScheduleAsync" />
+            }
+            @if (effective is not null)
+            {
+                <RadzenCard Variant="Variant.Outlined" class="rz-mt-4">
+                    <RadzenText TextStyle="TextStyle.Subtitle1">برنامه مؤثر (منطقه زمانی <span class="ltr">@effective.TimeZone</span>)</RadzenText>
+                    <RadzenText>ورود و دسترسی‌ها: <span class="ltr">@effective.Login</span></RadzenText>
+                    @foreach (var (permission, text) in effective.Permissions)
+                    {
+                        <RadzenText TextStyle="TextStyle.Body2"><span class="ltr">@permission</span>: <span class="ltr">@text</span></RadzenText>
+                    }
+                </RadzenCard>
+            }
+        </RadzenTabsItem>
+    </Tabs>
+</RadzenTabs>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private UserDto? user;
+    private string? firstName, lastName, email, newPassword;
+    private bool enabled, temporaryPassword = true, canManage, canAssign, canSchedule, hasOwnSchedule;
+    private List<AssignmentsEditor.Row> rows = [];
+    private AccessLookups lookups = AccessLookups.Empty;
+    private UserLockoutDto? lockout;
+    private List<UserCredentialDto> credentials = [];
+    private List<RequiredActionDto> requiredActionCatalog = [];
+    private IEnumerable<string> requiredActions = [];
+    private List<UserSessionDto> sessions = [];
+    private WeeklyScheduleDto? schedule;
+    private AccessScheduleSnapshot? effective;
+    private ScheduleEditor? scheduleEditor;
+
+    private string UserPath => $"api/identity/users/{Uri.EscapeDataString(Id)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.UsersManage);
+        canAssign = await Can(Permissions.ScopesManage);
+        canSchedule = await Can(Permissions.SchedulesManage);
+
+        await RunAsync(async () =>
+        {
+            user = await Api.GetAsync<UserDto>(UserPath);
+            firstName = user.Attributes.GetValueOrDefault("firstName")?.FirstOrDefault();
+            lastName = user.Attributes.GetValueOrDefault("lastName")?.FirstOrDefault();
+            email = user.Attributes.GetValueOrDefault("email")?.FirstOrDefault();
+            enabled = user.Enabled;
+        });
+        if (user is null) return;
+        await RunAsync(async () =>
+        {
+            lookups = await AccessLookups.LoadAsync(Api);
+            var access = await Api.GetAsync<ScopedAccessResponse>($"{UserPath}/scoped-access");
+            rows = access.Assignments.Select(AssignmentsEditor.Row.From).ToList();
+        });
+        await LoadSecurityAsync();
+        if (canManage) await RunAsync(async () => sessions = await Api.GetAsync<List<UserSessionDto>>($"{UserPath}/sessions"));
+        if (await Can(Permissions.SchedulesRead)) await LoadScheduleAsync();
+    }
+
+    private async Task LoadSecurityAsync() => await RunAsync(async () =>
+    {
+        lockout = await Api.GetAsync<UserLockoutDto>($"{UserPath}/lockout");
+        credentials = await Api.GetAsync<List<UserCredentialDto>>($"{UserPath}/credentials");
+        requiredActionCatalog = (await Api.GetAsync<List<RequiredActionDto>>("api/identity/required-actions")).Where(a => a.Enabled).ToList();
+        requiredActions = await Api.GetAsync<List<string>>($"{UserPath}/required-actions");
+    });
+
+    private async Task LoadScheduleAsync() => await RunAsync(async () =>
+    {
+        var setting = await Api.GetAsync<ScheduleSettingDto>($"api/identity/schedules/users/{Uri.EscapeDataString(Id)}");
+        schedule = setting.Value;
+        hasOwnSchedule = schedule is not null;
+        effective = await Api.GetAsync<AccessScheduleSnapshot>($"api/identity/schedules/users/{Uri.EscapeDataString(Id)}/effective");
+    });
+
+    private Task SaveProfileAsync() => RunAsync(async () =>
+        user = await Api.SendAsync<UserDto>(HttpMethod.Put, UserPath, new UpdateUserRequest(email ?? "", firstName ?? "", lastName ?? "", enabled)),
+        "مشخصات ذخیره شد");
+
+    private async Task ResetPasswordAsync()
+    {
+        if (string.IsNullOrEmpty(newPassword)) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Put, $"{UserPath}/reset-password", new ResetPasswordRequest(newPassword, temporaryPassword)), "رمز عبور ثبت شد"))
+            newPassword = null;
+    }
+
+    private Task SaveAssignmentsAsync() => RunAsync(() => Api.SendAsync(HttpMethod.Put, $"{UserPath}/scoped-access",
+        new SetScopedAccessRequest(rows.Where(r => !string.IsNullOrEmpty(r.Role)).Select(r => r.ToDto()).ToArray())), "نقش‌ها ذخیره شد");
+
+    private async Task UnlockAsync()
+    {
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Delete, $"{UserPath}/lockout"), "قفل حساب برداشته شد")) await LoadSecurityAsync();
+    }
+
+    private async Task DeleteCredentialAsync(UserCredentialDto credential)
+    {
+        if (!await ConfirmAsync($"اعتبارنامه «{CredentialName(credential.Type)}» حذف شود؟")) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Delete, $"{UserPath}/credentials/{Uri.EscapeDataString(credential.Id)}"), "اعتبارنامه حذف شد"))
+            await LoadSecurityAsync();
+    }
+
+    private Task SaveRequiredActionsAsync() => RunAsync(() =>
+        Api.SendAsync(HttpMethod.Put, $"{UserPath}/required-actions", new SetRequiredActionsRequest(requiredActions.ToArray())), "اقدامات الزامی ذخیره شد");
+
+    private Task SendActionsEmailAsync() => RunAsync(() =>
+        Api.SendAsync(HttpMethod.Post, $"{UserPath}/execute-actions-email", new SendActionsEmailRequest(requiredActions.ToArray())), "ایمیل ارسال شد");
+
+    private async Task RevokeAsync()
+    {
+        if (!await ConfirmAsync("کاربر از همه نشست‌ها خارج شود؟")) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Post, $"{UserPath}/revoke", new RevokeUserTokensRequest("console")), "نشست‌ها بسته شد"))
+            sessions = [];
+    }
+
+    private async Task SaveScheduleAsync()
+    {
+        var path = $"api/identity/schedules/users/{Uri.EscapeDataString(Id)}";
+        var saved = hasOwnSchedule && scheduleEditor is not null
+            ? await RunAsync(() => Api.SendAsync(HttpMethod.Put, path, scheduleEditor.Current), "برنامه زمانی ذخیره شد")
+            : await RunAsync(() => Api.SendAsync(HttpMethod.Delete, path), "برنامه اختصاصی حذف شد");
+        if (saved) await LoadScheduleAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (!await ConfirmAsync("این کاربر برای همیشه حذف شود؟")) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Delete, UserPath), "کاربر حذف شد")) Navigation.NavigateTo("/users");
+    }
+
+    private static string CredentialName(string type) => type switch
+    {
+        "password" => "رمز عبور",
+        "otp" => "رمز یک‌بارمصرف (OTP)",
+        "webauthn" or "webauthn-passwordless" => "کلید امنیتی",
+        _ => type,
+    };
+}

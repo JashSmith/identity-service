@@ -18,7 +18,7 @@ builder.Services.AddAvashAuthentication(options =>
     options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
     options.AcceptIssuerFromDiscovery = true;
 });
-builder.Services.AddAvashAuthorization();
+builder.Services.AddAvashAuthorization(o => o.ApplicationId = SampleApp.OrderPermissions.Application);
 builder.Services.AddAvashAccessContext(o =>
 {
     var gateway = builder.Configuration["Identity:AccessContext:GatewayBaseUrl"]
@@ -26,6 +26,10 @@ builder.Services.AddAvashAccessContext(o =>
                  ?? builder.Configuration["Identity:Authority"];
     o.GatewayBaseUrl = string.IsNullOrWhiteSpace(gateway) ? null : gateway.TrimEnd('/');
 });
+// Weekly access schedules (Identity Gateway: /api/identity/schedules) apply to every permission policy.
+builder.Services.AddAvashAccessSchedules(o =>
+    o.GatewayBaseUrl = builder.Configuration["Identity:AccessContext:GatewayBaseUrl"]
+                       ?? builder.Configuration["PermissionRegistration:IdentityServer"]);
 
 // DB-driven scope filter — safe, type-safe, deny-by-default.
 // IResourceScopeResolver is the DB mapping (in-memory mirror here); handlers are strongly-typed.
@@ -59,7 +63,7 @@ builder.Services.AddOpenApi("v1", o =>
         document.Info.Title = "Order Service (sample)";
         document.Info.Description =
             "Sample consumer of the Identity Gateway. Every endpoint requires one of the ten " +
-            "Orders.* permissions this service registered at startup via [RequirePermission]. " +
+            "order-service:Orders:* permissions this service registered at startup via [RequirePermission]. " +
             "Get a token from POST /api/identity/auth/login on the Identity Gateway and paste it " +
             "into the Bearer authentication dialog.";
         var components = document.Components ?? new Microsoft.OpenApi.OpenApiComponents();
@@ -141,7 +145,7 @@ app.MapPost("/api/orders/{orderId}/refunds/approve", (string orderId, decimal am
 app.MapGet("/api/orders/scoped", async (Avash.Identity.Authorization.ICurrentAccessContext access, OrderService svc, ScopeFilterService filter, CancellationToken ct) =>
 {
     await access.EnsureLoadedAsync(ct);
-    if (!access.HasPermission(SampleApp.OrderPermissions.ViewOrders))
+    if (!access.HasPermission(SampleApp.OrderPermissions.Full(SampleApp.OrderPermissions.ViewOrders)))
         return Results.Forbid();
     var effective = access.GetAssignments()
         .SelectMany(a => a.Scopes)
@@ -157,7 +161,7 @@ app.MapGet("/api/orders/scoped", async (Avash.Identity.Authorization.ICurrentAcc
 app.MapGet("/api/orders/{orderId}/scoped-check", async (string orderId, string region, Avash.Identity.Authorization.ICurrentAccessContext access, OrderService svc, CancellationToken ct) =>
 {
     await access.EnsureLoadedAsync(ct);
-    if (!access.HasPermission(SampleApp.OrderPermissions.ViewOrders, "region", region))
+    if (!access.HasPermission(SampleApp.OrderPermissions.Full(SampleApp.OrderPermissions.ViewOrders), "region", region))
         return Results.Forbid();
     return Results.Ok(svc.ListOrders().FirstOrDefault(o => o.Id == orderId));
 }).RequireAuthorization().WithTags("Orders").WithName("GetOrderScopedCheck");

@@ -1,3 +1,5 @@
+using Identity.Contracts;
+
 namespace Identity.Application.Scope;
 
 public interface IScopeValueValidator
@@ -31,30 +33,48 @@ public sealed class ScopeValueValidatorRegistry(IEnumerable<IScopeValueValidator
         => _map.TryGetValue(scopeKey, out var v) ? v : _map.TryGetValue("*", out var d) ? d : new DefaultScopeValueValidator();
 }
 
+/// <summary>
+/// Scope definitions from the registry. Failures (registry unreachable) are errors: validation must fail
+/// closed instead of accepting scopes it could not check.
+/// </summary>
 public interface IScopeDefinitionLookup
 {
-    Task<bool> ExistsActiveAsync(string key, CancellationToken ct);
-    Task<bool> IsScopeAllowedForRoleAsync(string role, string scopeKey, CancellationToken ct);
+    Task<Result<bool>> ExistsActiveAsync(string key, CancellationToken ct);
+
+    /// <summary>True when the role restricts nothing (no authz.allowed-scopes) or lists the scope.</summary>
+    Task<Result<bool>> IsScopeAllowedForRoleAsync(string role, string scopeKey, CancellationToken ct);
+
+    /// <summary>Parent key and value catalog of an active scope; scope.not_found otherwise.</summary>
+    Task<Result<ScopeRules>> GetRulesAsync(string key, CancellationToken ct);
 }
 
-public sealed record ScopeDefinitionDto(string Key, string DisplayName, string? Description, bool IsActive, string ValueType);
+public sealed record ScopeDefinitionDto(string Key, string DisplayName, string? Description, bool IsActive, string ValueType,
+    string? Parent = null);
+
+/// <summary>What validation needs to know about one scope key.</summary>
+public sealed record ScopeRules(string Key, string? Parent, IReadOnlyCollection<ScopeValueDto> Values);
 
 public sealed record ResourceScopeMappingDto(string Key, IReadOnlyCollection<string> Scopes);
 
 /// <summary>
-/// Admin-side CRUD for the scope registry (scope definitions + resource mappings).
-/// Backed by the Keycloak <c>iam-scope-registry</c> group attributes.
+/// Administration of the scope registry (the iam-scope-registry group). Errors: scope.not_found,
+/// scope.already_exists, or a Keycloak availability error. Creating a scope also declares its user
+/// attribute and token claim; when that fails the scope is removed again.
 /// </summary>
 public interface IScopeRegistryAdmin
 {
-    Task<IReadOnlyCollection<ScopeDefinitionDto>> ListScopesAsync(CancellationToken ct);
-    Task<ScopeDefinitionDto?> GetScopeAsync(string key, CancellationToken ct);
-    Task<IReadOnlyCollection<ResourceScopeMappingDto>> ListResourcesAsync(CancellationToken ct);
-    Task<IReadOnlyCollection<string>> GetResourcesForScopeAsync(string key, CancellationToken ct);
-    Task<ScopeDefinitionDto?> CreateScopeAsync(string key, string? displayName, string? description, CancellationToken ct);
-    Task<ScopeDefinitionDto?> UpdateScopeAsync(string key, string? displayName, string? description, bool? isActive, CancellationToken ct);
-    Task<bool> DeleteScopeAsync(string key, CancellationToken ct);
-    Task<bool> SetScopeResourcesAsync(string key, IReadOnlyCollection<string> resources, CancellationToken ct);
+    Task<Result<IReadOnlyCollection<ScopeDefinitionDto>>> ListScopesAsync(CancellationToken ct);
+    Task<Result<ScopeDefinitionDto>> GetScopeAsync(string key, CancellationToken ct);
+    Task<Result<IReadOnlyCollection<ResourceScopeMappingDto>>> ListResourcesAsync(CancellationToken ct);
+    Task<Result<IReadOnlyCollection<string>>> GetResourcesForScopeAsync(string key, CancellationToken ct);
+    Task<Result<ScopeDefinitionDto>> CreateScopeAsync(string key, string? displayName, string? description,
+        IReadOnlyCollection<string>? resources, string? parent, CancellationToken ct);
+    Task<Result<ScopeDefinitionDto>> UpdateScopeAsync(string key, string? displayName, string? description, bool? isActive,
+        IReadOnlyCollection<string>? resources, string? parent, CancellationToken ct);
+    Task<Result<IReadOnlyCollection<ScopeValueDto>>> GetValuesAsync(string key, CancellationToken ct);
+    Task<Result> SetValuesAsync(string key, IReadOnlyCollection<ScopeValueDto> values, CancellationToken ct);
+    Task<Result> DeleteScopeAsync(string key, CancellationToken ct);
+    Task<Result> SetScopeResourcesAsync(string key, IReadOnlyCollection<string> resources, CancellationToken ct);
 }
 
 public interface IScopeCacheInvalidator { void Invalidate(); }

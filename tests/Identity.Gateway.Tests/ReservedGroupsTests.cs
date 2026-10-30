@@ -102,7 +102,7 @@ public sealed class ReservedGroupsTests
     {
         var kc = new FakeKeycloak();
 
-        var created = await Store(kc).CreateAsync("super-admins", null, ["identity.users.manage"], CancellationToken.None);
+        var created = await Store(kc).CreateAsync("super-admins", null, ["identity.users.manage"], null, CancellationToken.None);
 
         Assert.Equal("role.reserved", created.Error?.Code);
         Assert.False(kc.AnyWrite);

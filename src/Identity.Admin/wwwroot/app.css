@@ -1,0 +1,40 @@
+/* Persian (RTL) console. Radzen follows dir="rtl" on <html>; these rules only add the typeface and the login page. */
+:root {
+    --rz-text-font-family: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+}
+
+html, body {
+    font-family: var(--rz-text-font-family);
+    margin: 0;
+}
+
+/* Headings receive focus after navigation (screen readers announce the page); no visible box is needed. */
+h1:focus {
+    outline: none;
+}
+
+.login-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: var(--rz-base-100);
+    padding: 1rem;
+}
+
+.login-card {
+    width: min(420px, 100%);
+}
+
+.login-tenant {
+    display: block;
+    text-align: center;
+    text-decoration: none;
+}
+
+/* Latin identifiers (permission names, client ids) stay left-to-right inside RTL text. */
+.ltr {
+    direction: ltr;
+    unicode-bidi: isolate;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 0.85em;
+}

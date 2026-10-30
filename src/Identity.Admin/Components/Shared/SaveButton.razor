@@ -1,0 +1,11 @@
+@if (Visible)
+{
+    <div class="rz-mt-4">
+        <RadzenButton Text="ذخیره" Icon="save" Click="@Click" />
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback Click { get; set; }
+}

@@ -1,0 +1,57 @@
+@page "/roles"
+@inherits ConsolePage
+
+<PageTitle>نقش‌ها | کنسول مدیریت هویت</PageTitle>
+
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
+    <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">نقش‌ها</RadzenText>
+    @if (canManage)
+    {
+        <RadzenButton Icon="add" Text="نقش جدید" Click="@(() => Navigation.NavigateTo("/roles/new"))" />
+    }
+</RadzenStack>
+
+<RadzenDataGrid TItem="BusinessRoleDto" Data="@roles" IsLoading="@Busy" AllowFiltering="true" FilterMode="FilterMode.Simple"
+                AllowSorting="true" EmptyText="نقشی تعریف نشده است">
+    <Columns>
+        <RadzenDataGridColumn Property="Name" Title="نام" />
+        <RadzenDataGridColumn Property="Description" Title="توضیح" />
+        <RadzenDataGridColumn Title="تعداد دسترسی" Width="140px" Filterable="false">
+            <Template Context="role">@role.Permissions.Count</Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="محدوده‌های الزامی" Filterable="false">
+            <Template Context="role"><span class="ltr">@string.Join(", ", role.RequiredScopes ?? [])</span></Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="" Width="200px" Filterable="false" Sortable="false">
+            <Template Context="role">
+                <RadzenButton Icon="edit" Text="ویرایش" Size="ButtonSize.Small" Variant="Variant.Text"
+                              Click="@(() => Navigation.NavigateTo($"/roles/{Uri.EscapeDataString(role.Name)}"))" />
+                @if (canManage)
+                {
+                    <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Text" ButtonStyle="ButtonStyle.Danger"
+                                  Click="@(() => DeleteAsync(role))" title="حذف" />
+                }
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    private List<BusinessRoleDto> roles = [];
+    private bool canManage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.RolesManage);
+        await LoadAsync();
+    }
+
+    private Task LoadAsync() => RunAsync(async () => roles = await Api.GetAsync<List<BusinessRoleDto>>("api/identity/business-roles"));
+
+    private async Task DeleteAsync(BusinessRoleDto role)
+    {
+        if (!await ConfirmAsync($"نقش «{role.Name}» حذف شود؟")) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Delete, $"api/identity/business-roles/{Uri.EscapeDataString(role.Name)}"), "نقش حذف شد"))
+            await LoadAsync();
+    }
+}

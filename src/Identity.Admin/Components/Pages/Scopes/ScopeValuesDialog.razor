@@ -1,0 +1,80 @@
+@inherits ConsolePage
+
+<RadzenStack Gap="1rem">
+    <RadzenText TextStyle="TextStyle.Body2">
+        با تعریف مقادیر، تخصیص‌ها فقط از همین فهرست انتخاب می‌شوند. فهرست خالی یعنی مقدار آزاد.
+        @if (Scope.Parent is not null)
+        {
+            <text>هر مقدار باید به یکی از مقادیر محدوده والد (<span class="ltr">@Scope.Parent</span>) تعلق داشته باشد.</text>
+        }
+    </RadzenText>
+
+    @foreach (var row in rows)
+    {
+        <RadzenRow Gap="0.5rem" AlignItems="AlignItems.Center">
+            <RadzenColumn Size="4"><RadzenTextBox @bind-Value="row.Value" Placeholder="مقدار (لاتین)" Disabled="@ReadOnly" Style="width: 100%; direction: ltr;" /></RadzenColumn>
+            <RadzenColumn Size="4"><RadzenTextBox @bind-Value="row.Label" Placeholder="عنوان" Disabled="@ReadOnly" Style="width: 100%;" /></RadzenColumn>
+            <RadzenColumn Size="3">
+                @if (Scope.Parent is not null)
+                {
+                    <RadzenDropDown TValue="string" Data="@parentValues" TextProperty="Label" ValueProperty="Value" @bind-Value="row.Parent"
+                                    Placeholder="والد" Disabled="@ReadOnly" AllowFiltering="true" Style="width: 100%;" />
+                }
+            </RadzenColumn>
+            <RadzenColumn Size="1">
+                @if (!ReadOnly)
+                {
+                    <RadzenButton Icon="delete" Variant="Variant.Text" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small" Click="@(() => rows.Remove(row))" />
+                }
+            </RadzenColumn>
+        </RadzenRow>
+    }
+
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.SpaceBetween" Gap="0.5rem">
+        @if (!ReadOnly)
+        {
+            <RadzenButton Text="افزودن مقدار" Icon="add" ButtonStyle="ButtonStyle.Secondary" Variant="Variant.Outlined" Click="@(() => rows.Add(new Row()))" />
+        }
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+            <RadzenButton Text="بستن" ButtonStyle="ButtonStyle.Light" Click="@(() => Dialogs.Close())" />
+            @if (!ReadOnly)
+            {
+                <RadzenButton Text="ذخیره" Icon="check" IsBusy="@Busy" Click="@SaveAsync" />
+            }
+        </RadzenStack>
+    </RadzenStack>
+</RadzenStack>
+
+@code {
+    [Parameter] public ScopeDefinitionView Scope { get; set; } = default!;
+    [Parameter] public bool ReadOnly { get; set; }
+
+    private sealed class Row
+    {
+        public string? Value { get; set; }
+        public string? Label { get; set; }
+        public string? Parent { get; set; }
+    }
+
+    private List<Row> rows = [];
+    private List<ScopeValueDto> parentValues = [];
+
+    private string ValuesPath(string key) => $"api/identity/scopes/{Uri.EscapeDataString(key)}/values";
+
+    protected override Task OnInitializedAsync() => RunAsync(async () =>
+    {
+        rows = (await Api.GetAsync<List<ScopeValueDto>>(ValuesPath(Scope.Key)))
+            .Select(v => new Row { Value = v.Value, Label = v.Label, Parent = v.Parent }).ToList();
+        if (Scope.Parent is not null)
+            parentValues = (await Api.GetAsync<List<ScopeValueDto>>(ValuesPath(Scope.Parent)))
+                .Select(v => v with { Label = v.Label ?? v.Value }).ToList();
+    });
+
+    private async Task SaveAsync()
+    {
+        var values = rows.Where(r => !string.IsNullOrWhiteSpace(r.Value))
+            .Select(r => new ScopeValueDto(r.Value!.Trim(), r.Label, r.Parent)).ToArray();
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Put, ValuesPath(Scope.Key), new SetScopeValuesRequest(values)), "مقادیر ذخیره شد"))
+            Dialogs.Close(true);
+    }
+}

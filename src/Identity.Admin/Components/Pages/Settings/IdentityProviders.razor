@@ -1,0 +1,114 @@
+@inherits ConsolePage
+
+<RadzenStack Gap="1rem">
+    <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0">
+        کاربران می‌توانند با حساب سازمانی دیگر (OIDC یا SAML) یا سرویس‌هایی مثل Google و Microsoft وارد شوند. کلیدهای محرمانه هیچ‌گاه نمایش داده نمی‌شوند.
+    </RadzenText>
+    <RadzenDataGrid TItem="IdentityProviderDto" Data="@providers" IsLoading="@Busy" EmptyText="سرویس ورودی تعریف نشده است">
+        <Columns>
+            <RadzenDataGridColumn Property="DisplayName" Title="نام" />
+            <RadzenDataGridColumn Title="شناسه"><Template Context="p"><span class="ltr">@p.Alias</span></Template></RadzenDataGridColumn>
+            <RadzenDataGridColumn Title="نوع"><Template Context="p"><span class="ltr">@p.ProviderId</span></Template></RadzenDataGridColumn>
+            <RadzenDataGridColumn Title="وضعیت" Width="110px">
+                <Template Context="p"><RadzenBadge BadgeStyle="@(p.Enabled ? BadgeStyle.Success : BadgeStyle.Light)" Text="@(p.Enabled ? "فعال" : "غیرفعال")" /></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Title="" Width="120px">
+                <Template Context="p">
+                    @if (CanManage)
+                    {
+                        <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => Edit(p))" title="ویرایش" />
+                        <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Text" ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteAsync(p))" title="حذف" />
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+
+    @if (CanManage)
+    {
+        <RadzenCard Variant="Variant.Outlined">
+            <RadzenText TextStyle="TextStyle.Subtitle1">@(editing is null ? "سرویس ورود جدید" : $"ویرایش {editing}")</RadzenText>
+            <RadzenRow Gap="1rem">
+                <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="شناسه (لاتین)" Style="width: 100%;"><RadzenTextBox @bind-Value="alias" Disabled="@(editing is not null)" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="نوع" Style="width: 100%;"><RadzenDropDown TValue="string" Data="@ProviderTypes" @bind-Value="providerId" Disabled="@(editing is not null)" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="4"><RadzenFormField Text="نام نمایشی" Style="width: 100%;"><RadzenTextBox @bind-Value="displayName" /></RadzenFormField></RadzenColumn>
+                <RadzenColumn Size="12">
+                    <RadzenFormField Text="تنظیمات (هر خط key=value؛ مثل clientId، clientSecret، authorizationUrl، tokenUrl)" Style="width: 100%;">
+                        <RadzenTextArea @bind-Value="config" Rows="5" Style="direction: ltr;" />
+                    </RadzenFormField>
+                </RadzenColumn>
+                <RadzenColumn Size="12">
+                    <RadzenStack Orientation="Orientation.Horizontal" Gap="1.5rem">
+                        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="enabled" /><RadzenText class="rz-m-0">فعال</RadzenText></RadzenStack>
+                        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="trustEmail" /><RadzenText class="rz-m-0">ایمیل تأییدشده تلقی شود</RadzenText></RadzenStack>
+                    </RadzenStack>
+                </RadzenColumn>
+            </RadzenRow>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mt-2">
+                <RadzenButton Text="ذخیره" Icon="save" Click="@SaveAsync" />
+                @if (editing is not null)
+                {
+                    <RadzenButton Text="انصراف" ButtonStyle="ButtonStyle.Light" Click="@Reset" />
+                }
+            </RadzenStack>
+        </RadzenCard>
+    }
+</RadzenStack>
+
+@code {
+    [Parameter] public bool CanManage { get; set; }
+
+    private static readonly string[] ProviderTypes = ["oidc", "keycloak-oidc", "saml", "google", "microsoft", "github"];
+    private const string Path = "api/identity/settings/identity-providers";
+
+    private List<IdentityProviderDto> providers = [];
+    private string? editing, alias, displayName, config;
+    private string providerId = "oidc";
+    private bool enabled = true, trustEmail;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task LoadAsync() => RunAsync(async () => providers = await Api.GetAsync<List<IdentityProviderDto>>(Path));
+
+    private void Edit(IdentityProviderDto p)
+    {
+        editing = alias = p.Alias;
+        providerId = p.ProviderId;
+        displayName = p.DisplayName;
+        enabled = p.Enabled;
+        trustEmail = p.TrustEmail;
+        // Masked secrets stay masked; sending them back unchanged keeps the stored value.
+        config = string.Join(Environment.NewLine, (p.Config ?? new Dictionary<string, string>()).Select(kv => $"{kv.Key}={kv.Value}"));
+    }
+
+    private void Reset()
+    {
+        editing = alias = displayName = config = null;
+        providerId = "oidc";
+        enabled = true;
+        trustEmail = false;
+    }
+
+    private Dictionary<string, string> ParseConfig() => (config ?? "")
+        .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(line => line.Split('=', 2))
+        .Where(parts => parts.Length == 2 && parts[0].Trim().Length > 0)
+        .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim());
+
+    private async Task SaveAsync()
+    {
+        var body = new IdentityProviderDto(alias ?? "", providerId, displayName, enabled, trustEmail, ParseConfig());
+        var saved = editing is null
+            ? await RunAsync(() => Api.SendAsync(HttpMethod.Post, Path, body), "سرویس ورود ایجاد شد")
+            : await RunAsync(() => Api.SendAsync(HttpMethod.Put, $"{Path}/{Uri.EscapeDataString(editing)}", body), "سرویس ورود ذخیره شد");
+        if (!saved) return;
+        Reset();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(IdentityProviderDto p)
+    {
+        if (!await ConfirmAsync($"سرویس ورود «{p.DisplayName ?? p.Alias}» حذف شود؟")) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Delete, $"{Path}/{Uri.EscapeDataString(p.Alias)}"), "حذف شد")) await LoadAsync();
+    }
+}

@@ -1,0 +1,80 @@
+@page "/applications"
+@inherits ConsolePage
+
+<PageTitle>اپلیکیشن‌ها | کنسول مدیریت هویت</PageTitle>
+
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
+    <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">اپلیکیشن‌ها و دسترسی‌ها</RadzenText>
+    @if (canManage)
+    {
+        <RadzenButton Icon="add" Text="اپلیکیشن جدید" Click="@(() => EditAsync(null))" />
+    }
+</RadzenStack>
+
+<RadzenDataGrid TItem="ApplicationDto" Data="@applications" IsLoading="@Busy" AllowSorting="true" EmptyText="اپلیکیشنی تعریف نشده است">
+    <Columns>
+        <RadzenDataGridColumn Property="DisplayName" Title="نام" />
+        <RadzenDataGridColumn Property="ClientId" Title="شناسه">
+            <Template Context="app"><span class="ltr">@app.ClientId</span></Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="نوع" Width="120px">
+            <Template Context="app">@(app.Kind == "web" ? "وب (ورود کاربر)" : "سرویس")</Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="وضعیت" Width="110px">
+            <Template Context="app"><RadzenBadge BadgeStyle="@(app.Enabled ? BadgeStyle.Success : BadgeStyle.Light)" Text="@(app.Enabled ? "فعال" : "غیرفعال")" /></Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="" Width="300px" Sortable="false">
+            <Template Context="app">
+                <RadzenButton Icon="key" Text="دسترسی‌ها" Size="ButtonSize.Small" Variant="Variant.Text"
+                              Click="@(() => Navigation.NavigateTo($"/applications/{Uri.EscapeDataString(app.ClientId)}"))" />
+                @if (canManage)
+                {
+                    <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => EditAsync(app))" title="ویرایش" />
+                    <RadzenButton Icon="password" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => RotateSecretAsync(app))" title="کلید جدید" />
+                    <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Text" ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteAsync(app))" title="حذف" />
+                }
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    private List<ApplicationDto> applications = [];
+    private bool canManage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.ApplicationsManage);
+        await LoadAsync();
+    }
+
+    private Task LoadAsync() => RunAsync(async () => applications = await Api.GetAsync<List<ApplicationDto>>("api/identity/applications"));
+
+    private async Task EditAsync(ApplicationDto? app)
+    {
+        var result = await Dialogs.OpenAsync<ApplicationDialog>(app is null ? "اپلیکیشن جدید" : $"ویرایش {app.DisplayName}",
+            new Dictionary<string, object?> { ["Application"] = app }, new DialogOptions { Width = "640px" });
+        if (result is ApplicationSecretResponse created) await ShowSecretAsync(created);
+        if (result is not null) await LoadAsync();
+    }
+
+    private async Task RotateSecretAsync(ApplicationDto app)
+    {
+        if (!await ConfirmAsync($"کلید محرمانه «{app.DisplayName}» عوض شود؟ سرویس باید کلید جدید را دریافت کند.")) return;
+        ApplicationSecretResponse? response = null;
+        if (await RunAsync(async () => response = await Api.SendAsync<ApplicationSecretResponse>(HttpMethod.Post,
+                $"api/identity/applications/{Uri.EscapeDataString(app.ClientId)}/secret", null)))
+            await ShowSecretAsync(response!);
+    }
+
+    private Task ShowSecretAsync(ApplicationSecretResponse response) =>
+        Dialogs.Alert($"کلید محرمانه «{response.Application.ClientId}»: {response.ClientSecret} — این کلید فقط همین یک بار نمایش داده می‌شود.",
+            "کلید محرمانه", new AlertOptions { OkButtonText = "ذخیره کردم" });
+
+    private async Task DeleteAsync(ApplicationDto app)
+    {
+        if (!await ConfirmAsync($"اپلیکیشن «{app.DisplayName}» و همه دسترسی‌های آن حذف شود؟")) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Delete, $"api/identity/applications/{Uri.EscapeDataString(app.ClientId)}"), "اپلیکیشن حذف شد"))
+            await LoadAsync();
+    }
+}

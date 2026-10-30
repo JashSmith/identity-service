@@ -1,0 +1,115 @@
+@page "/applications/{ClientId}"
+@inherits ConsolePage
+
+<PageTitle>دسترسی‌های @ClientId | کنسول مدیریت هویت</PageTitle>
+
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
+    <RadzenStack Gap="0">
+        <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">دسترسی‌های @(application?.DisplayName ?? ClientId)</RadzenText>
+        <span class="ltr">@ClientId</span>
+    </RadzenStack>
+    <RadzenButton Icon="arrow_forward" Text="بازگشت" ButtonStyle="ButtonStyle.Light" Click="@(() => Navigation.NavigateTo("/applications"))" />
+</RadzenStack>
+
+@if (canManage)
+{
+    <RadzenCard Variant="Variant.Outlined" class="rz-mb-4">
+        <RadzenText TextStyle="TextStyle.Subtitle1">افزودن دسترسی دستی</RadzenText>
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Wrap="FlexWrap.Wrap" AlignItems="AlignItems.End">
+            <RadzenFormField Text="نام (Module:Resource:Action)"><RadzenTextBox @bind-Value="newName" Placeholder="Sales:Order:Read" Style="direction: ltr; width: 260px;" /></RadzenFormField>
+            <RadzenFormField Text="نام نمایشی"><RadzenTextBox @bind-Value="newDisplayName" Style="width: 220px;" /></RadzenFormField>
+            <RadzenButton Text="افزودن" Icon="add" Click="@AddAsync" />
+        </RadzenStack>
+        <RadzenText TextStyle="TextStyle.Caption">دسترسی‌هایی که سرویس‌ها خودشان ثبت می‌کنند با منبع «سرویس» نمایش داده می‌شوند.</RadzenText>
+    </RadzenCard>
+}
+
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-mb-2">
+    <RadzenSwitch @bind-Value="includeDeprecated" Change="@(_ => LoadAsync())" /> <RadzenText class="rz-m-0">نمایش منسوخ‌شده‌ها</RadzenText>
+</RadzenStack>
+
+<RadzenDataGrid TItem="CatalogPermissionDto" Data="@permissions" IsLoading="@Busy" AllowFiltering="true" FilterMode="FilterMode.Simple"
+                AllowSorting="true" EmptyText="دسترسی‌ای ثبت نشده است">
+    <Columns>
+        <RadzenDataGridColumn Property="Module" Title="ماژول" />
+        <RadzenDataGridColumn Property="Resource" Title="منبع" />
+        <RadzenDataGridColumn Property="Action" Title="عمل" />
+        <RadzenDataGridColumn Property="DisplayName" Title="نام نمایشی" />
+        <RadzenDataGridColumn Title="منبع ثبت" Width="110px" Filterable="false">
+            <Template Context="p">@(p.Source == "manual" ? "دستی" : "سرویس")</Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="وضعیت" Width="110px" Filterable="false">
+            <Template Context="p">
+                @if (p.Deprecated)
+                {
+                    <RadzenBadge BadgeStyle="BadgeStyle.Warning" Text="منسوخ" />
+                }
+            </Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Title="" Width="230px" Filterable="false" Sortable="false">
+            <Template Context="p">
+                @if (canSchedule)
+                {
+                    <RadzenButton Icon="schedule" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => ScheduleAsync(p))" title="برنامه زمانی" />
+                }
+                @if (canManage)
+                {
+                    <RadzenButton Icon="@(p.Deprecated ? "restore" : "block")" Size="ButtonSize.Small" Variant="Variant.Text"
+                                  Click="@(() => ToggleDeprecatedAsync(p))" title="@(p.Deprecated ? "فعال‌سازی دوباره" : "منسوخ کردن")" />
+                    <RadzenButton Icon="delete" Size="ButtonSize.Small" Variant="Variant.Text" ButtonStyle="ButtonStyle.Danger"
+                                  Click="@(() => DeleteAsync(p))" title="حذف" />
+                }
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@code {
+    [Parameter] public string ClientId { get; set; } = "";
+
+    private ApplicationDto? application;
+    private List<CatalogPermissionDto> permissions = [];
+    private string? newName, newDisplayName;
+    private bool canManage, canSchedule, includeDeprecated;
+
+    private string AppPath => $"api/identity/applications/{Uri.EscapeDataString(ClientId)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.PermissionsManage);
+        canSchedule = await Can(Permissions.SchedulesManage);
+        await RunAsync(async () => application = await Api.GetAsync<ApplicationDto>(AppPath));
+        await LoadAsync();
+    }
+
+    private Task LoadAsync() => RunAsync(async () =>
+        permissions = await Api.GetAsync<List<CatalogPermissionDto>>($"{AppPath}/permissions?includeDeprecated={includeDeprecated}"));
+
+    private async Task AddAsync()
+    {
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Post, $"{AppPath}/permissions",
+                new CreateCatalogPermissionRequest(newName ?? "", newDisplayName, null)), "دسترسی افزوده شد"))
+        {
+            newName = newDisplayName = null;
+            await LoadAsync();
+        }
+    }
+
+    private string PermissionPath(CatalogPermissionDto p) => $"{AppPath}/permissions/{Uri.EscapeDataString($"{p.Module}:{p.Resource}:{p.Action}")}";
+
+    private async Task ToggleDeprecatedAsync(CatalogPermissionDto p)
+    {
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Put, PermissionPath(p), new UpdateCatalogPermissionRequest(null, null, !p.Deprecated))))
+            await LoadAsync();
+    }
+
+    private async Task DeleteAsync(CatalogPermissionDto p)
+    {
+        if (!await ConfirmAsync($"دسترسی «{p.Name}» از همه نقش‌ها برداشته و حذف شود؟")) return;
+        if (await RunAsync(() => Api.SendAsync(HttpMethod.Delete, PermissionPath(p)), "دسترسی حذف شد")) await LoadAsync();
+    }
+
+    private Task ScheduleAsync(CatalogPermissionDto p) =>
+        Dialogs.OpenAsync<PermissionScheduleDialog>($"برنامه زمانی {p.DisplayName ?? p.Name}",
+            new Dictionary<string, object?> { ["Permission"] = p.Name }, new DialogOptions { Width = "640px" });
+}
