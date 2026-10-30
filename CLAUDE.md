@@ -55,6 +55,8 @@ Delegated admins may only manage users inside their own scope and grant only wha
 | `src/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
 | `src/Avash.Identity.*` | Consumer packages |
 | `samples/OrderService.Sample` | Sample consumer service |
+| `tools/Identity.TenantProvisioning` | Operator tool: creates a new tenant realm with master credentials (the gateway never gets them) |
+| `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator), built in Docker by `scripts/build-keycloak-extensions.sh` into `Keycloak/Providers` |
 | `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |
 | `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`) |
 | `docs/` | Persian docs: architecture + Keycloak ERD, run guide, API summary |
@@ -106,9 +108,9 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
   clients carry their own `sub`/`preferred_username` mappers.
 
 ## Known open issues
-- Weekly schedules are not enforced on Keycloak's own login page (only gateway login/refresh and
-  consumers); a Keycloak authenticator SPI is a follow-up.
-- Realm provisioning for a new tenant is manual (see `docs/running.md`).
+- An SSO session opened inside the schedule is not re-checked when it signs in to another application
+  (cookie path); it ends with the SSO idle timeout.
+- `super-admins` members follow the realm's default schedule; give them an `unrestricted` user override.
 - The console keeps tokens in server memory: a console restart signs administrators out.
 
 ## Roadmap
@@ -118,9 +120,9 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 4. Applications and permissions: `App:Module:Resource:Action`, persistent catalog and sync (done)
 5. Roles and scopes: required scope keys, value hierarchy and catalog, delegated admin (done)
 6. Users: lockout, credentials/OTP reset, required actions, delegated visibility (done)
-7. Weekly schedules: attributes, API, gateway login/refresh and consumer enforcement (done; login SPI open)
+7. Weekly schedules: attributes, API, gateway login/refresh, consumer enforcement and Keycloak authenticator (done)
 8. Auth settings: tokens, password policy, brute force, OTP/MFA, IdPs, LDAP/AD, Persian login theme (done)
-9. Multi-tenancy: realm per tenant, tenant header, per-issuer token validation (done; provisioning manual)
+9. Multi-tenancy: realm per tenant, tenant header, per-issuer token validation, provisioning tool (done)
 10. Radzen admin console and E2E tests with `Aspire.Hosting.Testing` (done)
 11. Documentation in Persian (done)
-12. Next: SMS login (when the owner asks), Keycloak schedule SPI, automated realm provisioning
+12. Next: SMS login (when the owner asks)

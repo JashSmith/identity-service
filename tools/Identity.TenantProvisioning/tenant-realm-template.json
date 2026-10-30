@@ -1,0 +1,250 @@
+{
+  "realm": "TEMPLATE",
+  "enabled": true,
+  "displayName": "TEMPLATE",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "defaultRoles": [
+    "offline_access",
+    "uma_authorization"
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "offline_access",
+        "description": "Offline access"
+      },
+      {
+        "name": "uma_authorization",
+        "description": "UMA authorization"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "super-admins",
+      "attributes": {
+        "description": [
+          "Always-present unrestricted administrators; every registered client role is auto-mapped to this group"
+        ]
+      }
+    },
+    {
+      "name": "iam-scope-registry",
+      "attributes": {
+        "scope.region": [
+          "{\"displayName\":\"Region\",\"description\":\"Geographic region\",\"isActive\":true,\"valueType\":\"String\"}"
+        ],
+        "resource.Orders": [
+          "region"
+        ]
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "identity-gateway-admin",
+      "name": "Identity Gateway (admin service account)",
+      "description": "Service account the gateway uses for the Admin REST API. No user login flows.",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "",
+      "bearerOnly": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true,
+      "attributes": {
+        "client.secret.creation.time": "0"
+      }
+    },
+    {
+      "clientId": "identity-gateway",
+      "name": "Identity Gateway",
+      "description": "Public gateway — proxy for login/refresh/introspect/logout",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "fullScopeAllowed": true,
+      "protocol": "openid-connect",
+      "defaultClientScopes": [
+        "iam-access",
+        "authz-scopes",
+        "iam-permissions"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
+      "attributes": {
+        "access.token.lifespan": "300",
+        "client.secret.creation.time": "0",
+        "iam.application": "true",
+        "iam.display_name": "درگاه هویت",
+        "iam.kind": "service"
+      },
+      "protocolMappers": [
+        {
+          "name": "gateway-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "identity-gateway",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "sub-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "subject-sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "id",
+            "claim.name": "sub",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "iam-access-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "iam.scoped_access",
+            "claim.name": "iam_access",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "iam-access",
+      "description": "Maps iam.scoped_access user attribute to iam_access claim",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false",
+        "gui.order": "",
+        "consent.screen.text": ""
+      },
+      "protocolMappers": [
+        {
+          "name": "iam-access-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "iam.scoped_access",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "claim.name": "iam_access",
+            "jsonType.label": "String",
+            "multivalued": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "authz-scopes",
+      "description": "Maps authz.scope.* user/group attributes to flat scopes claims",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    },
+    {
+      "name": "iam-permissions",
+      "description": "Application permissions as {clientId}:{Module}:{Resource}:{Action}; mappers are provisioned per application at runtime",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": []
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-identity-gateway-admin",
+      "enabled": true,
+      "serviceAccountClientId": "identity-gateway-admin",
+      "email": "service-account-identity-gateway-admin@company.local",
+      "emailVerified": true,
+      "clientRoles": {
+        "realm-management": [
+          "view-realm",
+          "manage-realm",
+          "view-users",
+          "manage-users",
+          "query-users",
+          "query-groups",
+          "view-clients",
+          "manage-clients",
+          "query-clients",
+          "view-events",
+          "view-identity-providers",
+          "manage-identity-providers"
+        ]
+      },
+      "requiredActions": []
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "User",
+      "credentials": [],
+      "groups": [
+        "super-admins"
+      ],
+      "email": "admin@company.local",
+      "requiredActions": []
+    }
+  ],
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "fa",
+    "en"
+  ],
+  "defaultLocale": "fa",
+  "loginTheme": "avash"
+}
