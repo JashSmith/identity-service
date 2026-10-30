@@ -119,18 +119,29 @@ public sealed class IdentityGrpcService(
         return new LogoutResponse { Success = true };
     }
 
+    /// <summary>Returns the value, or raises the error as the matching gRPC status.</summary>
+    private static T Unwrap<T>(Result<T> result) => result.IsSuccess
+        ? result.Value
+        : throw new RpcException(new Status(result.Error!.Kind switch
+        {
+            ErrorKind.Validation => StatusCode.InvalidArgument,
+            ErrorKind.NotFound => StatusCode.NotFound,
+            ErrorKind.Conflict => StatusCode.AlreadyExists,
+            ErrorKind.Forbidden => StatusCode.PermissionDenied,
+            ErrorKind.Unavailable => StatusCode.Unavailable,
+            _ => StatusCode.Internal,
+        }, $"{result.Error.Code}: {result.Error.Message}"));
+
     public override async Task<UserResponse> GetUser(GetUserRequest request, ServerCallContext context)
     {
-        var u = await users.GetUserAsync(request.UserId, context.CancellationToken);
-        if (u is null) throw new RpcException(new Status(StatusCode.NotFound, "user not found"));
-        return MapUser(u);
+        return MapUser(Unwrap(await users.GetUserAsync(request.UserId, context.CancellationToken)));
     }
 
     public override async Task<UserListResponse> ListUsers(ListUsersRequest request, ServerCallContext context)
     {
-        var p = await users.GetUsersAsync(string.IsNullOrWhiteSpace(request.Search) ? null : request.Search,
+        var p = Unwrap(await users.GetUsersAsync(string.IsNullOrWhiteSpace(request.Search) ? null : request.Search,
             request.Page <= 0 ? 1 : request.Page, request.PageSize <= 0 ? 20 : request.PageSize,
-            context.CancellationToken);
+            includeSessions: true, context.CancellationToken));
         var r = new UserListResponse { Page = p.Page, PageSize = p.PageSize, Total = p.Total ?? p.Items.Count };
         r.Items.AddRange(p.Items.Select(MapUser));
         return r;
@@ -138,9 +149,9 @@ public sealed class IdentityGrpcService(
 
     public override async Task<RoleListResponse> ListRoles(ListRolesRequest request, ServerCallContext context)
     {
-        var p = await roles.GetRolesAsync(string.IsNullOrWhiteSpace(request.ClientId) ? null : request.ClientId,
+        var p = Unwrap(await roles.GetRolesAsync(string.IsNullOrWhiteSpace(request.ClientId) ? null : request.ClientId,
             request.Page <= 0 ? 1 : request.Page, request.PageSize <= 0 ? 20 : request.PageSize,
-            context.CancellationToken);
+            context.CancellationToken));
         var r = new RoleListResponse { Page = p.Page, PageSize = p.PageSize, Total = p.Total ?? p.Items.Count };
         r.Items.AddRange(p.Items.Select(MapRole));
         return r;
@@ -148,7 +159,7 @@ public sealed class IdentityGrpcService(
 
     public override async Task<RoleListResponse> GetUserRoles(GetUserRequest request, ServerCallContext context)
     {
-        var list = await users.GetUserRolesAsync(request.UserId, context.CancellationToken);
+        var list = Unwrap(await users.GetUserRolesAsync(request.UserId, context.CancellationToken));
         var r = new RoleListResponse { Page = 1, PageSize = list.Count, Total = list.Count };
         r.Items.AddRange(list.Select(MapRole));
         return r;
@@ -157,7 +168,7 @@ public sealed class IdentityGrpcService(
     public override async Task<PermissionListResponse> GetUserPermissions(GetUserRequest request,
         ServerCallContext context)
     {
-        var list = await users.GetUserPermissionsAsync(request.UserId, context.CancellationToken);
+        var list = Unwrap(await users.GetUserPermissionsAsync(request.UserId, context.CancellationToken));
         var r = new PermissionListResponse();
         r.Items.AddRange(list.Select(p => new PermissionResponse
         {
