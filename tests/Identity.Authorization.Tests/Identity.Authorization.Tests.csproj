@@ -20,5 +20,7 @@
 
     <ItemGroup>
         <ProjectReference Include="../../src/Avash.Identity.PermissionDiscovery/Avash.Identity.PermissionDiscovery.csproj"/>
+        <ProjectReference Include="../../src/Avash.Identity.Authorization/Avash.Identity.Authorization.csproj"/>
+        <ProjectReference Include="../../src/Avash.Identity.Authorization.AspNetCore/Avash.Identity.Authorization.AspNetCore.csproj"/>
     </ItemGroup>
 </Project>
