@@ -32,7 +32,11 @@ public static class BootstrapRegistration
         services.AddSingleton(new BootstrapStep("admin-console-client", (sp, ct) =>
             sp.GetRequiredService<KeycloakAdminConsoleClient>().EnsureAsync(ct)));
 
-        // 6. One prefixed permission mapper per application in the shared iam-permissions client scope.
+        // 6. Weekly schedules on Keycloak's own login pages (when the keycloak/extensions jar is installed).
+        services.AddSingleton(new BootstrapStep("schedule-authenticator", (sp, ct) =>
+            sp.GetRequiredService<KeycloakScheduleAuthenticatorSetup>().EnsureAsync(ct)));
+
+        // 7. One prefixed permission mapper per application in the shared iam-permissions client scope.
         services.AddSingleton(new BootstrapStep("permission-claims", (sp, ct) =>
             sp.GetRequiredService<Identity.Application.Permissions.IApplicationCatalog>().EnsurePermissionClaimsAsync(ct)));
 

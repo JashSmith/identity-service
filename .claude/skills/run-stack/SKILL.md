@@ -8,7 +8,8 @@ description: Start, verify and stop the Identity Gateway stack (Aspire AppHost w
 ## Start
 0. A running stack locks the DLLs in `bin/`: always stop it (see below) before `dotnet build`.
 1. Make sure Docker is running: `docker version --format '{{.Server.Version}}'`.
-2. Build first so the run can use `--no-build`: `dotnet build IdentityService.slnx`.
+2. Build first so the run can use `--no-build`: `dotnet build IdentityService.slnx`. After changes in
+   `keycloak/extensions`, run `bash scripts/build-keycloak-extensions.sh` (Docker only) before starting.
 3. Start the AppHost **in the background**, logging to the scratchpad:
    `dotnet run --project src/Identity.AppHost --launch-profile http --no-build > <scratchpad>/apphost.log 2>&1`
 4. Wait (background `until` loop, 1 s polling, ~5 min cap, `curl -m 3`) until:

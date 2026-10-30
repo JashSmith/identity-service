@@ -498,3 +498,7 @@ identity-signing-keys.json
 .tmp*
 # Tenant provisioning output: client secrets and temporary passwords (never commit)
 *.tenant.env
+
+# Keycloak extensions: Maven output and the built jar
+keycloak/extensions/target/
+src/Identity.AppHost/Keycloak/Providers/*.jar
