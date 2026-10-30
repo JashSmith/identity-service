@@ -1,0 +1,16 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.4">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <AspireUseCliBundle>true</AspireUseCliBundle>
+        <UserSecretsId>f0468f87-8af3-4d09-aef3-f110a8930140</UserSecretsId>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Aspire.Hosting.Keycloak"/>
+        <PackageReference Include="Aspire.Hosting.PostgreSQL"/>
+        <PackageReference Include="Aspire.Hosting.Redis"/>
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Identity.Gateway/Identity.Gateway.csproj"/>
+        <ProjectReference Include="../../samples/OrderService.Sample/OrderService.Sample.csproj"/>
+    </ItemGroup>
+</Project>

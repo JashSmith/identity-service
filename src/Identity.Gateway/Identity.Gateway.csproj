@@ -10,6 +10,7 @@
         <ProjectReference Include="../Identity.Infrastructure.Keycloak/Identity.Infrastructure.Keycloak.csproj"/>
         <ProjectReference Include="../Identity.Infrastructure.Redis/Identity.Infrastructure.Redis.csproj"/>
         <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj"/>
+        <ProjectReference Include="../Identity.ServiceDefaults/Identity.ServiceDefaults.csproj"/>
         <ProjectReference Include="../Avash.Identity.Authentication.AspNetCore/Avash.Identity.Authentication.AspNetCore.csproj"/>
         <ProjectReference Include="../Avash.Identity.Authorization.AspNetCore/Avash.Identity.Authorization.AspNetCore.csproj"/>
         <ProjectReference Include="../Avash.Identity.Grpc/Avash.Identity.Grpc.csproj"/>

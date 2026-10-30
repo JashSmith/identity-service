@@ -6,6 +6,7 @@ using Identity.Contracts;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
 var authority = builder.Configuration["Identity:Authority"] ??
                 throw new InvalidOperationException("Identity:Authority is required.");
 var audience = builder.Configuration["Identity:Audience"] ?? string.Empty;
@@ -166,6 +167,7 @@ builder.Services.AddOpenApi("v1", o =>
 });
 
 var app = builder.Build();
+app.MapDefaultEndpoints();
 if (app.Environment.IsDevelopment())
 {
     // Scalar reads the Microsoft.OpenApi document at /openapi/v1.json — full interactive UI

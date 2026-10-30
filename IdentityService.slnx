@@ -1,10 +1,6 @@
 <Solution>
-    <Folder Name="/deploy/">
-        <File Path="deploy/docker-compose.yml"/>
-        <File Path="deploy/Identity.Gateway.Dockerfile"/>
-        <File Path="deploy/Keycloak.Dockerfile"/>
-        <File Path="deploy/realm-company.json"/>
-        <File Path="deploy/OrderService.Sample.Dockerfile"/>
+    <Folder Name="/scripts/">
+        <File Path="scripts/smoke-test.sh"/>
     </Folder>
     <Folder Name="/docs/">
         <File Path="docs/architecture.md"/>
@@ -26,7 +22,9 @@
         <Project Path="src/Identity.Domain/Identity.Domain.csproj"/>
     </Folder>
     <Folder Name="/src/Host/">
+        <Project Path="src/Identity.AppHost/Identity.AppHost.csproj"/>
         <Project Path="src/Identity.Gateway/Identity.Gateway.csproj"/>
+        <Project Path="src/Identity.ServiceDefaults/Identity.ServiceDefaults.csproj"/>
     </Folder>
     <Folder Name="/src/Infrastructure/">
         <Project Path="src/Identity.Infrastructure.Keycloak/Identity.Infrastructure.Keycloak.csproj"/>

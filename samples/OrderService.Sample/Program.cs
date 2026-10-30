@@ -6,6 +6,7 @@ using Scalar.AspNetCore;
 using SampleApp;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
 
 var authority = builder.Configuration["Identity:Authority"] ?? "http://localhost:8080/realms/company";
 var audience = builder.Configuration["Identity:Audience"] ?? string.Empty;
@@ -83,6 +84,7 @@ builder.Services.AddOpenApi("v1", o =>
 });
 
 var app = builder.Build();
+app.MapDefaultEndpoints();
 app.UseAuthentication();
 app.UseAuthorization();
 

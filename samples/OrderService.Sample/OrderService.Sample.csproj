@@ -7,6 +7,7 @@
         <ProjectReference Include="../../src/Avash.Identity.Abstractions/Avash.Identity.Abstractions.csproj"/>
         <ProjectReference Include="../../src/Identity.Application/Identity.Application.csproj"/>
         <ProjectReference Include="../../src/Identity.Contracts/Identity.Contracts.csproj"/>
+        <ProjectReference Include="../../src/Identity.ServiceDefaults/Identity.ServiceDefaults.csproj"/>
         <ProjectReference Include="../../src/Avash.Identity.Authentication.AspNetCore/Avash.Identity.Authentication.AspNetCore.csproj"/>
         <ProjectReference Include="../../src/Avash.Identity.Authorization.AspNetCore/Avash.Identity.Authorization.AspNetCore.csproj"/>
         <ProjectReference Include="../../src/Avash.Identity.PermissionDiscovery/Avash.Identity.PermissionDiscovery.csproj"/>
