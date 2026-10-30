@@ -14,5 +14,6 @@ public sealed class IamPermissionSource : IPermissionDefinitionSource
         new PermissionDescriptor(IamPermissions.ScopesManage, "Manage scoped access assignments"),
         new PermissionDescriptor(IamPermissions.PermissionsRead, "Read registered permissions catalog"),
         new PermissionDescriptor(IamPermissions.PermissionsRegister, "Register service permission manifests"),
+        new PermissionDescriptor(IamPermissions.SystemRead, "Read system diagnostics (Keycloak database status)"),
     };
 }

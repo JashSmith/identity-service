@@ -23,6 +23,19 @@ public sealed class KeycloakClientRoleProvisioner(
     private readonly KeycloakOptions _o = opts.Value;
     private string AdminBase => $"{_o.BaseUrl.TrimEnd('/')}/admin/realms";
     private const string SuperAdminGroupName = ReservedGroups.SuperAdmins;
+
+    /// <summary>
+    /// Gateway management permissions granted to super-admins as realm roles. Must list every
+    /// permission of the gateway's IamPermissionSource; a test guards against drift.
+    /// </summary>
+    public static readonly IReadOnlyList<string> GatewayManagementPermissions =
+    [
+        "identity.users.read", "identity.users.manage",
+        "identity.roles.read", "identity.roles.manage",
+        "identity.scopes.read", "identity.scopes.manage",
+        "identity.permissions.read", "identity.permissions.register",
+        "identity.system.read",
+    ];
     private const string MapperName = "permission-client-role-mapper";
 
     private async Task<string> TokenAsync(CancellationToken ct) => await tokenProvider.GetTokenAsync(ct) ?? string.Empty;
@@ -193,11 +206,7 @@ public sealed class KeycloakClientRoleProvisioner(
 
         // Grant the gateway management permissions (identity.*) so super-admins pass RequireAuthorization.
         var granted = new List<object>();
-        foreach (var perm in new[] {
-                     "identity.users.read", "identity.users.manage",
-                     "identity.roles.read", "identity.roles.manage",
-                     "identity.scopes.read", "identity.scopes.manage",
-                     "identity.permissions.read", "identity.permissions.register" })
+        foreach (var perm in GatewayManagementPermissions)
         {
             var role = await EnsureRealmRoleAsync(perm, token, ct);
             if (role is not null) granted.Add(new { id = role.Value.Id, name = role.Value.Name });

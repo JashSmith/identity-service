@@ -205,6 +205,7 @@ app.MapAccessContext();
 app.MapPermissions();
 app.MapGet("/api/system/database-info", async (IDatabaseDiagnosticsService dbService, CancellationToken ct) =>
     Results.Ok(await dbService.CheckStatusAsync(ct)))
+    .RequireAuthorization(IamPermissions.SystemRead)
     .WithName("GetDatabaseInfo")
     .WithTags("System")
     .Produces<Identity.Contracts.Diagnostics.DatabaseStatusDto>(200);

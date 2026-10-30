@@ -1,6 +1,7 @@
 using Avash.Identity.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Avash.Identity.Authentication.AspNetCore;
@@ -39,8 +40,10 @@ public static class ServiceCollectionExtensions
             {
                 OnAuthenticationFailed = ctx =>
                 {
-                    var token = ctx.Request.Headers.Authorization.ToString();
-                    Console.WriteLine($"Incoming token: {token}");
+                    // Never log the token: a captured log line would be a usable credential.
+                    ctx.HttpContext.RequestServices.GetService<ILoggerFactory>()?
+                        .CreateLogger("Avash.Identity.Authentication")
+                        .LogDebug("Bearer token rejected: {Reason}", ctx.Exception.GetType().Name);
                     return Task.CompletedTask;
                 },
                 OnTokenValidated = context =>
