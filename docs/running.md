@@ -22,9 +22,12 @@
 ## اجرا
 
 ```bash
+bash scripts/build-keycloak-extensions.sh      # یک بار و پس از هر تغییر در keycloak/extensions (فقط Docker لازم است)
 dotnet build IdentityService.slnx
 dotnet run --project src/Identity.AppHost --launch-profile http
 ```
+
+بدون ساخت افزونه هم سامانه کار می‌کند، ولی برنامه زمانی روی صفحه ورود خود Keycloak اعمال نمی‌شود و درگاه در لاگ هشدار می‌دهد.
 
 ‏Aspire این منابع را بالا می‌آورد:
 
