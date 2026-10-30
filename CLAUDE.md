@@ -106,9 +106,6 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
   clients carry their own `sub`/`preferred_username` mappers.
 
 ## Known open issues
-- `/api/system/database-info` reports the Keycloak database as unreachable under Aspire.
-- The developer exception page echoes request headers, including bearer tokens (Development only).
-- `GatewayResolvingAccessContext` (consumer package) still swallows gateway failures with `catch {}`.
 - Weekly schedules are not enforced on Keycloak's own login page (only gateway login/refresh and
   consumers); a Keycloak authenticator SPI is a follow-up.
 - Realm provisioning for a new tenant is manual (see `docs/running.md`).
