@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>راهنمای کار با سرویس هویت (Identity Facade)</title>
+<title>راهنمای کار با سرویس هویت (Identity Gateway)</title>
 <style>
 :root{--fg:#202124;--bg:#fff;--head:#17365d;--rule:#2f75b5;--box:#eef5fc;--boxrule:#2f75b5;--warn:#fff4e5;--warnrule:#e69138;--ok:#edf7ed;--okrule:#43a047;--err:#fdecea;--errrule:#c0392b;--code:#111827;--codefg:#e5e7eb;--th:#d9eaf7;--cell:#d9e2f3;--muted:#5f6368;--inline:#f1f3f4}
 body{font-family:Tahoma,"Segoe UI",sans-serif;line-height:2;max-width:1100px;margin:auto;padding:24px;color:var(--fg);background:var(--bg)}
@@ -26,10 +26,10 @@ nav ol{margin:0;padding-right:22px}
 </style>
 </head>
 <body>
-<h1>راهنمای کار با سرویس هویت (Identity Facade)</h1>
-<p>این راهنمای عملی شش مرحلهٔ کار با Identity Facade را توضیح می‌دهد: احراز هویت، سرویس‌های کاربران، نقش‌های کسب‌وکاری، Scopeها به‌عنوان attribute، ساخت کاربر Scopeدار و مدیریت رجیستری Scope. هر نمونه با اجرای واقعی روی استک docker تست شده و خروجی واقعی آن درج شده است.</p>
+<h1>راهنمای کار با سرویس هویت (Identity Gateway)</h1>
+<p>این راهنمای عملی شش مرحلهٔ کار با Identity Gateway را توضیح می‌دهد: احراز هویت، سرویس‌های کاربران، نقش‌های کسب‌وکاری، Scopeها به‌عنوان attribute، ساخت کاربر Scopeدار و مدیریت رجیستری Scope. هر نمونه با اجرای واقعی روی استک docker تست شده و خروجی واقعی آن درج شده است.</p>
 
-<div class="box ok"><strong>اصل معماری:</strong> Keycloak مالک کاربران، گذرواژه‌ها، نشست‌ها، گروه‌ها، نقش‌ها و صدور JWT است. Facade فقط پروکسی، اعتبارسنجی، نرمال‌سازی و مدیریت مجوزها را انجام می‌دهد و <strong>هیچ توکنی تولید نمی‌کند</strong>. مصرف‌کننده‌ها آدرس Keycloak را نمی‌دانند؛ فقط به Facade وصل می‌شوند.</div>
+<div class="box ok"><strong>اصل معماری:</strong> Keycloak مالک کاربران، گذرواژه‌ها، نشست‌ها، گروه‌ها، نقش‌ها و صدور JWT است. Gateway فقط پروکسی، اعتبارسنجی، نرمال‌سازی و مدیریت مجوزها را انجام می‌دهد و <strong>هیچ توکنی تولید نمی‌کند</strong>. مصرف‌کننده‌ها آدرس Keycloak را نمی‌دانند؛ فقط به Gateway وصل می‌شوند.</div>
 
 <div class="box"><strong>منبع حقیقت:</strong> همهٔ دادهٔ احراز هویت در Keycloak است. نقش تجاری = <strong>Group</strong>، مجوز = <strong>Client Role</strong> روی کلاینت همان سرویس، Scope = <strong>attribute</strong> روی کاربر/گروه، و تعریف Scopeها در گروه پیکربندی <code>iam-scope-registry</code>. دیتابیس Oracle فقط متادیتای کلیدهای امضا را نگه می‌دارد.</div>
 
@@ -46,25 +46,25 @@ nav ol{margin:0;padding-right:22px}
 
 <h2 id="s0">پیش‌نیازها</h2>
 <div class="code">cd deploy
-docker compose up --build -d          # Keycloak، دو Oracle، Vault، Redis، Facade، order-service
+docker compose up --build -d          # Keycloak، دو Oracle، Vault، Redis، Gateway، order-service
 docker compose ps                     # همه باید healthy باشند (Oracle حدود ۶۰ ثانیه)
 curl -fsS http://localhost:5080/health/live</div>
 
 <table>
 <tr><th>منبع</th><th>آدرس</th></tr>
-<tr><td>Facade (REST)</td><td class="ltr">http://localhost:5080</td></tr>
+<tr><td>Gateway (REST)</td><td class="ltr">http://localhost:5080</td></tr>
 <tr><td>Scalar (مستندات تعاملی)</td><td class="ltr">http://localhost:5080/scalar</td></tr>
 <tr><td>Postman</td><td class="ltr">postman/Identity service.postman_collection.json + environment</td></tr>
 <tr><td>تست کامل خودکار جریان</td><td class="ltr">deploy/smoke-test.sh</td></tr>
 <tr><td>نمونهٔ مصرف‌کننده</td><td class="ltr">http://localhost:5180 (order-service)</td></tr>
 </table>
 
-<div class="box warn"><strong>اعتبارنامهٔ توسعه:</strong> کاربر <code>admin</code> / گذرواژهٔ <code>admin</code>، کلاینت <code>identity-facade</code> با secret <code>facade-development-only</code>. این مقادیر فقط برای توسعه‌اند و در محیط واقعی باید تغییر کنند و همه‌چیز روی HTTPS باشد.</div>
+<div class="box warn"><strong>اعتبارنامهٔ توسعه:</strong> کاربر <code>admin</code> / گذرواژهٔ <code>admin</code>، کلاینت <code>identity-gateway</code> با secret <code>gateway-development-only</code>. این مقادیر فقط برای توسعه‌اند و در محیط واقعی باید تغییر کنند و همه‌چیز روی HTTPS باشد.</div>
 
-<div class="box"><strong>نکتهٔ مهم دربارهٔ طول عمر توکن:</strong> Access Token کلاینت <code>identity-facade</code> عمداً کوتاه است (<code>access.token.lifespan = 300</code> یعنی ۵ دقیقه). این کار پنجرهٔ انتشار تغییرات Scope و مجوزها را محدود می‌کند: توکنی که قبلاً صادر شده تغییر نمی‌کند؛ تغییرات در توکن <strong>بعدی</strong> (پس از Refresh یا ورود مجدد) دیده می‌شوند. در اسکریپت‌های تست، توکن را تازه بگیرید.</div>
+<div class="box"><strong>نکتهٔ مهم دربارهٔ طول عمر توکن:</strong> Access Token کلاینت <code>identity-gateway</code> عمداً کوتاه است (<code>access.token.lifespan = 300</code> یعنی ۵ دقیقه). این کار پنجرهٔ انتشار تغییرات Scope و مجوزها را محدود می‌کند: توکنی که قبلاً صادر شده تغییر نمی‌کند؛ تغییرات در توکن <strong>بعدی</strong> (پس از Refresh یا ورود مجدد) دیده می‌شوند. در اسکریپت‌های تست، توکن را تازه بگیرید.</div>
 
 <h2 id="s1">۱. ورود، احراز هویت، Refresh، Introspect و خروج</h2>
-<p>همهٔ مسیرهای زیر پروکسی Keycloak هستند؛ Facade هیچ توکنی نمی‌سازد و گذرواژه را ذخیره نمی‌کند.</p>
+<p>همهٔ مسیرهای زیر پروکسی Keycloak هستند؛ Gateway هیچ توکنی نمی‌سازد و گذرواژه را ذخیره نمی‌کند.</p>
 
 <table>
 <tr><th>عملیات</th><th>مسیر</th><th>دسترسی</th><th>کی استفاده می‌شود</th></tr>
@@ -79,8 +79,8 @@ curl -fsS http://localhost:5080/health/live</div>
 <h3>۱.۱ ورود کاربر (Password Grant)</h3>
 <div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/login \
   -d "grant_type=password" \
-  -d "client_id=identity-facade" \
-  -d "client_secret=facade-development-only" \
+  -d "client_id=identity-gateway" \
+  -d "client_secret=gateway-development-only" \
   -d "username=admin" \
   -d "password=admin"</div>
 <p class="small">پاسخ واقعی (توکن‌ها کوتاه شده‌اند):</p>
@@ -94,7 +94,7 @@ curl -fsS http://localhost:5080/health/live</div>
 
 <div class="code"># ذخیرهٔ توکن در متغیر محیطی برای دستورات بعدی
 TOKEN=$(curl -s -X POST http://localhost:5080/api/identity/auth/login \
-  -d "grant_type=password&client_id=identity-facade&client_secret=facade-development-only&username=admin&password=admin" \
+  -d "grant_type=password&client_id=identity-gateway&client_secret=gateway-development-only&username=admin&password=admin" \
   | python -c "import json,sys; print(json.load(sys.stdin)['access_token'])")</div>
 
 <h3>۱.۲ ورود سرویس (Client Credentials)</h3>
@@ -120,40 +120,40 @@ TOKEN=$(curl -s -X POST http://localhost:5080/api/identity/auth/login \
   ],
   "sessionId": "42144108-9af6-ba0b-0445-d4e339b8d4cb"
 }</div>
-<div class="box"><strong>دو دستهٔ نام مجوز:</strong> مجوزهای <code>Identity.*</code> (با حرف بزرگ) مربوط به ماژول مدیریت کلید و Directory قدیمی‌اند؛ مجوزهای <code>identity.*</code> (با حرف کوچک) مجوزهای مدیریتی خود Facade برای کاربر/نقش/Scope هستند و همان‌هایی‌اند که Endpointها با <code>RequireAuthorization</code> چک می‌کنند. کاربر <code>admin</code> عضو گروه <code>super-admins</code> است و هر دو دسته را دارد.</div>
+<div class="box"><strong>دو دستهٔ نام مجوز:</strong> مجوزهای <code>Identity.*</code> (با حرف بزرگ) مربوط به ماژول مدیریت کلید و Directory قدیمی‌اند؛ مجوزهای <code>identity.*</code> (با حرف کوچک) مجوزهای مدیریتی خود Gateway برای کاربر/نقش/Scope هستند و همان‌هایی‌اند که Endpointها با <code>RequireAuthorization</code> چک می‌کنند. کاربر <code>admin</code> عضو گروه <code>super-admins</code> است و هر دو دسته را دارد.</div>
 
 <h3>۱.۴ تازه‌سازی توکن (Refresh)</h3>
 <div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/refresh \
   -d "grant_type=refresh_token" \
-  -d "client_id=identity-facade" \
-  -d "client_secret=facade-development-only" \
+  -d "client_id=identity-gateway" \
+  -d "client_secret=gateway-development-only" \
   -d "refresh_token=$REFRESH_TOKEN"</div>
 <p>پاسخ همان ساختار ورود است، با توکن‌های تازه. Keycloak در این realm چرخش Refresh Token را فعال دارد، پس <strong>همیشه</strong> مقدار برگشتی را جایگزین قبلی کنید.</p>
 <div class="box ok"><strong>کی Refresh لازم است:</strong> پس از تغییر مجوز یا Scope یک کاربر، توکن فعلی تغییر نمی‌کند. با Refresh یا ورود مجدد، توکن تازه شامل مقادیر جدید است (تأییدشده در تست).</div>
 
 <h3>۱.۵ اعتبارسنجی توکن (Introspect)</h3>
 <div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/introspect \
-  -d "client_id=identity-facade" \
-  -d "client_secret=facade-development-only" \
+  -d "client_id=identity-gateway" \
+  -d "client_secret=gateway-development-only" \
   -d "token=$TOKEN"</div>
 <p class="small">پاسخ واقعی طبق RFC 7662:</p>
-<div class="out">{ "active": true, "sub": "d05b0be6-e42c-4a0e-b195-162f1ba651df", "client_id": "identity-facade", ... }</div>
+<div class="out">{ "active": true, "sub": "d05b0be6-e42c-4a0e-b195-162f1ba651df", "client_id": "identity-gateway", ... }</div>
 <div class="box"><strong>تفاوت با اعتبارسنجی محلی:</strong> سرویس‌ها در حالت عادی توکن را <em>محلی</em> با JWKS اعتبارسنجی می‌کنند و به این Endpoint نمی‌زنند. Introspect فقط برای عملیات حساس (پرداخت، حذف، تغییر مالکیت) لازم است که «همین لحظه باطل نشده باشد» اهمیت دارد.</div>
 
 <h3>۱.۶ خروج و ابطال نشست (Logout)</h3>
 <div class="code">curl -s -X POST http://localhost:5080/api/identity/auth/logout \
-  -d "client_id=identity-facade" \
-  -d "client_secret=facade-development-only" \
+  -d "client_id=identity-gateway" \
+  -d "client_secret=gateway-development-only" \
   -d "refresh_token=$REFRESH_TOKEN"</div>
 <p class="small">پاسخ واقعی:</p>
 <div class="out">{ "success": true }</div>
-<p>Facade ابتدا Logout Keycloak را صدا می‌زند و در صورت شکست، به Endpoint ابطال (Revoke) می‌رود. پس از خروج، توکن‌های ذخیره‌شده را از حافظه پاک کنید.</p>
+<p>Gateway ابتدا Logout Keycloak را صدا می‌زند و در صورت شکست، به Endpoint ابطال (Revoke) می‌رود. پس از خروج، توکن‌های ذخیره‌شده را از حافظه پاک کنید.</p>
 <div class="box warn"><strong>خروج Access Token را فوراً باطل نمی‌کند:</strong> Access Token تا انقضا (حداکثر ۵ دقیقه) با JWKS معتبر می‌ماند؛ آنچه باطل می‌شود نشست و Refresh Token است. برای ابطال فوری لازم است عمر توکن کوتاه بماند (همین ۳۰۰ ثانیه) یا Introspect استفاده شود.</div>
 
 <h3>۱.۷ Discovery و JWKS (برای مصرف‌کننده‌ها)</h3>
 <div class="code">curl -s http://localhost:5080/.well-known/openid-configuration
 curl -s http://localhost:5080/api/identity/oidc/jwks</div>
-<p>Facade سند Discovery را از Keycloak عبور می‌دهد و فقط <code>jwks_uri</code> را به خودش تغییر می‌دهد. <code>issuer</code> و بقیهٔ Endpointها دست‌نخورده می‌مانند تا توکن واقعی Keycloak بدون تغییر اعتبارسنجی شود. مصرف‌کننده باید <code>AcceptIssuerFromDiscovery = true</code> را فعال کند، چون Authority آدرس Facade است اما Issuer متعلق به Keycloak.</p>
+<p>Gateway سند Discovery را از Keycloak عبور می‌دهد و فقط <code>jwks_uri</code> را به خودش تغییر می‌دهد. <code>issuer</code> و بقیهٔ Endpointها دست‌نخورده می‌مانند تا توکن واقعی Keycloak بدون تغییر اعتبارسنجی شود. مصرف‌کننده باید <code>AcceptIssuerFromDiscovery = true</code> را فعال کند، چون Authority آدرس Gateway است اما Issuer متعلق به Keycloak.</p>
 
 <h2 id="s2">۲. سرویس‌های کاربران و نقش‌ها</h2>
 <p>این مسیرها Directory خواندنی روی Keycloak هستند و با Bearer Token و مجوز خواندن کار می‌کنند.</p>
@@ -184,7 +184,7 @@ curl -s http://localhost:5080/api/identity/oidc/jwks</div>
 <h3>۲.۲ مجوزهای مؤثر یک کاربر</h3>
 <div class="code">curl -s http://localhost:5080/api/identity/users/{userId}/permissions \
   -H "Authorization: Bearer $TOKEN"</div>
-<div class="box warn"><strong>نکتهٔ مهمی که در تست کشف شد:</strong> Endpoint نقش‌های Keycloak (<code>/users/{id}/role-mappings</code>) فقط نقش‌های <strong>مستقیم</strong> را برمی‌گرداند. در مدل ما مجوزها از طریق <strong>عضویت در گروه</strong> (نقش کسب‌وکاری) به کاربر می‌رسند، پس این Endpoint قبلاً خالی برمی‌گشت. اکنون Facade نقش‌های مستقیم را با نقش‌های ارثی از گروه‌ها (هم Realm Role و هم Client Role همهٔ کلاینت‌ها) ترکیب می‌کند.</div>
+<div class="box warn"><strong>نکتهٔ مهمی که در تست کشف شد:</strong> Endpoint نقش‌های Keycloak (<code>/users/{id}/role-mappings</code>) فقط نقش‌های <strong>مستقیم</strong> را برمی‌گرداند. در مدل ما مجوزها از طریق <strong>عضویت در گروه</strong> (نقش کسب‌وکاری) به کاربر می‌رسند، پس این Endpoint قبلاً خالی برمی‌گشت. اکنون Gateway نقش‌های مستقیم را با نقش‌های ارثی از گروه‌ها (هم Realm Role و هم Client Role همهٔ کلاینت‌ها) ترکیب می‌کند.</div>
 <p class="small">پاسخ واقعی برای کاربری که عضو گروه <code>SeniorAccountant</code> است:</p>
 <div class="out">[
   { "name": "Orders.View",    "description": "Orders.View",    "deprecated": false },
@@ -204,7 +204,7 @@ curl -s http://localhost:5080/api/identity/oidc/jwks</div>
   { "name": "Orders.Invoices.Issue", "serviceId": "order-service", "deprecated": false },
   { "name": "Orders.Reports.Export", "serviceId": "order-service", "deprecated": false }
 ]</div>
-<div class="box err"><strong>رفتار مهم پس از راه‌اندازی مجدد:</strong> کاتالوگ مجوزها در حافظهٔ Facade است. پس از Restart، تا وقتی سرویس‌ها دوباره Manifest خود را ثبت نکنند این فهرست <strong>خالی</strong> است. به همین دلیل اعتبارسنجی «آیا این مجوز وجود دارد؟» عمداً به <strong>Keycloak</strong> (منبع حقیقت) سپرده شده نه به این کاتالوگ حافظه‌ای؛ وگرنه پس از هر Restart، اختصاص مجوزهای کاملاً معتبر با خطای «وجود ندارد» رد می‌شد.</div>
+<div class="box err"><strong>رفتار مهم پس از راه‌اندازی مجدد:</strong> کاتالوگ مجوزها در حافظهٔ Gateway است. پس از Restart، تا وقتی سرویس‌ها دوباره Manifest خود را ثبت نکنند این فهرست <strong>خالی</strong> است. به همین دلیل اعتبارسنجی «آیا این مجوز وجود دارد؟» عمداً به <strong>Keycloak</strong> (منبع حقیقت) سپرده شده نه به این کاتالوگ حافظه‌ای؛ وگرنه پس از هر Restart، اختصاص مجوزهای کاملاً معتبر با خطای «وجود ندارد» رد می‌شد.</div>
 
 <h2 id="s3">۳. ساخت نقش کسب‌وکاری و اعطای دسترسی</h2>
 <p>نقش کسب‌وکاری در Keycloak یک <strong>Group</strong> است و مجوزها <strong>Client Role</strong> روی کلاینت سرویس مربوطه. اختصاص مجوز به نقش یعنی Map کردن Client Role روی آن Group.</p>
@@ -287,7 +287,7 @@ curl -s -X PUT http://localhost:5080/api/identity/business-roles/SeniorAccountan
 </table>
 
 <h2 id="s4">۴. Scope به‌عنوان دادهٔ Attributeشده</h2>
-<p>Scope یعنی محدودیت داده‌محور: «این کاربر فقط در تهران-۲ کار می‌کند». Scopeها نه در دیتابیس Facade، بلکه به‌صورت <strong>attribute</strong> روی کاربر و گروه در Keycloak نگه داشته می‌شوند و از آنجا به توکن و سپس به فیلتر سطح دیتابیس در سرویس مصرف‌کننده می‌رسند.</p>
+<p>Scope یعنی محدودیت داده‌محور: «این کاربر فقط در تهران-۲ کار می‌کند». Scopeها نه در دیتابیس Gateway، بلکه به‌صورت <strong>attribute</strong> روی کاربر و گروه در Keycloak نگه داشته می‌شوند و از آنجا به توکن و سپس به فیلتر سطح دیتابیس در سرویس مصرف‌کننده می‌رسند.</p>
 
 <h3>۴.۱ مدل داده</h3>
 <table>
@@ -350,12 +350,12 @@ curl -s -X DELETE http://localhost:5080/api/identity/users/{userId}/scoped-assig
 <h3>۴.۴ دو مسیر خواندن در سرویس مصرف‌کننده</h3>
 <table>
 <tr><th>مسیر</th><th>مزیت</th><th>محدودیت</th></tr>
-<tr><td>Claim <code>iam_access</code> (رشتهٔ JSON شامل نقش‌ها)</td><td>بدون تماس شبکه‌ای؛ نقش‌به‌نقش تفکیک شده</td><td>برای بار بزرگ ممکن است از توکن حذف شود؛ در آن صورت <code>EnsureLoadedAsync</code> از Facade می‌خواند</td></tr>
+<tr><td>Claim <code>iam_access</code> (رشتهٔ JSON شامل نقش‌ها)</td><td>بدون تماس شبکه‌ای؛ نقش‌به‌نقش تفکیک شده</td><td>برای بار بزرگ ممکن است از توکن حذف شود؛ در آن صورت <code>EnsureLoadedAsync</code> از Gateway می‌خواند</td></tr>
 <tr><td>Claimهای <code>authz.scope.*</code> (تودرتو)</td><td>مستقیم از توکن، بدون تجزیهٔ JSON دستی</td><td>تجمیع‌شده است (تفکیک نقش ندارد)</td></tr>
 </table>
 <div class="code">// در سرویس مصرف‌کننده
-builder.Services.AddCompanyAccessContext(o =&gt;
-    o.FacadeBaseUrl = configuration["Identity:AccessContext:FacadeBaseUrl"]);
+builder.Services.AddAvashAccessContext(o =&gt;
+    o.GatewayBaseUrl = configuration["Identity:AccessContext:GatewayBaseUrl"]);
 
 // در Endpoint
 await access.EnsureLoadedAsync(ct);
@@ -378,13 +378,13 @@ region=tehran-1  (غیرمجاز)  → 403</div>
 <table>
 <tr><th>نشانهٔ ظاهری</th><th>علت ریشه‌ای</th><th>وضعیت</th></tr>
 <tr><td>نوشتن Scope <code>204/200</code> می‌داد ولی Attribute در Keycloak ذخیره نمی‌شد و Claim خالی بود</td><td>User Profile اعلانی Keycloak با سیاست پیش‌فرض، هر Attribute <strong>اعلام‌نشده</strong> را بی‌صدا دور می‌ریزد. کد قبلی یک Attribute تحت‌اللفظی <code>authz.scope.*</code> می‌ساخت، ولی Keycloak Wildcard در نام Attribute را پشتیبانی نمی‌کند — پس هیچ Attribute واقعی اعلام نشده بود. اکنون به‌ازای هر کلید Scope یک Attribute مشخص (<code>authz.scope.region</code>، <code>authz.scope.branch</code>، …) با دسترسی فقط-ادمین اعلام می‌شود.</td><td><span class="badge">رفع شد</span></td></tr>
-<tr><td>Claimهای Scope در توکن نبودند</td><td>Client Scopeهای <code>authz-scopes</code> و <code>iam-access</code> به کلاینت‌ها متصل نبودند، پس Mapperها هرگز اجرا نمی‌شدند. اکنون در شروع کار Facade به‌صورت خودکار و تکرارپذیر (Idempotent) به همهٔ کلاینت‌ها متصل می‌شوند.</td><td><span class="badge">رفع شد</span></td></tr>
+<tr><td>Claimهای Scope در توکن نبودند</td><td>Client Scopeهای <code>authz-scopes</code> و <code>iam-access</code> به کلاینت‌ها متصل نبودند، پس Mapperها هرگز اجرا نمی‌شدند. اکنون در شروع کار Gateway به‌صورت خودکار و تکرارپذیر (Idempotent) به همهٔ کلاینت‌ها متصل می‌شوند.</td><td><span class="badge">رفع شد</span></td></tr>
 <tr><td>مجوزهای <code>Orders.*</code> در توکن کاربر نبودند</td><td>Mapper تجمیع‌کنندهٔ Client Role روی کلاینت نبود؛ فقط Mapper نقش‌های Realm وجود داشت. اکنون <code>oidc-usermodel-client-role-mapper</code> اضافه شده است.</td><td><span class="badge">رفع شد</span></td></tr>
 </table>
 
-<div class="box warn"><strong>نکتهٔ مهم هنگام Import مجدد Realm:</strong> کدِ Facade به‌صورت خودکار فقط برای کلاینت‌هایی Mapper نقش می‌سازد که <em>خودشان Manifest ثبت می‌کنند</em> (مثل <code>order-service</code>). برای کلاینت خودِ <code>identity-facade</code> هیچ Manifestی ثبت نمی‌شود، پس Mapper تجمیع آن باید از <strong>فایل Realm</strong> بیاید — که اضافه شده است (<code>permission-client-role-aggregate</code> در <code>deploy/realm-company.json</code>). اگر Realm را دستی ویرایش کردید یا نسخهٔ قدیمی وارد کردید، نبودِ این Mapper باعث می‌شود کاربران فقط نقش‌های Realm را ببینند و مجوزهای سرویس‌ها (<code>Orders.*</code>) در توکنشان نیاید. با <code>GET /api/identity/me</code> یا Decode توکن بررسی کنید.</div>
-<div class="box"><strong>اتصال Client Scopeها فرق دارد:</strong> برخلاف Mapper بالا، اتصال <code>authz-scopes</code> و <code>iam-access</code> به کلاینت‌ها توسط کد در هر شروعِ Facade خودکار و تکرارپذیر انجام می‌شود (در تست، پس از حذف دستی، با راه‌اندازی مجدد به هر ۸ کلاینت بازگشت). پس این بخش نیاز به اقدام دستی ندارد.</div>
-<div class="box ok"><strong>خودترمیمی:</strong> اتصال Client Scopeها فقط در فایل Realm نوشته نشده (چون Import با سیاست «نادیده گرفتن موجود» روی Realmهای قدیمی اثر ندارد). Facade در هر شروع، نبودِ اتصال را تشخیص داده و برطرف می‌کند. در تست، اتصال‌ها دستی حذف شدند و پس از راه‌اندازی مجدد، خودکار به هر ۸ کلاینت بازگشتند.</div>
+<div class="box warn"><strong>نکتهٔ مهم هنگام Import مجدد Realm:</strong> کدِ Gateway به‌صورت خودکار فقط برای کلاینت‌هایی Mapper نقش می‌سازد که <em>خودشان Manifest ثبت می‌کنند</em> (مثل <code>order-service</code>). برای کلاینت خودِ <code>identity-gateway</code> هیچ Manifestی ثبت نمی‌شود، پس Mapper تجمیع آن باید از <strong>فایل Realm</strong> بیاید — که اضافه شده است (<code>permission-client-role-aggregate</code> در <code>deploy/realm-company.json</code>). اگر Realm را دستی ویرایش کردید یا نسخهٔ قدیمی وارد کردید، نبودِ این Mapper باعث می‌شود کاربران فقط نقش‌های Realm را ببینند و مجوزهای سرویس‌ها (<code>Orders.*</code>) در توکنشان نیاید. با <code>GET /api/identity/me</code> یا Decode توکن بررسی کنید.</div>
+<div class="box"><strong>اتصال Client Scopeها فرق دارد:</strong> برخلاف Mapper بالا، اتصال <code>authz-scopes</code> و <code>iam-access</code> به کلاینت‌ها توسط کد در هر شروعِ Gateway خودکار و تکرارپذیر انجام می‌شود (در تست، پس از حذف دستی، با راه‌اندازی مجدد به هر ۸ کلاینت بازگشت). پس این بخش نیاز به اقدام دستی ندارد.</div>
+<div class="box ok"><strong>خودترمیمی:</strong> اتصال Client Scopeها فقط در فایل Realm نوشته نشده (چون Import با سیاست «نادیده گرفتن موجود» روی Realmهای قدیمی اثر ندارد). Gateway در هر شروع، نبودِ اتصال را تشخیص داده و برطرف می‌کند. در تست، اتصال‌ها دستی حذف شدند و پس از راه‌اندازی مجدد، خودکار به هر ۸ کلاینت بازگشتند.</div>
 
 <h2 id="s5">۵. ساخت کاربر همراه با نقش و Scope</h2>
 <p>یک درخواست، سه کار انجام می‌دهد: ساخت کاربر در Keycloak، نوشتن Attributeهای Scope، و عضویت در گروه نقش. اگر مرحلهٔ Scope شکست بخورد، کاربر ساخته‌شده <strong>بازگردانی (Rollback)</strong> و حذف می‌شود تا کاربر نیمه‌کاره نماند.</p>
@@ -468,7 +468,7 @@ curl -s -X POST http://localhost:5080/api/identity/users \
     "lastName":  ["'lastName' is required by the identity provider's user profile; without it the user cannot sign in."]
   }
 }</div>
-<div class="box err"><strong>چرا مورد «ه» اضافه شد:</strong> در User Profile این Realm، فیلدهای <code>email</code>، <code>firstName</code> و <code>lastName</code> برای نقش <code>user</code> الزامی‌اند. ساخت کاربر بدون آن‌ها با <code>201</code> <strong>موفق می‌شد</strong>، ولی کاربر بعداً هرگز نمی‌توانست وارد شود و خطای مبهم <code>Account is not fully set up</code> می‌گرفت. اکنون Facade فهرست فیلدهای الزامی را از خود Keycloak می‌خواند و <em>قبل از</em> ساخت کاربر، خطای field-level می‌دهد.</div>
+<div class="box err"><strong>چرا مورد «ه» اضافه شد:</strong> در User Profile این Realm، فیلدهای <code>email</code>، <code>firstName</code> و <code>lastName</code> برای نقش <code>user</code> الزامی‌اند. ساخت کاربر بدون آن‌ها با <code>201</code> <strong>موفق می‌شد</strong>، ولی کاربر بعداً هرگز نمی‌توانست وارد شود و خطای مبهم <code>Account is not fully set up</code> می‌گرفت. اکنون Gateway فهرست فیلدهای الزامی را از خود Keycloak می‌خواند و <em>قبل از</em> ساخت کاربر، خطای field-level می‌دهد.</div>
 
 <p><strong>و) نام کاربری یا ایمیل تکراری:</strong></p>
 <div class="out">{
@@ -571,7 +571,7 @@ curl -s -X PUT "$KEYCLOAK/admin/realms/company/groups/{groupId}" \
 <div class="box warn"><strong>دو نکتهٔ عملی:</strong> ۱) اگر این Attribute تنظیم نشده باشد، همهٔ Scopeها برای آن نقش مجازند (رفتار باز). برای اعمال محدودیت حتماً آن را تنظیم کنید. ۲) چون PUT کل Attributeها را جایگزین می‌کند، Attributeهای دیگر را هم در بدنه نگه دارید. پس از تغییر، نتایج تا انقضای کش (حداکثر ۵ دقیقه) یا تا یک تغییر از طریق API که کش را Invalidate می‌کند، به‌روز نمی‌شوند.</div>
 
 <h3>۶.۵ کش و به‌روز بودن داده</h3>
-<p>دادهٔ رجیستری در دو لایه کش می‌شود: حافظهٔ محلی (L1) و Redis (L2) با عمر ۵ دقیقه. Redis باعث می‌شود چند نمونهٔ Facade کش یکدیگر را هم باطل کنند.</p>
+<p>دادهٔ رجیستری در دو لایه کش می‌شود: حافظهٔ محلی (L1) و Redis (L2) با عمر ۵ دقیقه. Redis باعث می‌شود چند نمونهٔ Gateway کش یکدیگر را هم باطل کنند.</p>
 <table>
 <tr><th>رویداد</th><th>اثر روی کش</th></tr>
 <tr><td>ساخت / ویرایش Scope</td><td>بلافاصله باطل می‌شود</td></tr>
@@ -583,9 +583,9 @@ curl -s -X PUT "$KEYCLOAK/admin/realms/company/groups/{groupId}" \
 <h2 id="s7">۷. تست سریع کل جریان</h2>
 <p>اسکریپت <code>deploy/smoke-test.sh</code> هر هفت گام جریان هدف را پشت‌سر هم اجرا و تأیید می‌کند (فقط <code>curl</code> و <code>python</code> لازم دارد):</p>
 <div class="code">cd deploy
-FACADE=http://localhost:5080 ./smoke-test.sh</div>
+GATEWAY=http://localhost:5080 ./smoke-test.sh</div>
 <p class="small">خروجی واقعی:</p>
-<div class="out">== 1/7 — Super-admin login (facade proxy → Keycloak)
+<div class="out">== 1/7 — Super-admin login (gateway proxy → Keycloak)
   PASS login OK, Keycloak token issued
 
 == 2/7 — Verify super-admin management permissions in token
@@ -603,7 +603,7 @@ FACADE=http://localhost:5080 ./smoke-test.sh</div>
 == 6/7 — Login as the new user and verify token claims
   PASS user token carries 'identity.users.read' and authz.scope.region=tehran-2
 
-== 7/7 — Access-context + scoped-access via facade
+== 7/7 — Access-context + scoped-access via gateway
   PASS access-context and scoped-access consistent with token
 
 All 7 steps passed.</div>
@@ -625,7 +625,7 @@ All 7 steps passed.</div>
 <h2 id="s9">۹. چک‌لیست محیط واقعی</h2>
 <ul>
 <li>گذرواژهٔ <code>admin</code> و همهٔ Secretهای کلاینت عوض شوند و از Vault خوانده شوند.</li>
-<li>گرنت <code>password</code> روی کلاینت <code>identity-facade</code> بسته شود (<code>directAccessGrantsEnabled: false</code>) و ورود از طریق جریان استاندارد OIDC انجام شود.</li>
+<li>گرنت <code>password</code> روی کلاینت <code>identity-gateway</code> بسته شود (<code>directAccessGrantsEnabled: false</code>) و ورود از طریق جریان استاندارد OIDC انجام شود.</li>
 <li>همه‌چیز پشت HTTPS باشد و <code>RequireHttpsMetadata</code> فعال شود.</li>
 <li><code>authz.allowed-scopes</code> برای همهٔ نقش‌ها صریحاً تنظیم شود (نبودش یعنی «همه مجاز»).</li>
 <li>Attributeهای Scope فقط توسط ادمین قابل نوشتن بمانند (User Profile Hardening در شروع کار اعمال می‌شود).</li>
@@ -635,7 +635,7 @@ All 7 steps passed.</div>
 
 <div class="box"><strong>مواردی که آگاهانه باز مانده‌اند:</strong> اگر Keycloak در دسترس نباشد، رجیستری به فهرست پیش‌فرض Scopeها برمی‌گردد تا سیستم از کار نیفتد (رفتار باز). برای محیط واقعی سخت‌گیرانه‌تر، این رفتار باید به «رد کردن درخواست» تغییر کند. همچنین <code>IAuditSink</code> فعلاً هیچ‌کاره (Noop) است و رویدادهای امنیتی ثبت نمی‌شوند.</div>
 
-<p class="small">آخرین به‌روزرسانی این راهنما: پس از تست کامل روی استک docker (Keycloak، Oracle، Redis، Vault، Facade و order-service). همهٔ پاسخ‌های نشان‌داده‌شده خروجی واقعی اجرا هستند.</p>
+<p class="small">آخرین به‌روزرسانی این راهنما: پس از تست کامل روی استک docker (Keycloak، Oracle، Redis، Vault، Gateway و order-service). همهٔ پاسخ‌های نشان‌داده‌شده خروجی واقعی اجرا هستند.</p>
 
 </body>
 </html>

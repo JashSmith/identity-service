@@ -27,13 +27,13 @@ public sealed class ArchitectureTests
     [Fact]
     public void Authentication_has_no_authorization_dependency()
     {
-        var names = typeof(Company.Identity.Authentication.IdentityAuthenticationOptions).Assembly
+        var names = typeof(Avash.Identity.Authentication.IdentityAuthenticationOptions).Assembly
             .GetReferencedAssemblies().Select(x => x.Name).ToArray();
-        Assert.DoesNotContain("Company.Identity.Authorization", names);
+        Assert.DoesNotContain("Avash.Identity.Authorization", names);
     }
 
     [Fact]
-    public void Domain_types_surface_is_facade_owned_only()
+    public void Domain_types_surface_is_gateway_owned_only()
     {
         var names = typeof(Identity.Domain.PermissionDefinition).Assembly.GetTypes()
             .Where(x => x.Namespace == "Identity.Domain").Select(x => x.Name).ToArray();

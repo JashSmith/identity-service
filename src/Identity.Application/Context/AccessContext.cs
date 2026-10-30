@@ -43,7 +43,7 @@ public sealed class CurrentAccessContext : IApplicationAccessContext
 
     /// <summary>
     /// Creates an access context by resolving the permissions and scoped assignments
-    /// for the given user id. Used by the facade itself; microservices typically use
+    /// for the given user id. Used by the gateway itself; microservices typically use
     /// the claims-based constructor via claims principal parsing.
     /// </summary>
     public static async Task<CurrentAccessContext> FromUserAsync(

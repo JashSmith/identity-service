@@ -2,11 +2,11 @@
 
 ## Decision summary
 
-Keycloak is the authoritative Identity Provider and OAuth 2.0/OIDC Authorization Server. The .NET 10 application is an **Identity Facade / Identity Orchestrator**, not a second identity server.
+Keycloak is the authoritative Identity Provider and OAuth 2.0/OIDC Authorization Server. The .NET 10 application is an **Identity Gateway / Identity Orchestrator**, not a second identity server.
 
 The platform deliberately does **not** implement password hashing, credential verification, authentication sessions, access-token or refresh-token minting, refresh-token rotation, token revocation, MFA, password recovery, external identity storage, user federation, realm/client/composite role semantics, or JWT signing. Those capabilities remain in Keycloak.
 
-Every access token accepted by an application service is a genuine Keycloak-issued token. The facade may validate, normalize, cache, provision, register, and administer; it never signs or exchanges a token in .NET.
+Every access token accepted by an application service is a genuine Keycloak-issued token. The gateway may validate, normalize, cache, provision, register, and administer; it never signs or exchanges a token in .NET.
 
 ## System architecture
 
@@ -15,11 +15,11 @@ graph LR
     Browser[Browser / Blazor / API client]
     Service[Microservice]
     Gateway[API gateway]
-    Facade[Identity Facade\n.NET 10]
+    Gateway[Identity Gateway\n.NET 10]
     KC[Keycloak cluster\nOIDC + Admin REST]
     KCDB[(Keycloak PostgreSQL)]
     Redis[(Redis L2 cache)]
-    Meta[(Facade metadata DB)]
+    Meta[(Gateway metadata DB)]
     Org[Organization SSO validation API]
     Vault[HashiCorp Vault]
     KCExt[Keycloak extensions\ncustom grant + Vault key provider]
@@ -27,10 +27,10 @@ graph LR
     Browser -->|OIDC authorization code| KC
     Service -->|local JWT validation| Service
     Gateway -->|local JWT validation| Gateway
-    Service -->|manifest REST/gRPC| Facade
-    Facade -->|Admin REST / token orchestration| KC
-    Facade --> Redis
-    Facade --> Meta
+    Service -->|manifest REST/gRPC| Gateway
+    Gateway -->|Admin REST / token orchestration| KC
+    Gateway --> Redis
+    Gateway --> Meta
     KC --> KCDB
     KCExt --> Org
     KCExt --> Vault
@@ -42,7 +42,7 @@ graph LR
 
 ### Ownership boundary
 
-| Capability | Owner | .NET facade behavior |
+| Capability | Owner | .NET gateway behavior |
 |---|---|---|
 | Users, usernames, immutable subject IDs | Keycloak | Directory adapter and normalized DTOs |
 | Passwords, credentials, password policy/reset | Keycloak | Never read or persist credentials |
@@ -51,10 +51,10 @@ graph LR
 | Realm/client/composite roles | Keycloak | Register application-owned client roles and administer through constrained APIs |
 | External identity links | Keycloak | Validate proprietary identity and ask Keycloak to create/update the link |
 | JWT signing and JWKS | Keycloak | Consumer packages use Keycloak discovery/JWKS |
-| Permission manifests and service ownership | Facade | Hash, persist history, audit, and synchronize client roles |
-| Stable application DTOs and APIs | Facade | Hide Keycloak representations |
-| External proprietary SSO validation | Facade adapter / Keycloak grant extension | Validate only; no token issuance in .NET |
-| Cache, reconciliation, observability | Facade | Bounded, explicit stale-data policy |
+| Permission manifests and service ownership | Gateway | Hash, persist history, audit, and synchronize client roles |
+| Stable application DTOs and APIs | Gateway | Hide Keycloak representations |
+| External proprietary SSO validation | Gateway adapter / Keycloak grant extension | Validate only; no token issuance in .NET |
+| Cache, reconciliation, observability | Gateway | Bounded, explicit stale-data policy |
 | RSA key source of truth | Vault | Keycloak extension consumes Vault-backed key set |
 
 ## Request flows
@@ -64,9 +64,9 @@ graph LR
 1. The client uses authorization code + PKCE against Keycloak.
 2. Keycloak performs authentication, MFA, federation, session creation, and consent according to the realm flow.
 3. Keycloak returns a Keycloak access token and, where configured, refresh token.
-4. The client calls services with the access token. `Company.Identity.Authentication` validates issuer, audience, signature, lifetime, not-before, token type, and algorithm locally.
-5. `Company.Identity.Authorization` evaluates mapped Keycloak realm/client-role claims locally. No facade call is made per request.
-6. A BFF may keep tokens server-side and use an HttpOnly session cookie, but the BFF delegates session/token ownership to Keycloak or a dedicated BFF session component; the facade does not recreate Keycloak sessions.
+4. The client calls services with the access token. `Avash.Identity.Authentication` validates issuer, audience, signature, lifetime, not-before, token type, and algorithm locally.
+5. `Avash.Identity.Authorization` evaluates mapped Keycloak realm/client-role claims locally. No gateway call is made per request.
+6. A BFF may keep tokens server-side and use an HttpOnly session cookie, but the BFF delegates session/token ownership to Keycloak or a dedicated BFF session component; the gateway does not recreate Keycloak sessions.
 
 ### Proprietary organization token
 
@@ -75,7 +75,7 @@ The raw external token is accepted only over TLS and is treated as a secret.
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant F as Identity Facade
+    participant F as Identity Gateway
     participant V as Organization validation API
     participant K as Keycloak
     participant S as Application service
@@ -128,22 +128,22 @@ The custom grant is `urn:company:params:oauth:grant-type:organization-token`. It
 
 ```text
 src/
-  Identity.Domain/                    # manifest and facade-owned invariants only
+  Identity.Domain/                    # manifest and gateway-owned invariants only
   Identity.Application/               # use cases and provider-neutral ports
   Identity.Contracts/                 # Company-owned REST/gRPC DTOs
   Identity.Infrastructure/            # cross-cutting HTTP, resilience, audit
   Identity.Infrastructure.Keycloak/   # Admin REST/OIDC adapter; no types leak outward
   Identity.Infrastructure.ExternalSso/ # organization validation adapter
   Identity.Infrastructure.Redis/      # L1/L2 cache implementation
-  Identity.Api/                       # facade REST composition root
-  Company.Identity.Abstractions/      # stable package contracts and attributes
-  Company.Identity.Authentication/    # JWT validation options only
-  Company.Identity.Authorization/     # policy primitives only
-  Company.Identity.PermissionRegistration/ # discovery, hash, retry, client
-  Company.Identity.Context/            # current-user abstraction and adapters
-  Company.Identity.Grpc/              # normalized transport contracts
-  Company.Identity.Blazor/             # optional BFF/UI helpers
-  Company.Identity.Testing/            # test token/claims and fake ports
+  Identity.Gateway/                       # gateway REST composition root
+  Avash.Identity.Abstractions/      # stable package contracts and attributes
+  Avash.Identity.Authentication/    # JWT validation options only
+  Avash.Identity.Authorization/     # policy primitives only
+  Avash.Identity.PermissionRegistration/ # discovery, hash, retry, client
+  Avash.Identity.Context/            # current-user abstraction and adapters
+  Avash.Identity.Grpc/              # normalized transport contracts
+  Avash.Identity.Blazor/             # optional BFF/UI helpers
+  Avash.Identity.Testing/            # test token/claims and fake ports
 
 keycloak/
   extensions/organization-grant/      # release-pinned OAuth2 Grant Type SPI
@@ -153,7 +153,7 @@ keycloak/
 
 `Identity.Application` and `Identity.Domain` depend only on `Identity.Contracts` where appropriate and provider-neutral ports. They do not depend on Keycloak SDKs, Admin REST representations, EF Core, ASP.NET Core, Redis, RabbitMQ, or gRPC implementation details.
 
-Facade persistence is optional and contains only:
+Gateway persistence is optional and contains only:
 
 - manifest history, canonical hash, accepted version, and deprecation state;
 - external synchronization metadata that is not the identity link itself;
@@ -168,19 +168,19 @@ Use a version-pinned realm and import/configuration reviewed as code.
 
 - One client per microservice where practical, such as `order-service`.
 - Permissions are **per-service client roles** (e.g. client `order-service` owns `Orders.Read`, `Orders.Create`, `Orders.Update`, `Orders.Cancel`). Each service client carries an `oidc-usermodel-client-role-mapper` with `claim.name=permissions` / `claim.name=permission` so Keycloak aggregates all client roles into the `permissions`/`permission` claims. No realm roles are used for application permissions.
-- Business roles are **Keycloak Groups** (e.g. `/Admin`, `/Manager`, `/RegionalManager`). The facade's `IBusinessRoleStore` is `KeycloakGroupBusinessRoleStore` — CRUD via `POST/GET /admin/realms/{realm}/groups`, members via `/groups/{id}/members`, membership via `PUT /admin/realms/{realm}/users/{id}/groups/{groupId}`. The special groups `/iam-scope-registry` (scope/resource registry, see below), `/key-admins` and `/super-admins` (admin groups receiving every newly registered client role; `super-admins` is the always-present unrestricted role seeded at startup by `EnsureSuperAdminGroupAsync` and also carries the facade `identity.*` management permissions) are excluded from business-role listings.
-- Scoped assignments are **Keycloak-attribute-driven, no Oracle authorization tables** (Oracle `identity-meta-db` retains only signing-key/Vault metadata). Each scope value is a multivalued user/group attribute `authz.scope.<key>` (one entry per value) plus a dedicated config group `/iam-scope-registry` whose attributes hold `scope.<key>={displayName,description,isActive,valueType}` and `resource.<name>=[scopes]` (resource-to-scope map) and whose business-role groups hold `authz.allowed-scopes`. Effective scopes are the union `Group ∪ User` per key, merged server-side and enforced at write. Tokens carry flat claims `authz.scope.<key>` via the `authz-scopes` clientScope (one `oidc-usermodel-attribute-mapper` per scope, `multivalued+aggregate.attrs`). The declarative User Profile is hardened so `authz.scope.*` / `iam.scoped_access` are `admin`-only (`view:["admin"], edit:["admin"]`). The legacy claim `iam_access` (from attribute `iam.scoped_access`) is dual-written for one migration window but is not the source of truth; `GET /api/identity/access-context` remains authoritative and large payloads fall back to it via `ICurrentAccessContext.EnsureLoadedAsync`. Already-issued JWTs do not mutate — freshness is via short-lived access tokens (300 s for `identity-facade`) + refresh-token rotation.
+- Business roles are **Keycloak Groups** (e.g. `/Admin`, `/Manager`, `/RegionalManager`). The gateway's `IBusinessRoleStore` is `KeycloakGroupBusinessRoleStore` — CRUD via `POST/GET /admin/realms/{realm}/groups`, members via `/groups/{id}/members`, membership via `PUT /admin/realms/{realm}/users/{id}/groups/{groupId}`. The special groups `/iam-scope-registry` (scope/resource registry, see below), `/key-admins` and `/super-admins` (admin groups receiving every newly registered client role; `super-admins` is the always-present unrestricted role seeded at startup by `EnsureSuperAdminGroupAsync` and also carries the gateway `identity.*` management permissions) are excluded from business-role listings.
+- Scoped assignments are **Keycloak-attribute-driven, no Oracle authorization tables** (Oracle `identity-meta-db` retains only signing-key/Vault metadata). Each scope value is a multivalued user/group attribute `authz.scope.<key>` (one entry per value) plus a dedicated config group `/iam-scope-registry` whose attributes hold `scope.<key>={displayName,description,isActive,valueType}` and `resource.<name>=[scopes]` (resource-to-scope map) and whose business-role groups hold `authz.allowed-scopes`. Effective scopes are the union `Group ∪ User` per key, merged server-side and enforced at write. Tokens carry flat claims `authz.scope.<key>` via the `authz-scopes` clientScope (one `oidc-usermodel-attribute-mapper` per scope, `multivalued+aggregate.attrs`). The declarative User Profile is hardened so `authz.scope.*` / `iam.scoped_access` are `admin`-only (`view:["admin"], edit:["admin"]`). The legacy claim `iam_access` (from attribute `iam.scoped_access`) is dual-written for one migration window but is not the source of truth; `GET /api/identity/access-context` remains authoritative and large payloads fall back to it via `ICurrentAccessContext.EnsureLoadedAsync`. Already-issued JWTs do not mutate — freshness is via short-lived access tokens (300 s for `identity-gateway`) + refresh-token rotation.
 - Configure audience and role mappers so tokens contain only the roles needed by the target services. Do not place unbounded profile data or an unnecessarily large permission list in tokens.
-- The facade has a confidential service account with only the Admin REST permissions required for directory queries and constrained role/client management.
+- The gateway has a confidential service account with only the Admin REST permissions required for directory queries and constrained role/client management.
 - Each registering microservice has a distinct client credential or mTLS identity. It can manage only its own client and permission namespace.
-- Human administrators use the Keycloak Admin Console for identity operations. Facade-managed role/permission writes are preferred so cache invalidation and audit are reliable.
+- Human administrators use the Keycloak Admin Console for identity operations. Gateway-managed role/permission writes are preferred so cache invalidation and audit are reliable.
 - Configure short-lived access tokens for normal APIs. Refresh-token policy remains Keycloak-owned.
 
 ### Client roles versus Authorization Services
 
 Client roles + composites are the default because they are simple, interoperable in JWTs, naturally owned by a microservice, easy to enforce with local ASP.NET policies, and easy to register idempotently. Keycloak Authorization Services resources/scopes are reserved for object-level, resource-instance, or highly dynamic decisions where an entitlement/policy request is worth the extra network dependency and operational complexity. They are not used merely to represent static endpoint permissions.
 
-## Identity Facade APIs
+## Identity Gateway APIs
 
 All responses use application-owned DTOs with stable identifiers and pagination; Keycloak representation types are internal.
 
@@ -221,7 +221,7 @@ POST   /api/identity/scopes
 PUT    /api/identity/scopes/{key}
 ```
 
-`POST /api/identity/permissions/register` requires the `Identity.Permissions.Register` permission. The facade derives the authenticated service ID from the validated credential (`client_id`/`azp` claim), compares it to `manifest.serviceId`, and records the manifest. Administrative user/role APIs require separate administrator permissions (`Identity.Users.Read`, `Identity.Roles.Read`, `Identity.Keys.*`) and are not exposed to ordinary service clients. The full REST surface is browsable and callable in Scalar at `/scalar` (Development) or via `/openapi/v1.json`.
+`POST /api/identity/permissions/register` requires the `Identity.Permissions.Register` permission. The gateway derives the authenticated service ID from the validated credential (`client_id`/`azp` claim), compares it to `manifest.serviceId`, and records the manifest. Administrative user/role APIs require separate administrator permissions (`Identity.Users.Read`, `Identity.Roles.Read`, `Identity.Keys.*`) and are not exposed to ordinary service clients. The full REST surface is browsable and callable in Scalar at `/scalar` (Development) or via `/openapi/v1.json`.
 
 Equivalent gRPC operations use the same DTO semantics and authorization. Error responses contain a correlation ID, not secret material.
 
@@ -234,7 +234,7 @@ A service declares permissions close to its endpoint or application method:
 public async Task<IActionResult> Cancel(CancellationToken cancellationToken) { /* ... */ }
 ```
 
-`Company.Identity.PermissionRegistration` discovers attributes, endpoint metadata, gRPC metadata, explicit definitions, or optional source-generator output. It produces canonical JSON with sorted permission names and stable fields:
+`Avash.Identity.PermissionRegistration` discovers attributes, endpoint metadata, gRPC metadata, explicit definitions, or optional source-generator output. It produces canonical JSON with sorted permission names and stable fields:
 
 ```json
 {
@@ -251,12 +251,12 @@ public async Task<IActionResult> Cancel(CancellationToken cancellationToken) { /
 
 The hash is SHA-256 over deterministic UTF-8 JSON (ordinal field/name ordering, normalized strings, no timestamps). A registration includes the hash, correlation ID, and idempotency key. It is sent directly over REST by default or gRPC when required. No RabbitMQ exchange, queue, outbox, or consumer is involved.
 
-The identity facade:
+The identity gateway:
 
 1. authenticates the service;
 2. validates service ID, namespace, count/length limits, manifest version, and hash;
 3. inserts or updates the permission catalog idempotently;
-4. ensures the service's **Keycloak client** exists and creates/gets each permission as a **client role** of that client (best-effort, conflict-aware — `GET /admin/realms/{realm}/clients/{uuid}/roles/{name}` then `POST` if missing; already-existing is success, and a Keycloak outage never fails the response); ensures an `oidc-usermodel-client-role-mapper` on the client (`claim.name=permissions`/`permission`) so Keycloak aggregates client roles into the token claims; namespace enforcement rejects cross-service prefixes (`Identity.*` only for `identity-facade`, `Orders.*` only for `order-service`) with `400`; new client roles are auto-mapped to the `/key-admins` and `/super-admins` groups via `POST /admin/realms/{realm}/groups/{adminGroupId}/role-mappings/clients/{uuid}` so admins see them after refresh without re-login or manual Admin Console work;
+4. ensures the service's **Keycloak client** exists and creates/gets each permission as a **client role** of that client (best-effort, conflict-aware — `GET /admin/realms/{realm}/clients/{uuid}/roles/{name}` then `POST` if missing; already-existing is success, and a Keycloak outage never fails the response); ensures an `oidc-usermodel-client-role-mapper` on the client (`claim.name=permissions`/`permission`) so Keycloak aggregates client roles into the token claims; namespace enforcement rejects cross-service prefixes (`Identity.*` only for `identity-gateway`, `Orders.*` only for `order-service`) with `400`; new client roles are auto-mapped to the `/key-admins` and `/super-admins` groups via `POST /admin/realms/{realm}/groups/{adminGroupId}/role-mappings/clients/{uuid}` so admins see them after refresh without re-login or manual Admin Console work;
 5. marks permissions missing from a newer accepted manifest as deprecated **locally**, never deletes them automatically — and **never deletes the Keycloak client role** when it vanishes from the manifest (soft-deprecate only);
 6. invalidates L1/L2 catalogs and increments authorization version;
 7. records audit data without raw tokens or secrets.
@@ -269,12 +269,12 @@ The intended consuming-service experience is:
 
 ```csharp
 builder.Services
-    .AddCompanyAuthentication(options =>
+    .AddAvashAuthentication(options =>
     {
         options.Authority = configuration["Identity:Authority"]!;
         options.Audience = configuration["Identity:Audience"]!;
     })
-    .AddCompanyAuthorization();
+    .AddAvashAuthorization();
 
 builder.Services.AddPermissionRegistration(options =>
 {
@@ -296,16 +296,16 @@ Then an endpoint needs only:
 
 Package boundaries are intentionally independent:
 
-- `Company.Identity.Abstractions`: attributes, claim names, stable DTO primitives.
-- `Company.Identity.Authentication`: JWT bearer validation only; no authorization or registration dependency.
-- `Company.Identity.Authorization`: authorization requirements and local claim evaluation; no authentication dependency.
-- `Company.Identity.PermissionRegistration`: discovery, canonical hash, service credentials, direct REST/gRPC registration, startup retry.
-- `Company.Identity.Context`: `ICurrentUserContext` and HTTP/gRPC adapters.
-- `Company.Identity.Grpc`: generated/normalized client contracts.
-- `Company.Identity.Blazor`: optional BFF/browser helpers.
-- `Company.Identity.Testing`: deterministic claims, fake clocks, test handlers.
+- `Avash.Identity.Abstractions`: attributes, claim names, stable DTO primitives.
+- `Avash.Identity.Authentication`: JWT bearer validation only; no authorization or registration dependency.
+- `Avash.Identity.Authorization`: authorization requirements and local claim evaluation; no authentication dependency.
+- `Avash.Identity.PermissionRegistration`: discovery, canonical hash, service credentials, direct REST/gRPC registration, startup retry.
+- `Avash.Identity.Context`: `ICurrentUserContext` and HTTP/gRPC adapters.
+- `Avash.Identity.Grpc`: generated/normalized client contracts.
+- `Avash.Identity.Blazor`: optional BFF/browser helpers.
+- `Avash.Identity.Testing`: deterministic claims, fake clocks, test handlers.
 
-Authentication uses ASP.NET `JwtBearer` and OIDC `ConfigurationManager` to cache discovery and JWKS. It validates issuer, audience, signature, expiration, not-before, accepted algorithm, and token type. An unknown `kid` triggers metadata refresh, then fails closed if the key remains unknown. It does not call the facade or Keycloak on every request and does not cache signature results in Redis.
+Authentication uses ASP.NET `JwtBearer` and OIDC `ConfigurationManager` to cache discovery and JWKS. It validates issuer, audience, signature, expiration, not-before, accepted algorithm, and token type. An unknown `kid` triggers metadata refresh, then fails closed if the key remains unknown. It does not call the gateway or Keycloak on every request and does not cache signature results in Redis.
 
 ## Current-user context
 
@@ -326,11 +326,11 @@ The application layer consumes this abstraction. HTTP and gRPC adapters translat
 
 ## Caching and authorization consistency
 
-Use cache-aside L1 process memory + L2 Redis for facade data:
+Use cache-aside L1 process memory + L2 Redis for gateway data:
 
 | Data | Starting TTL | Invalidation / stale behavior |
 |---|---:|---|
-| Keycloak admin user directory | 60 seconds | Invalidate after facade write; bounded stale reads during outage |
+| Keycloak admin user directory | 60 seconds | Invalidate after gateway write; bounded stale reads during outage |
 | Role and permission catalogs | 60 seconds | Invalidate after registration/admin write; reconcile periodically |
 | Effective authorization snapshots | 30 seconds | Version-keyed; security-sensitive operations can require live check |
 | Manifest status/history | 5 minutes | Invalidate on registration; stale status is observable |
@@ -342,14 +342,14 @@ Stateless local JWT validation, immediate permission/session revocation, and zer
 
 - a `authorization_version` claim checked against a short-TTL distributed version cache;
 - live Keycloak introspection/session validation;
-- a facade policy check with fail-closed behavior;
+- a gateway policy check with fail-closed behavior;
 - a shorter token lifetime for the specific client.
 
-Each option trades availability and latency for a smaller revocation window. A role/permission write through the facade increments the version and invalidates caches. If direct Admin Console writes are allowed, use short TTLs plus periodic reconciliation and, where supported by the pinned Keycloak release, a minimal Keycloak Event Listener to publish invalidation signals. Never claim perfect immediate revocation with a self-contained JWT.
+Each option trades availability and latency for a smaller revocation window. A role/permission write through the gateway increments the version and invalidates caches. If direct Admin Console writes are allowed, use short TTLs plus periodic reconciliation and, where supported by the pinned Keycloak release, a minimal Keycloak Event Listener to publish invalidation signals. Never claim perfect immediate revocation with a self-contained JWT.
 
 ## Vault-backed RSA signing
 
-Keycloak signs JWTs with asymmetric RSA keys. The .NET facade never owns a signing key and has no application JWKS endpoint. Modern Keycloak should not be assumed to include native HashiCorp Vault integration.
+Keycloak signs JWTs with asymmetric RSA keys. The .NET gateway never owns a signing key and has no application JWKS endpoint. Modern Keycloak should not be assumed to include native HashiCorp Vault integration.
 
 Implement two release-pinned Keycloak extensions:
 
@@ -387,8 +387,8 @@ A running node may use its last-known-good loaded key for a bounded, alerted out
 
 | Failure | Expected behavior |
 |---|---|
-| Keycloak unavailable | Local JWT validation continues until token expiry; facade writes fail closed; bounded stale catalog reads may continue |
-| Facade unavailable during service startup | Service starts; manifest worker retries with jitter |
+| Keycloak unavailable | Local JWT validation continues until token expiry; gateway writes fail closed; bounded stale catalog reads may continue |
+| Gateway unavailable during service startup | Service starts; manifest worker retries with jitter |
 | Redis unavailable | L1 and origin fallback for safe reads; writes record invalidation failure and alert |
 | Organization validation API unavailable | External-token flow fails closed; token is not stored for retry |
 | Invalid/replayed external token | Reject, rate-limit, audit metadata only; never provision |
@@ -422,14 +422,14 @@ A running node may use its last-known-good loaded key for a bounded, alerted out
 
 Unit tests cover stable-subject validation, invalid tokens, allowlisted synchronization, no-email-linking, provisioning/link conflicts, duplicate identity prevention, explicit role mapping, canonical manifest/hash, namespace authorization, duplicate/concurrent registration, deprecation, bounded retry, current-user adapters, and cache stale/fail-closed behavior.
 
-Integration tests use Testcontainers for the pinned Keycloak, PostgreSQL, Redis, and a stub organization validation API. They verify real Keycloak access/refresh issuance, Admin REST DTO normalization, federated links, provisioning races, role composites, local JWT validation, discovery/JWKS caching, unknown-`kid` refresh, cache invalidation, and facade downtime during startup.
+Integration tests use Testcontainers for the pinned Keycloak, PostgreSQL, Redis, and a stub organization validation API. They verify real Keycloak access/refresh issuance, Admin REST DTO normalization, federated links, provisioning races, role composites, local JWT validation, discovery/JWKS caching, unknown-`kid` refresh, cache invalidation, and gateway downtime during startup.
 
 The grant and Vault key-provider extensions have their own compatibility suite for invalid/replayed tokens, rate limiting, session creation, refresh behavior, account conflicts, Vault version detection, key rotation, old-token validation, outage/LKG behavior, and multi-node convergence. CI tests the pinned Keycloak release and the next supported release before upgrades.
 
 ## Deployment model
 
-Development Compose includes Keycloak, Keycloak PostgreSQL, the facade, optional facade metadata PostgreSQL, Redis, and optional Vault dev mode. RabbitMQ and local signing-key volumes are intentionally absent. Production uses managed/highly available Keycloak and PostgreSQL, Redis with TLS/authentication, Vault with HA/seal management, private networking, TLS everywhere, secret injection, backups, restore drills, separate service accounts, and readiness checks for dependencies.
+Development Compose includes Keycloak, Keycloak PostgreSQL, the gateway, optional gateway metadata PostgreSQL, Redis, and optional Vault dev mode. RabbitMQ and local signing-key volumes are intentionally absent. Production uses managed/highly available Keycloak and PostgreSQL, Redis with TLS/authentication, Vault with HA/seal management, private networking, TLS everywhere, secret injection, backups, restore drills, separate service accounts, and readiness checks for dependencies.
 
-Keycloak extensions are built and scanned as release-specific artifacts, deployed to every Keycloak replica before configuration activation, and rolled out with compatibility/readiness checks. Facade replicas are stateless except for the metadata store and L1 cache. Metrics include token/Keycloak call latency, Admin API failures, manifest lag/hash conflicts, cache age/invalidation failures, external validation failures, Vault connectivity, key convergence, and rejected namespace/role attempts.
+Keycloak extensions are built and scanned as release-specific artifacts, deployed to every Keycloak replica before configuration activation, and rolled out with compatibility/readiness checks. Gateway replicas are stateless except for the metadata store and L1 cache. Metrics include token/Keycloak call latency, Admin API failures, manifest lag/hash conflicts, cache age/invalidation failures, external validation failures, Vault connectivity, key convergence, and rejected namespace/role attempts.
 
 The repository's old local identity database, `identity-signing-keys.json`, RabbitMQ topology, local bootstrap credentials, local JWKS endpoint, and custom token/session code are not production components of this architecture. They must be removed from deployment and runtime composition, not renamed and retained as a second source of truth.

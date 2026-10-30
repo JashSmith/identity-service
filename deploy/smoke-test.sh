@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# End-to-end smoke test for the Identity Facade target business flow (CLAUDE.md §33-44):
+# End-to-end smoke test for the Identity Gateway target business flow (CLAUDE.md §33-44):
 #   super-admin login → create business role → assign permissions → create scoped user
 #   → verify token claims (permissions + authz scope) → verify access-context.
-# Requires: running stack (facade on :5080), curl, python3 (jq not needed).
-# Usage: cd deploy && ./smoke-test.sh   (override: FACADE=http://host:5080 ./smoke-test.sh)
+# Requires: running stack (gateway on :5080), curl, python3 (jq not needed).
+# Usage: cd deploy && ./smoke-test.sh   (override: GATEWAY=http://host:5080 ./smoke-test.sh)
 set -euo pipefail
 
-FACADE="${FACADE:-http://localhost:5080}"
+GATEWAY="${GATEWAY:-http://localhost:5080}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 ADMIN_PASS="${ADMIN_PASS:-admin}"
-CLIENT_ID="identity-facade"
-CLIENT_SECRET="${CLIENT_SECRET:-facade-development-only}"
+CLIENT_ID="identity-gateway"
+CLIENT_SECRET="${CLIENT_SECRET:-gateway-development-only}"
 TS=$(date +%s)
 ROLE_NAME="smoke-accountant-$TS"
 TEST_USER="smoke-user-$TS"
@@ -48,8 +48,8 @@ print($2)
 " <<<"$1"
 }
 
-step "1/7 — Super-admin login (facade proxy → Keycloak)"
-LOGIN=$(curl -fsS -X POST "$FACADE/api/identity/auth/login" \
+step "1/7 — Super-admin login (gateway proxy → Keycloak)"
+LOGIN=$(curl -fsS -X POST "$GATEWAY/api/identity/auth/login" \
   -d "grant_type=password&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&username=$ADMIN_USER&password=$ADMIN_PASS")
 ADMIN_TOKEN=$(json_field "$LOGIN" "d['access_token']")
 [ -n "$ADMIN_TOKEN" ] || fail "login" "no access_token in: $LOGIN"
@@ -64,20 +64,20 @@ done
 pass "admin token carries identity.{roles,users,scopes}.manage"
 
 step "3/7 — Create business role '$ROLE_NAME' (auto-created as Keycloak group)"
-CREATE_ROLE=$(curl -fsS -X POST "$FACADE/api/identity/business-roles" \
+CREATE_ROLE=$(curl -fsS -X POST "$GATEWAY/api/identity/business-roles" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"name\":\"$ROLE_NAME\",\"description\":\"Smoke test role\",\"permissions\":[]}")
 NAME=$(json_field "$CREATE_ROLE" "d['name']")
 [ "$NAME" = "$ROLE_NAME" ] || fail "create role" "got: $CREATE_ROLE"
-GET_ROLE=$(curl -fsS "$FACADE/api/identity/business-roles/$ROLE_NAME" -H "Authorization: Bearer $ADMIN_TOKEN")
+GET_ROLE=$(curl -fsS "$GATEWAY/api/identity/business-roles/$ROLE_NAME" -H "Authorization: Bearer $ADMIN_TOKEN")
 [ "$(json_field "$GET_ROLE" "d['name']")" = "$ROLE_NAME" ] || fail "get role" "role not readable back: $GET_ROLE"
 pass "business role created and readable"
 
 step "4/7 — Assign a registered permission to the role"
-PERM=$(curl -fsS "$FACADE/api/identity/permissions?serviceId=order-service" -H "Authorization: Bearer $ADMIN_TOKEN" \
+PERM=$(curl -fsS "$GATEWAY/api/identity/permissions?serviceId=order-service" -H "Authorization: Bearer $ADMIN_TOKEN" \
   | pyj "import sys,json; d=json.load(sys.stdin); print(d[0]['name'] if d else '')")
 [ -n "$PERM" ] || PERM="identity.users.read"
-ASSIGN=$(curl -fsS -X POST "$FACADE/api/identity/business-roles/$ROLE_NAME/permissions" \
+ASSIGN=$(curl -fsS -X POST "$GATEWAY/api/identity/business-roles/$ROLE_NAME/permissions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"permissions\":[\"$PERM\"]}")
 HAS=$(json_field "$ASSIGN" "','.join(d.get('permissions',[]))")
@@ -85,7 +85,7 @@ case ",$HAS," in *",$PERM,"*) ;; *) fail "assign permission" "'$PERM' missing fr
 pass "permission '$PERM' assigned (client-role mapping)"
 
 step "5/7 — Create user with scoped assignment (region=$SCOPE_REGION)"
-CREATE_USER=$(curl -fsS -X POST "$FACADE/api/identity/users" \
+CREATE_USER=$(curl -fsS -X POST "$GATEWAY/api/identity/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"username\":\"$TEST_USER\",\"email\":\"$TEST_USER@company.local\",\"firstName\":\"Smoke\",\"lastName\":\"User\",\"enabled\":true,
        \"credentials\":{\"password\":\"$TEST_PASS\",\"temporary\":false},
@@ -95,7 +95,7 @@ USER_ID=$(json_field "$CREATE_USER" "d['id']")
 pass "user '$TEST_USER' created (id=$USER_ID)"
 
 step "6/7 — Login as the new user and verify token claims"
-USER_LOGIN=$(curl -fsS -X POST "$FACADE/api/identity/auth/login" \
+USER_LOGIN=$(curl -fsS -X POST "$GATEWAY/api/identity/auth/login" \
   -d "grant_type=password&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&username=$TEST_USER&password=$TEST_PASS")
 USER_TOKEN=$(json_field "$USER_LOGIN" "d['access_token']")
 [ -n "$USER_TOKEN" ] || fail "user login" "$USER_LOGIN"
@@ -107,14 +107,14 @@ REGION_OK=$(json_field "$UPAYLOAD" "'$SCOPE_REGION' in d.get('authz',{}).get('sc
 [ "$REGION_OK" = "True" ] || fail "user claims" "authz.scope.region does not contain $SCOPE_REGION; payload=$UPAYLOAD"
 pass "user token carries '$PERM' and authz.scope.region=$SCOPE_REGION"
 
-step "7/7 — Access-context + scoped-access via facade"
-CTX=$(curl -fsS "$FACADE/api/identity/access-context" -H "Authorization: Bearer $USER_TOKEN")
+step "7/7 — Access-context + scoped-access via gateway"
+CTX=$(curl -fsS "$GATEWAY/api/identity/access-context" -H "Authorization: Bearer $USER_TOKEN")
 CTXP=$(json_field "$CTX" "','.join(d.get('permissions',[]))")
 case ",$CTXP," in *",$PERM,"*) ;; *) fail "access-context" "missing permission: $CTX" ;; esac
-SCOPED=$(curl -fsS "$FACADE/api/identity/users/$USER_ID/scoped-access" -H "Authorization: Bearer $ADMIN_TOKEN")
+SCOPED=$(curl -fsS "$GATEWAY/api/identity/users/$USER_ID/scoped-access" -H "Authorization: Bearer $ADMIN_TOKEN")
 HASREGION=$(json_field "$SCOPED" "'$SCOPE_REGION' in [v for a in d.get('assignments',[]) for v in a.get('scopes',{}).get('region',[])]")
 [ "$HASREGION" = "True" ] || fail "scoped-access" "region value missing: $SCOPED"
 pass "access-context and scoped-access consistent with token"
 
 printf '\n\033[32mAll 7 steps passed.\033[0m Role=%s User=%s Region=%s\n' "$ROLE_NAME" "$TEST_USER" "$SCOPE_REGION"
-printf 'Cleanup: DELETE %s/api/identity/business-roles/%s and the smoke user via Keycloak console.\n' "$FACADE" "$ROLE_NAME"
+printf 'Cleanup: DELETE %s/api/identity/business-roles/%s and the smoke user via Keycloak console.\n' "$GATEWAY" "$ROLE_NAME"

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <RootNamespace>Avash.Identity.PermissionDiscovery</RootNamespace>
+        <AssemblyName>Avash.Identity.PermissionDiscovery</AssemblyName>
+        <PackageId>Avash.Identity.PermissionDiscovery</PackageId>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Avash.Identity.Abstractions/Avash.Identity.Abstractions.csproj"/>
+    </ItemGroup>
+</Project>

@@ -1,6 +1,6 @@
 using System.Net;
 using System.Text.Json;
-using Identity.Api;
+using Identity.Gateway;
 using Identity.Application;
 using Identity.Application.Scope;
 using Identity.Contracts;

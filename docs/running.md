@@ -8,9 +8,9 @@ log in, and call both APIs. Everything below is verified against the committed c
 | Service | Image | Purpose |
 | --- | --- | --- |
 | `keycloak-db` | `gvenzl/oracle-xe:21-slim` | Oracle 21 XE — Keycloak's user/realm database |
-| `identity-meta-db` | `gvenzl/oracle-xe:21-slim` | Oracle 21 XE — facade key-metadata DB (signing keys, rotation ops) |
+| `identity-meta-db` | `gvenzl/oracle-xe:21-slim` | Oracle 21 XE — gateway key-metadata DB (signing keys, rotation ops) |
 | `keycloak` | custom (Keycloak 26.4 + ojdbc11 21.9) | Identity Provider — users, credentials, sessions, token issuance, signing keys |
-| `identity-facade` | `deploy/Identity.Api.Dockerfile` | Identity Facade — auth proxy, directory, permissions, key lifecycle, Scalar |
+| `identity-gateway` | `deploy/Identity.Gateway.Dockerfile` | Identity Gateway — auth proxy, directory, permissions, key lifecycle, Scalar |
 | `order-service` | `deploy/OrderService.Sample.Dockerfile` | Sample consumer — 10 `[RequirePermission]` endpoints, registers at startup |
 | `vault` | `hashicorp/vault:1.20` | Signing-key material source of truth |
 | `redis` | `redis:7-alpine` | Key rotation lock |
@@ -20,7 +20,7 @@ log in, and call both APIs. Everything below is verified against the committed c
 - Docker Engine + compose plugin
 - 4 GB free RAM (two Oracle XE instances are the bulk of it)
 - Host ports **5080, 8080, 5180, 8200, 1521** free — or override with
-  `FACADE_HTTP_PORT`, `KEYCLOAK_HTTP_PORT`, `ORDER_HTTP_PORT` (Oracle ports fixed at 1521; the two
+  `GATEWAY_HTTP_PORT`, `KEYCLOAK_HTTP_PORT`, `ORDER_HTTP_PORT` (Oracle ports fixed at 1521; the two
   DBs share it on different service names, reachable only inside the compose network except 1521)
 
 ## 2. Start the stack
@@ -38,12 +38,12 @@ watch docker compose ps
 ```
 
 Startup order is enforced by healthchecks:
-`keycloak-db` / `identity-meta-db` → `keycloak` → `identity-facade` → `order-service`.
+`keycloak-db` / `identity-meta-db` → `keycloak` → `identity-gateway` → `order-service`.
 
 ## 3. Verify health
 
 ```bash
-curl -fsS http://localhost:5080/health/live          # facade
+curl -fsS http://localhost:5080/health/live          # gateway
 curl -fsS http://localhost:8080/health/ready -o /dev/null -w "%{http_code}\n"   # keycloak (host)
 curl -fsS http://localhost:5180/health/live          # order-service sample
 ```
@@ -51,14 +51,14 @@ curl -fsS http://localhost:5180/health/live          # order-service sample
 `200` everywhere = good. If Keycloak reports unhealthy, check
 `docker compose logs keycloak | tail -50` — the most common cause is the realm import (below).
 
-## 4. Log in and get a token — through the facade only
+## 4. Log in and get a token — through the gateway only
 
-All tokens are genuine Keycloak-issued JWTs, obtained through the facade's login proxy
-(the facade never mints tokens; it forwards the grant as received):
+All tokens are genuine Keycloak-issued JWTs, obtained through the gateway's login proxy
+(the gateway never mints tokens; it forwards the grant as received):
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:5080/api/identity/auth/login \
-  -d "grant_type=password&client_id=identity-facade&client_secret=facade-development-only&username=admin&password=admin" \
+  -d "grant_type=password&client_id=identity-gateway&client_secret=gateway-development-only&username=admin&password=admin" \
   | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
 echo "$TOKEN" | cut -c1-40   # peek, never log the whole token
 ```
@@ -70,7 +70,7 @@ curl -s -X POST http://localhost:5080/api/identity/auth/login \
   -d "grant_type=client_credentials&client_id=order-service&client_secret=order-service-development-only"
 ```
 
-## 5. Call the Identity Facade (Scalar at /scalar)
+## 5. Call the Identity Gateway (Scalar at /scalar)
 
 Open **http://localhost:5080/scalar** — 39 endpoints across Auth / Users / Roles / Permissions / Business Roles / Scoped Access / Access / Keys (Admin). Click **Authenticate → Bearer**, paste `$TOKEN`, and "Try it":
 
@@ -88,7 +88,7 @@ curl -s "http://localhost:5080/api/identity/permissions?serviceId=order-service"
 ## 6. Watch the sample register its permissions
 
 On first start, `order-service` discovers its ten `[RequirePermission]` actions and pushes a
-manifest to the facade, which mirrors them as Keycloak realm roles
+manifest to the gateway, which mirrors them as Keycloak realm roles
 (`Orders.View`, `Orders.Create`, … `Orders.Reports.Export`):
 
 ```bash
@@ -103,7 +103,7 @@ Registration is retried with exponential backoff and never blocks the sample's s
 
 ## 7. Call the sample service (Scalar at /scalar on 5180)
 
-The sample never contacts Keycloak: it validates tokens against the facade's
+The sample never contacts Keycloak: it validates tokens against the gateway's
 `/.well-known/openid-configuration` + `/api/identity/oidc/jwks` proxy
 (`AcceptIssuerFromDiscovery`). A token is honored if it carries the required
 `Orders.*` permission claim.
@@ -155,24 +155,24 @@ curl -s -X POST http://localhost:5080/api/identity/permissions/reconcile-admin -
 # then POST /api/identity/auth/refresh with the refresh_token — new access token already has the permission
 ```
 
-Consumer services read scopes via `ICurrentAccessContext.GetScopeValues("region")` / `HasPermission(..., "region", value)` — see `samples/OrderService.Sample/Program.cs` (`/api/orders/scoped`, `/api/orders/{id}/scoped-check`). `EnsureLoadedAsync()` resolves via the facade when the claim was omitted for size. The scope system is **Keycloak-attribute-driven** (`authz.scope.<key>` multivalued on user/group + registry group `/iam-scope-registry` holding `scope.<key>`/`resource.<name>`); it accepts both `"test-key": "items-1"` (scalar, normalized by `ScopeDictionaryConverter`) and `"test-key": ["items-1"]`; unknown/inactive/disallowed scopes return `400 ValidationProblem` with `assignments[0].scopes.<key>` errors. Filtering in consumers uses `ScopeFilterService.ApplyAsync` (see `samples/OrderService.Sample/ScopeFilters.cs`) — deny-by-default, per-`IScopeFilterHandler` (no raw SQL), resource isolation enforced (e.g. `test-key` only on `ResourceA`). The declarative User Profile hardens `authz.scope.*` to `admin`-only (`PUT /admin/realms/{realm}/users/profile`).
+Consumer services read scopes via `ICurrentAccessContext.GetScopeValues("region")` / `HasPermission(..., "region", value)` — see `samples/OrderService.Sample/Program.cs` (`/api/orders/scoped`, `/api/orders/{id}/scoped-check`). `EnsureLoadedAsync()` resolves via the gateway when the claim was omitted for size. The scope system is **Keycloak-attribute-driven** (`authz.scope.<key>` multivalued on user/group + registry group `/iam-scope-registry` holding `scope.<key>`/`resource.<name>`); it accepts both `"test-key": "items-1"` (scalar, normalized by `ScopeDictionaryConverter`) and `"test-key": ["items-1"]`; unknown/inactive/disallowed scopes return `400 ValidationProblem` with `assignments[0].scopes.<key>` errors. Filtering in consumers uses `ScopeFilterService.ApplyAsync` (see `samples/OrderService.Sample/ScopeFilters.cs`) — deny-by-default, per-`IScopeFilterHandler` (no raw SQL), resource isolation enforced (e.g. `test-key` only on `ResourceA`). The declarative User Profile hardens `authz.scope.*` to `admin`-only (`PUT /admin/realms/{realm}/users/profile`).
 
 ## 8. What lives where (config ownership)
 
-- **Identity Facade config** (`src/Identity.Api/appsettings.json` + compose env):
+- **Identity Gateway config** (`src/Identity.Gateway/appsettings.json` + compose env):
   `Identity:Keycloak:BaseUrl`, `Identity:KeycloakAdmin:*`, `Identity:Authority`.
   This is the ONLY place that knows Keycloak's address.
 - **Sample/consumer config** (`samples/OrderService.Sample/appsettings.json`):
-  only `Identity:Authority` (points at the facade), `Identity:Audience`,
+  only `Identity:Authority` (points at the gateway), `Identity:Audience`,
   `PermissionRegistration:IdentityServer`, `ClientId`, `ClientSecret`.
   No Keycloak URL, realm, or admin secret anywhere in the consumer.
-- **Realm definition** (`deploy/realm-company.json`): clients `identity-facade`
-  (secret `facade-development-only`) and `order-service`
+- **Realm definition** (`deploy/realm-company.json`): clients `identity-gateway`
+  (secret `gateway-development-only`) and `order-service`
   (secret `order-service-development-only`), the permission claim mappers
-  (`permissions`/`permission` from realm roles, `aud: identity-facade`,
+  (`permissions`/`permission` from realm roles, `aud: identity-gateway`,
   `sub`, `preferred_username`), realm roles `Identity.*`/`identity.*`, the groups
   `super-admins` (always-present unrestricted admin — every registered client role is
-  auto-mapped to it, plus the `identity.*` facade-management permissions), `key-admins`,
+  auto-mapped to it, plus the `identity.*` gateway-management permissions), `key-admins`,
   `iam-scope-registry`, and the `admin` user (member of `super-admins` + `key-admins`).
 
 ## 9. Re-importing the realm after changes
@@ -185,7 +185,7 @@ AT=$(curl -s -X POST http://localhost:8080/realms/master/protocol/openid-connect
   | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
 curl -X DELETE http://localhost:8080/admin/realms/company -H "Authorization: Bearer $AT"
 docker compose restart keycloak      # re-imports the realm on boot
-docker compose restart identity-facade order-service   # clear their cached discovery docs
+docker compose restart identity-gateway order-service   # clear their cached discovery docs
 ```
 
 ## 10. Teardown
@@ -206,5 +206,5 @@ docker compose down -v       # also wipe Oracle/Redis data
 | `unauthorized_client` on client_credentials | Client secret mismatch; ensure `client.secret.creation.time: "0"` attribute is in the realm JSON so the import keeps the declared secret |
 | Token has no `aud`/`sub`/`permissions` | Realm JSON mappers missing — re-import the realm |
 | 401 from a consumer with a valid token | Consumer cached an old discovery doc — restart it; `jwks_uri` is served relative to the caller's Host |
-| Port already allocated | Override `FACADE_HTTP_PORT` / `KEYCLOAK_HTTP_PORT` / `ORDER_HTTP_PORT` |
-| Facade 401 after realm re-import | Facade cached the previous realm signing key — `docker compose restart identity-facade` |
+| Port already allocated | Override `GATEWAY_HTTP_PORT` / `KEYCLOAK_HTTP_PORT` / `ORDER_HTTP_PORT` |
+| Gateway 401 after realm re-import | Gateway cached the previous realm signing key — `docker compose restart identity-gateway` |

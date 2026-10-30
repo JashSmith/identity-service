@@ -1,22 +1,22 @@
 # Company Identity Platform
 
-This repository defines a production-oriented **Keycloak-centric Identity Platform** for .NET 10. Keycloak is the authoritative Identity Provider and OAuth 2.0/OIDC Authorization Server. The .NET application is an Identity Facade / Identity Orchestrator for normalized APIs, Keycloak administration, proprietary organization SSO integration, permission registration, caching, audit, and integration concerns.
+This repository defines a production-oriented **Keycloak-centric Identity Platform** for .NET 10. Keycloak is the authoritative Identity Provider and OAuth 2.0/OIDC Authorization Server. The .NET application is an Identity Gateway / Identity Orchestrator for normalized APIs, Keycloak administration, proprietary organization SSO integration, permission registration, caching, audit, and integration concerns.
 
 It does **not** implement passwords, credentials, sessions, MFA, access-token or refresh-token minting, token revocation, user federation, role semantics, or JWT signing. Application services accept genuine Keycloak-issued JWTs and validate them locally.
 
-See [docs/architecture.md](docs/architecture.md) for the complete architecture, diagrams, ownership table, flows, extension design, threat model, cache policy, Vault key rotation, deployment model, and test strategy. See [docs/running.md](docs/running.md) for the step-by-step server run guide (compose up → login → call the facade and the order-service sample).
+See [docs/architecture.md](docs/architecture.md) for the complete architecture, diagrams, ownership table, flows, extension design, threat model, cache policy, Vault key rotation, deployment model, and test strategy. See [docs/running.md](docs/running.md) for the step-by-step server run guide (compose up → login → call the gateway and the order-service sample).
 
 ## Developer integration
 
 ```csharp
 builder.Services
-    .AddCompanyAuthentication(options =>
+    .AddAvashAuthentication(options =>
     {
-        options.Authority = configuration["Identity:Authority"]!; // the facade URL
+        options.Authority = configuration["Identity:Authority"]!; // the gateway URL
         options.Audience = configuration["Identity:Audience"]!;
         options.AcceptIssuerFromDiscovery = true; // issuer comes from the proxied discovery doc
     })
-    .AddCompanyAuthorization();
+    .AddAvashAuthorization();
 
 builder.Services.AddPermissionRegistration(options =>
 {
@@ -37,31 +37,31 @@ Protect an operation with a stable application permission:
 public Task<IActionResult> Cancel(CancellationToken cancellationToken) => ...;
 ```
 
-Authentication and authorization are independently installable. Authentication performs local issuer, audience, signature, expiration, not-before, algorithm, and token-type validation using Keycloak discovery and JWKS. It does not call the facade on every request. Authorization evaluates trusted Keycloak role/permission claims locally.
+Authentication and authorization are independently installable. Authentication performs local issuer, audience, signature, expiration, not-before, algorithm, and token-type validation using Keycloak discovery and JWKS. It does not call the gateway on every request. Authorization evaluates trusted Keycloak role/permission claims locally.
 
 ## Permission registration
 
-`Company.Identity.PermissionRegistration` discovers permission metadata, creates a deterministic manifest hash, and registers directly with the facade over REST using Keycloak client credentials. Registration is idempotent, namespace-scoped, retryable in the background (exponential backoff, default 8 retries), and never blocks application startup. RabbitMQ is not part of permission registration.
+`Avash.Identity.PermissionRegistration` discovers permission metadata, creates a deterministic manifest hash, and registers directly with the gateway over REST using Keycloak client credentials. Registration is idempotent, namespace-scoped, retryable in the background (exponential backoff, default 8 retries), and never blocks application startup. RabbitMQ is not part of permission registration.
 
-Permissions are mirrored by the facade into Keycloak **per-service client roles** (for example `orders-service: Orders.Cancel`), surfaced as the `permissions`/`permission` claims by one `oidc-usermodel-client-role-mapper` per client aggregating `resource_access.<client>.roles` → `permissions`. A newly registered permission is auto-mapped to the Admin Group (`key-admins`) and appears on the next refresh without re-login. Role provisioning and client-scope mapper creation are best-effort (409/race-safe) — a Keycloak outage never fails the registration response. Missing permissions are locally soft-deprecated, never deleted from Keycloak; drift is repaired via `POST /api/identity/permissions/reconcile-admin`.
+Permissions are mirrored by the gateway into Keycloak **per-service client roles** (for example `orders-service: Orders.Cancel`), surfaced as the `permissions`/`permission` claims by one `oidc-usermodel-client-role-mapper` per client aggregating `resource_access.<client>.roles` → `permissions`. A newly registered permission is auto-mapped to the Admin Group (`key-admins`) and appears on the next refresh without re-login. Role provisioning and client-scope mapper creation are best-effort (409/race-safe) — a Keycloak outage never fails the registration response. Missing permissions are locally soft-deprecated, never deleted from Keycloak; drift is repaired via `POST /api/identity/permissions/reconcile-admin`.
 
 ## Run with Docker (Oracle 21 default)
 
 ```bash
 cd deploy
 docker compose up --build -d
-# Oracle XE 21 (Keycloak DB + facade metadata), Keycloak 26.4, Vault, Redis,
-# Identity Facade, and the order-service sample — all healthchecked.
+# Oracle XE 21 (Keycloak DB + gateway metadata), Keycloak 26.4, Vault, Redis,
+# Identity Gateway, and the order-service sample — all healthchecked.
 ```
 
-Ports are overridable when the host already uses them: `FACADE_HTTP_PORT`,
+Ports are overridable when the host already uses them: `GATEWAY_HTTP_PORT`,
 `KEYCLOAK_HTTP_PORT`, `ORDER_HTTP_PORT` (defaults 5080/8080/5180).
 
 Wait for the healthchecks (Oracle XE takes ~60s), then:
 
 | Endpoint | URL |
 | --- | --- |
-| Identity Facade REST | http://localhost:5080 |
+| Identity Gateway REST | http://localhost:5080 |
 | Business roles / scoped access | `POST /api/identity/business-roles`, `POST /api/identity/users`, `GET /api/identity/access-context` (claim `iam_access`) |
 | Scalar API reference (interactive, full Bearer "Try it" support) | http://localhost:5080/scalar |
 | OpenAPI document | http://localhost:5080/openapi/v1.json |
@@ -71,19 +71,19 @@ Wait for the healthchecks (Oracle XE takes ~60s), then:
 | Vault dev UI | http://localhost:8200 (token `root`) |
 | gRPC (IdentityService, KeyAdminService) | http://localhost:5080 |
 
-**Services never see Keycloak.** A consumer points `Identity:Authority` at the facade; the
-facade proxies OIDC discovery and rewrites `jwks_uri` to itself, and registration tokens are
-obtained through the facade's login proxy. Keycloak's URL/realm/secrets exist only in the
-facade's configuration.
+**Services never see Keycloak.** A consumer points `Identity:Authority` at the gateway; the
+gateway proxies OIDC discovery and rewrites `jwks_uri` to itself, and registration tokens are
+obtained through the gateway's login proxy. Keycloak's URL/realm/secrets exist only in the
+gateway's configuration.
 
 Quick test sequence:
 
 ```bash
-# 1. Login through the facade (Keycloak-issued token, never minted by .NET)
+# 1. Login through the gateway (Keycloak-issued token, never minted by .NET)
 curl -s -X POST http://localhost:5080/api/identity/auth/login \
-  -d "grant_type=password&client_id=identity-facade&client_secret=facade-development-only&username=admin&password=admin"
+  -d "grant_type=password&client_id=identity-gateway&client_secret=gateway-development-only&username=admin&password=admin"
 
-# 2. Call a protected facade route with the returned access_token
+# 2. Call a protected gateway route with the returned access_token
 curl -s http://localhost:5080/api/identity/me -H "Authorization: Bearer <token>"
 
 # 3. Call the sample service — its token comes from step 1, the audience already matches
@@ -101,7 +101,7 @@ cd deploy && ./smoke-test.sh
 
 ## External organization SSO
 
-An opaque organization token is validated through a dedicated adapter or the recommended Keycloak custom OAuth2 Grant Type SPI. The token is never logged or unnecessarily persisted. The validated immutable `(provider, subject)` is linked to or provisions a Keycloak user, only allowlisted attributes are synchronized, external roles require explicit mappings, and Keycloak issues the final token. The facade never mints one.
+An opaque organization token is validated through a dedicated adapter or the recommended Keycloak custom OAuth2 Grant Type SPI. The token is never logged or unnecessarily persisted. The validated immutable `(provider, subject)` is linked to or provisions a Keycloak user, only allowlisted attributes are synchronized, external roles require explicit mappings, and Keycloak issues the final token. The gateway never mints one.
 
 A signed OIDC/JWT provider should use native Keycloak Identity Brokering where possible. JWT Authorization Grant support and limitations are release-specific and must be tested against the pinned Keycloak version. Deprecated legacy external Token Exchange is not the default.
 
@@ -111,7 +111,7 @@ Keycloak signs JWTs with RSA keys. Vault is the source of truth through release-
 
 ## Business roles & scoped access
 
-Business roles are **Keycloak Groups** (e.g. `/Accountant`, `/Manager`); the facade's `IBusinessRoleStore` is `KeycloakGroupBusinessRoleStore`. Permissions are **per-service client roles** (e.g. `order-service: Orders.Cancel`) aggregated into the `permissions` claim by one `oidc-usermodel-client-role-mapper` per client; assigning permissions to a business role maps the client roles onto its group (legacy realm-role mappings are still readable/removable). New permissions are auto-mapped to the admin groups (`super-admins` — the always-present unrestricted role — and `key-admins`) and reconciled via `POST /api/identity/permissions/reconcile-admin` without re-login (refresh picks up `resource_access` → `permissions`).
+Business roles are **Keycloak Groups** (e.g. `/Accountant`, `/Manager`); the gateway's `IBusinessRoleStore` is `KeycloakGroupBusinessRoleStore`. Permissions are **per-service client roles** (e.g. `order-service: Orders.Cancel`) aggregated into the `permissions` claim by one `oidc-usermodel-client-role-mapper` per client; assigning permissions to a business role maps the client roles onto its group (legacy realm-role mappings are still readable/removable). New permissions are auto-mapped to the admin groups (`super-admins` — the always-present unrestricted role — and `key-admins`) and reconciled via `POST /api/identity/permissions/reconcile-admin` without re-login (refresh picks up `resource_access` → `permissions`).
 
 Scoped assignments (`{role, scopes: {region:[...], branch:[...]}}`) are **Keycloak-attribute-driven, normalized and validated** against the dedicated config Group `/iam-scope-registry` (`scope.<key>` JSON `{displayName,description,isActive,valueType}` + `resource.<name>` multivalued, business-role Groups hold `authz.allowed-scopes`). User values live as multivalued attributes `authz.scope.<key>` (each value one entry), merged as Group ∪ User gated at write; the scalar `"test-key": "items-1"` form is normalized to `["items-1"]` via `ScopeDictionaryConverter`; unknown/inactive/disallowed scopes return field-level `400 ValidationProblem` (`assignments[0].scopes.test-key`). Oracle `identity-meta-db` retains only key/Vault metadata — the legacy Oracle scope tables were removed entirely (`deploy/migrate-oracle-to-keycloak.sh` migrates any old dumps into the registry group). The `authz-scopes` client scope exposes `authz.scope.*` as flat claims, hardened so only admins can write them via the User Profile. Registry data is cached in `IMemoryCache` (L1) + Redis (L2, `Identity:Redis:Configuration`) with invalidation on every role/scope mutation. Filter safely in consumers via `ScopeFilterService.ApplyAsync(query, effectiveScopes, ResourceKeys.Orders)` — deny-by-default, parameterized `Contains`/`IN`, no `EF.Property` on client-supplied names. See `samples/OrderService.Sample` (`ScopeFilters.cs`, `/api/orders/scoped`).
 

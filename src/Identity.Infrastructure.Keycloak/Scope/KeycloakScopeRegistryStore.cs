@@ -76,7 +76,7 @@ public sealed class KeycloakScopeRegistryStore(
         cache.Remove(ActiveKey);
         cache.Remove(RoleAllowedKey);
         cache.Remove(ResourceMapKey);
-        // Distributed invalidation so other facade replicas drop their copies too.
+        // Distributed invalidation so other gateway replicas drop their copies too.
         // Sync-over-async is acceptable here: invalidation is rare and admin-triggered.
         if (distributed is not null)
         {

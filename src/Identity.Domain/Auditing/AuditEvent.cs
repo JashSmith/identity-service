@@ -1,7 +1,7 @@
 namespace Identity.Domain;
 
 /// <summary>
-/// Auditable, non-secret facade event. The facade never persists raw tokens, passwords,
+/// Auditable, non-secret gateway event. The gateway never persists raw tokens, passwords,
 /// private signing keys or Vault secrets; Details must already be redacted before an
 /// instance is created.
 /// </summary>

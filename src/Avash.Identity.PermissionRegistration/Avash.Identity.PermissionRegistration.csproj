@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <RootNamespace>Avash.Identity.PermissionRegistration</RootNamespace>
+        <AssemblyName>Avash.Identity.PermissionRegistration</AssemblyName>
+        <PackageId>Avash.Identity.PermissionRegistration</PackageId>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Avash.Identity.Abstractions/Avash.Identity.Abstractions.csproj"/>
+        <PackageReference Include="Microsoft.Extensions.Http"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.Options"/>
+    </ItemGroup>
+</Project>

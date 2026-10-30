@@ -8,7 +8,7 @@ namespace Identity.Infrastructure.Keycloak;
 /// <summary>
 /// Idempotently provisions the <c>iam_access</c> protocol mapper that exposes the
 /// <c>iam.scoped_access</c> user attribute as a compact JWT claim. Best-effort — failure
-/// never blocks startup; the facade fallback (<c>GET /users/{id}/scoped-access</c>) remains.
+/// never blocks startup; the gateway fallback (<c>GET /users/{id}/scoped-access</c>) remains.
 /// Uses the Keycloak Admin REST API against the realm's clientScopes.
 /// </summary>
 public sealed class KeycloakIamAccessClaimMapper(
@@ -42,7 +42,7 @@ public sealed class KeycloakIamAccessClaimMapper(
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to provision iam_access mapper — facade fallback will be used");
+            logger.LogDebug(ex, "Failed to provision iam_access mapper — gateway fallback will be used");
         }
     }
 

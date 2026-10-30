@@ -1,0 +1,35 @@
+syntax = "proto3";
+option csharp_namespace = "Avash.Identity.Grpc";
+package avash.identity.v1;
+
+service IdentityService {
+  rpc Login (LoginRequest) returns (TokenResponse);
+  rpc RefreshToken (RefreshTokenRequest) returns (TokenResponse);
+  rpc Introspect (IntrospectRequest) returns (IntrospectResponse);
+  rpc Logout (LogoutRequest) returns (LogoutResponse);
+  rpc GetUser (GetUserRequest) returns (UserResponse);
+  rpc ListUsers (ListUsersRequest) returns (UserListResponse);
+  rpc ListRoles (ListRolesRequest) returns (RoleListResponse);
+  rpc GetUserRoles (GetUserRequest) returns (RoleListResponse);
+  rpc GetUserPermissions (GetUserRequest) returns (PermissionListResponse);
+  rpc RegisterPermissions (PermissionManifestRequest) returns (ManifestRegistrationResponse);
+}
+message LoginRequest { string username = 1; string password = 2; string client_id = 3; string client_secret = 4; string scope = 5; }
+message RefreshTokenRequest { string refresh_token = 1; string client_id = 2; string client_secret = 3; }
+message IntrospectRequest { string token = 1; string client_id = 2; string client_secret = 3; }
+message IntrospectResponse { bool active = 1; string sub = 2; string username = 3; string scope = 4; int64 exp = 5; }
+message TokenResponse { string access_token = 1; string refresh_token = 2; int32 expires_in = 3; string token_type = 4; }
+message LogoutRequest { string refresh_token = 1; string client_id = 2; string client_secret = 3; }
+message LogoutResponse { bool success = 1; }
+message GetUserRequest { string user_id = 1; }
+message ListUsersRequest { string search = 1; int32 page = 2; int32 page_size = 3; }
+message ListRolesRequest { string client_id = 1; int32 page = 2; int32 page_size = 3; }
+message UserResponse { string id = 1; string username = 2; string display_name = 3; bool enabled = 4; map<string, string> attributes = 5; }
+message UserListResponse { repeated UserResponse items = 1; int32 page = 2; int32 page_size = 3; int32 total = 4; }
+message RoleResponse { string id = 1; string name = 2; string description = 3; string client_id = 4; bool composite = 5; }
+message RoleListResponse { repeated RoleResponse items = 1; int32 page = 2; int32 page_size = 3; int32 total = 4; }
+message PermissionResponse { string name = 1; string description = 2; string service_id = 3; string service_version = 4; bool deprecated = 5; string keycloak_role_id = 6; }
+message PermissionListResponse { repeated PermissionResponse items = 1; }
+message PermissionDefinition { string name = 1; string description = 2; }
+message PermissionManifestRequest { string service_id = 1; string service_version = 2; string manifest_version = 3; repeated PermissionDefinition permissions = 4; string manifest_hash = 5; string idempotency_key = 6; }
+message ManifestRegistrationResponse { string service_id = 1; string manifest_version = 2; string manifest_hash = 3; bool accepted = 4; repeated string deprecated_permissions = 5; }

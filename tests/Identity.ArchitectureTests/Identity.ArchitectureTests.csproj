@@ -21,6 +21,6 @@
 <ItemGroup>
     <ProjectReference Include="../../src/Identity.Domain/Identity.Domain.csproj" />
     <ProjectReference Include="../../src/Identity.Application/Identity.Application.csproj" />
-    <ProjectReference Include="../../src/Company.Identity.Authentication/Company.Identity.Authentication.csproj" />
+    <ProjectReference Include="../../src/Avash.Identity.Authentication/Avash.Identity.Authentication.csproj" />
   </ItemGroup>
 </Project>
