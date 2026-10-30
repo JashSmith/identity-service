@@ -1,6 +1,6 @@
-using Company.Identity.Authentication.AspNetCore;
-using Company.Identity.Authorization.AspNetCore;
-using Company.Identity.PermissionRegistration;
+using Avash.Identity.Authentication.AspNetCore;
+using Avash.Identity.Authorization.AspNetCore;
+using Avash.Identity.PermissionRegistration;
 using Identity.Application.Scope;
 using Scalar.AspNetCore;
 using SampleApp;
@@ -10,20 +10,20 @@ var builder = WebApplication.CreateBuilder(args);
 var authority = builder.Configuration["Identity:Authority"] ?? "http://localhost:8080/realms/company";
 var audience = builder.Configuration["Identity:Audience"] ?? string.Empty;
 
-builder.Services.AddCompanyAuthentication(options =>
+builder.Services.AddAvashAuthentication(options =>
 {
     options.Authority = authority;
     options.Audience = audience;
     options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
     options.AcceptIssuerFromDiscovery = true;
 });
-builder.Services.AddCompanyAuthorization();
-builder.Services.AddCompanyAccessContext(o =>
+builder.Services.AddAvashAuthorization();
+builder.Services.AddAvashAccessContext(o =>
 {
-    var facade = builder.Configuration["Identity:AccessContext:FacadeBaseUrl"]
+    var gateway = builder.Configuration["Identity:AccessContext:GatewayBaseUrl"]
                  ?? builder.Configuration["PermissionRegistration:IdentityServer"]
                  ?? builder.Configuration["Identity:Authority"];
-    o.FacadeBaseUrl = string.IsNullOrWhiteSpace(facade) ? null : facade.TrimEnd('/');
+    o.GatewayBaseUrl = string.IsNullOrWhiteSpace(gateway) ? null : gateway.TrimEnd('/');
 });
 
 // DB-driven scope filter — safe, type-safe, deny-by-default.
@@ -57,9 +57,9 @@ builder.Services.AddOpenApi("v1", o =>
     {
         document.Info.Title = "Order Service (sample)";
         document.Info.Description =
-            "Sample consumer of the Identity Facade. Every endpoint requires one of the ten " +
+            "Sample consumer of the Identity Gateway. Every endpoint requires one of the ten " +
             "Orders.* permissions this service registered at startup via [RequirePermission]. " +
-            "Get a token from POST /api/identity/auth/login on the Identity Facade and paste it " +
+            "Get a token from POST /api/identity/auth/login on the Identity Gateway and paste it " +
             "into the Bearer authentication dialog.";
         var components = document.Components ?? new Microsoft.OpenApi.OpenApiComponents();
         document.Components = components;
@@ -69,7 +69,7 @@ builder.Services.AddOpenApi("v1", o =>
             Type = Microsoft.OpenApi.SecuritySchemeType.Http,
             Scheme = "bearer",
             BearerFormat = "JWT",
-            Description = "Keycloak-issued JWT obtained through the Identity Facade"
+            Description = "Keycloak-issued JWT obtained through the Identity Gateway"
         };
         document.Security =
         [
@@ -136,7 +136,7 @@ app.MapPost("/api/orders/{orderId}/refunds/approve", (string orderId, decimal am
 // resource's allowed scopes (via IResourceScopeResolver), then applies only registered
 // IScopeFilterHandler<T> predicates. No raw SQL, no EF.Property on client-supplied names,
 // deny-by-default when mapping missing, OR within a scope / AND across scopes.
-app.MapGet("/api/orders/scoped", async (Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc, ScopeFilterService filter, CancellationToken ct) =>
+app.MapGet("/api/orders/scoped", async (Avash.Identity.Authorization.ICurrentAccessContext access, OrderService svc, ScopeFilterService filter, CancellationToken ct) =>
 {
     await access.EnsureLoadedAsync(ct);
     if (!access.HasPermission(SampleApp.OrderPermissions.ViewOrders))
@@ -152,7 +152,7 @@ app.MapGet("/api/orders/scoped", async (Company.Identity.Authorization.ICurrentA
     return Results.Ok(filtered);
 }).RequireAuthorization().WithTags("Orders").WithName("ListOrdersScoped");
 
-app.MapGet("/api/orders/{orderId}/scoped-check", async (string orderId, string region, Company.Identity.Authorization.ICurrentAccessContext access, OrderService svc, CancellationToken ct) =>
+app.MapGet("/api/orders/{orderId}/scoped-check", async (string orderId, string region, Avash.Identity.Authorization.ICurrentAccessContext access, OrderService svc, CancellationToken ct) =>
 {
     await access.EnsureLoadedAsync(ct);
     if (!access.HasPermission(SampleApp.OrderPermissions.ViewOrders, "region", region))

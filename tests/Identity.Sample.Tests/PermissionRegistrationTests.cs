@@ -1,8 +1,8 @@
 using System.Reflection;
-using Company.Identity.Abstractions;
-using Company.Identity.PermissionDiscovery;
-using Company.Identity.PermissionRegistration;
-using Identity.Api;
+using Avash.Identity.Abstractions;
+using Avash.Identity.PermissionDiscovery;
+using Avash.Identity.PermissionRegistration;
+using Identity.Gateway;
 using Identity.Application;
 using Identity.Contracts;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -13,7 +13,7 @@ namespace Identity.Sample.Tests;
 /// <summary>
 /// Tests for the sample consumer service (OrderService.Sample) and the permission
 /// registration pipeline it exercises: discovery of [RequirePermission] attributes,
-/// manifest creation/hashing, the facade registry, and best-effort Keycloak role sync.
+/// manifest creation/hashing, the gateway registry, and best-effort Keycloak role sync.
 /// </summary>
 public sealed class PermissionDiscoveryTests
 {

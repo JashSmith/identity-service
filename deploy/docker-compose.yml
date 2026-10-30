@@ -1,22 +1,22 @@
 name: IdentityService
 services:
-  identity-facade:
+  identity-gateway:
     build:
       context: ..
-      dockerfile: deploy/Identity.Api.Dockerfile
+      dockerfile: deploy/Identity.Gateway.Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5080
       Identity__Authority: http://keycloak:8080/realms/company
-      # Keycloak proxy/admin base — the only place the facade's Keycloak address is configured.
+      # Keycloak proxy/admin base — the only place the gateway's Keycloak address is configured.
       Identity__Keycloak__BaseUrl: http://keycloak:8080
       Identity__RequireHttpsMetadata: "false"
       Authentication__Schemes__Bearer__RequireHttpsMetadata: "false"
       # Public self-URL used to rewrite jwks_uri in the proxied discovery document.
-      # Must match the host port published for the facade (FACADE_HTTP_PORT, default 5080).
-      Identity__PublicBaseUrl: http://localhost:${FACADE_HTTP_PORT:-5080}
-      # Tokens are minted for the facade's own Keycloak client, so its audience is that client id.
-      Identity__Audience: identity-facade
+      # Must match the host port published for the gateway (GATEWAY_HTTP_PORT, default 5080).
+      Identity__PublicBaseUrl: http://localhost:${GATEWAY_HTTP_PORT:-5080}
+      # Tokens are minted for the gateway's own Keycloak client, so its audience is that client id.
+      Identity__Audience: identity-gateway
       Identity__KeycloakAdmin__BaseUrl: http://keycloak:8080
       Identity__KeycloakAdmin__Realm: company
       Identity__KeycloakAdmin__AdminClientId: admin-cli
@@ -28,9 +28,9 @@ services:
       Database__ConnectionStrings__postgres: "Host=postgres-db;Port=5432;Database=keycloak;Username=keycloak;Password=${DB_PASSWORD:-KeycloakDev#2026!}"
       Database__ConnectionStrings__mssql: "Server=mssql-db,1433;Database=keycloak;User Id=sa;Password=${MSSQL_SA_PASSWORD:-${DB_PASSWORD:-KeycloakDev#2026!}};TrustServerCertificate=True"
       Database__ConnectionStrings__oracle: "User Id=keycloak;Password=${DB_PASSWORD:-KeycloakDev#2026!};Data Source=oracle-db:1521/XEPDB1"
-    ports: [ "${FACADE_HTTP_PORT:-5080}:5080" ]
+    ports: [ "${GATEWAY_HTTP_PORT:-5080}:5080" ]
     volumes:
-      - ../src/Identity.Api/wwwroot:/app/wwwroot:ro
+      - ../src/Identity.Gateway/wwwroot:/app/wwwroot:ro
     healthcheck:
       # aspnet image ships no curl — probe over /dev/tcp.
       test: [ "CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/5080 && printf \"GET /health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && timeout 3 head -1 <&3 | grep -q 200'" ]
@@ -172,8 +172,8 @@ services:
       retries: 10
 
   # Sample consumer — discovers its 10 [RequirePermission] actions at startup and registers
-  # them through the facade; it never contacts Keycloak directly. Validates tokens via the
-  # facade's discovery/JWKS proxy (AcceptIssuerFromDiscovery).
+  # them through the gateway; it never contacts Keycloak directly. Validates tokens via the
+  # gateway's discovery/JWKS proxy (AcceptIssuerFromDiscovery).
   order-service:
     build:
       context: ..
@@ -181,13 +181,13 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5180
-      Identity__Authority: http://identity-facade:5080
-      PermissionRegistration__IdentityServer: http://identity-facade:5080
+      Identity__Authority: http://identity-gateway:5080
+      PermissionRegistration__IdentityServer: http://identity-gateway:5080
       PermissionRegistration__ClientId: order-service
       PermissionRegistration__ClientSecret: order-service-development-only
     ports: [ "${ORDER_HTTP_PORT:-5180}:5180" ]
     depends_on:
-      identity-facade:
+      identity-gateway:
         condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/5180 && printf \"GET /health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && timeout 3 head -1 <&3 | grep -q 200'" ]

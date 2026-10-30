@@ -14,7 +14,7 @@ namespace Identity.Infrastructure.Keycloak;
 /// <c>scopes:{region:[…]}</c> from the flat claims, or read the single
 /// <c>iam_access</c> JSON claim during the migration window.
 /// Freshness: already-issued access tokens do NOT mutate; short-lived AT (300s for
-/// identity-facade) + refresh-token rotation propagates changes on next refresh.
+/// identity-gateway) + refresh-token rotation propagates changes on next refresh.
 /// Best-effort, never blocks startup.
 /// </summary>
 public sealed class KeycloakScopeClaimMapper(

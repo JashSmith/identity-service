@@ -1,4 +1,4 @@
-using Company.Identity.Authentication;
+using Avash.Identity.Authentication;
 
 namespace Identity.Authentication.Tests;
 

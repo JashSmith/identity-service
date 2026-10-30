@@ -23,7 +23,7 @@ public interface IKeycloakClientRoleProvisioner
     Task<int> ReconcileAdminAsync(CancellationToken ct);
 
     /// <summary>
-    /// Ensures the always-present super-admin group exists with all facade management
+    /// Ensures the always-present super-admin group exists with all gateway management
     /// permissions and every registered client role. Idempotent; best-effort.
     /// </summary>
     Task EnsureSuperAdminGroupAsync(CancellationToken ct) => Task.CompletedTask;

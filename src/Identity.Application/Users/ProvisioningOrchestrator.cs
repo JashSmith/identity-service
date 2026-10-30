@@ -20,7 +20,7 @@ public sealed class ProvisioningOrchestrator(
         "email" => r.Email,
         "firstName" => r.FirstName,
         "lastName" => r.LastName,
-        _ => null, // unknown attribute — not something the facade can supply or judge
+        _ => null, // unknown attribute — not something the gateway can supply or judge
     };
 
     private async Task ValidateProfileAsync(CreateUserRequest request, CancellationToken ct)

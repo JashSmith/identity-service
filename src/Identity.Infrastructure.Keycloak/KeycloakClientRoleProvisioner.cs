@@ -191,7 +191,7 @@ public sealed class KeycloakClientRoleProvisioner(
         }
         if (string.IsNullOrEmpty(groupId)) return;
 
-        // Grant the facade management permissions (identity.*) so super-admins pass RequireAuthorization.
+        // Grant the gateway management permissions (identity.*) so super-admins pass RequireAuthorization.
         var granted = new List<object>();
         foreach (var perm in new[] {
                      "identity.users.read", "identity.users.manage",
@@ -225,7 +225,7 @@ public sealed class KeycloakClientRoleProvisioner(
         try
         {
             var req = new HttpRequestMessage(HttpMethod.Post, $"{AdminBase}/{_o.Realm}/roles")
-            { Content = JsonContent.Create(new { name = roleName, description = $"Facade role {roleName}" }) };
+            { Content = JsonContent.Create(new { name = roleName, description = $"Gateway role {roleName}" }) };
             req.Headers.Add("Authorization", $"Bearer {token}");
             var res = await http.SendAsync(req, ct);
             if (res.IsSuccessStatusCode || res.StatusCode == HttpStatusCode.Conflict)

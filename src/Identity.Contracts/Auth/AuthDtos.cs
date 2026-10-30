@@ -1,7 +1,7 @@
 namespace Identity.Contracts;
 
 /// <summary>
-/// OAuth2 / OpenID Connect token response returned by the facade token proxy.
+/// OAuth2 / OpenID Connect token response returned by the gateway token proxy.
 /// </summary>
 /// <param name="AccessToken">The JWT access token string.</param>
 /// <param name="RefreshToken">The refresh token string, if issued.</param>
@@ -18,7 +18,7 @@ public sealed record AccessTokenResponse(
 /// </summary>
 /// <param name="Username">The user's username.</param>
 /// <param name="Password">The user's password.</param>
-/// <param name="ClientId">The optional client ID (defaults to configured facade client).</param>
+/// <param name="ClientId">The optional client ID (defaults to configured gateway client).</param>
 /// <param name="ClientSecret">The optional client secret if required.</param>
 public sealed record LoginRequest(
     string Username,

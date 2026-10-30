@@ -1,7 +1,7 @@
 <Solution>
     <Folder Name="/deploy/">
         <File Path="deploy/docker-compose.yml"/>
-        <File Path="deploy/Identity.Api.Dockerfile"/>
+        <File Path="deploy/Identity.Gateway.Dockerfile"/>
         <File Path="deploy/Keycloak.Dockerfile"/>
         <File Path="deploy/realm-company.json"/>
         <File Path="deploy/OrderService.Sample.Dockerfile"/>
@@ -26,7 +26,7 @@
         <Project Path="src/Identity.Domain/Identity.Domain.csproj"/>
     </Folder>
     <Folder Name="/src/Host/">
-        <Project Path="src/Identity.Api/Identity.Api.csproj"/>
+        <Project Path="src/Identity.Gateway/Identity.Gateway.csproj"/>
     </Folder>
     <Folder Name="/src/Infrastructure/">
         <Project Path="src/Identity.Infrastructure.Keycloak/Identity.Infrastructure.Keycloak.csproj"/>
@@ -35,21 +35,21 @@
     </Folder>
     <Folder Name="/src/Packages/"/>
     <Folder Name="/src/Packages/Authentication/">
-        <Project Path="src/Company.Identity.Abstractions/Company.Identity.Abstractions.csproj"/>
+        <Project Path="src/Avash.Identity.Abstractions/Avash.Identity.Abstractions.csproj"/>
         <Project
-                Path="src/Company.Identity.Authentication.AspNetCore/Company.Identity.Authentication.AspNetCore.csproj"/>
-        <Project Path="src/Company.Identity.Authentication/Company.Identity.Authentication.csproj"/>
+                Path="src/Avash.Identity.Authentication.AspNetCore/Avash.Identity.Authentication.AspNetCore.csproj"/>
+        <Project Path="src/Avash.Identity.Authentication/Avash.Identity.Authentication.csproj"/>
     </Folder>
     <Folder Name="/src/Packages/Authorization/">
-        <Project Path="src/Company.Identity.Authorization.AspNetCore/Company.Identity.Authorization.AspNetCore.csproj"/>
-        <Project Path="src/Company.Identity.Authorization/Company.Identity.Authorization.csproj"/>
+        <Project Path="src/Avash.Identity.Authorization.AspNetCore/Avash.Identity.Authorization.AspNetCore.csproj"/>
+        <Project Path="src/Avash.Identity.Authorization/Avash.Identity.Authorization.csproj"/>
     </Folder>
     <Folder Name="/src/Packages/PermissionRegistration/">
-        <Project Path="src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj"/>
-        <Project Path="src/Company.Identity.PermissionRegistration/Company.Identity.PermissionRegistration.csproj"/>
+        <Project Path="src/Avash.Identity.PermissionDiscovery/Avash.Identity.PermissionDiscovery.csproj"/>
+        <Project Path="src/Avash.Identity.PermissionRegistration/Avash.Identity.PermissionRegistration.csproj"/>
     </Folder>
     <Folder Name="/src/Packages/Transport/">
-        <Project Path="src/Company.Identity.Grpc/Company.Identity.Grpc.csproj"/>
+        <Project Path="src/Avash.Identity.Grpc/Avash.Identity.Grpc.csproj"/>
     </Folder>
     <Folder Name="/tests/">
         <Project Path="tests/Identity.ArchitectureTests/Identity.ArchitectureTests.csproj"/>

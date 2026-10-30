@@ -90,12 +90,12 @@
   ],
   "clients": [
     {
-      "clientId": "identity-facade",
-      "name": "Identity Facade",
-      "description": "Public facade — proxy for login/refresh/introspect/logout",
+      "clientId": "identity-gateway",
+      "name": "Identity Gateway",
+      "description": "Public gateway — proxy for login/refresh/introspect/logout",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
-      "secret": "facade-development-only",
+      "secret": "gateway-development-only",
       "publicClient": false,
       "bearerOnly": false,
       "standardFlowEnabled": true,
@@ -120,11 +120,11 @@
       "protocolMappers": [
 
         {
-          "name": "facade-audience",
+          "name": "gateway-audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "config": {
-            "included.client.audience": "identity-facade",
+            "included.client.audience": "identity-gateway",
             "id.token.claim": "false",
             "access.token.claim": "true"
           }
@@ -190,11 +190,11 @@
       "protocolMappers": [
 
         {
-          "name": "identity-facade-audience",
+          "name": "identity-gateway-audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "config": {
-            "included.client.audience": "identity-facade",
+            "included.client.audience": "identity-gateway",
             "id.token.claim": "false",
             "access.token.claim": "true"
           }
@@ -232,7 +232,7 @@
   "clientScopes": [
     {
       "name": "permissions-mapper",
-      "description": "Maps realm roles into permission / permissions claims for the facade authorizer",
+      "description": "Maps realm roles into permission / permissions claims for the gateway authorizer",
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "false",

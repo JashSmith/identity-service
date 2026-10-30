@@ -1,10 +1,10 @@
 # Engineering Report — Keycloak as Authoritative Source of Truth
 
-> Facade = wrapper / orchestrator / normalizer / validator over Keycloak Admin REST + OIDC. No parallel Oracle authorization DB. Oracle `identity-meta-db` retains only key/Vault sync metadata. Future Redis is cache-only. 28 points below.
+> Gateway = wrapper / orchestrator / normalizer / validator over Keycloak Admin REST + OIDC. No parallel Oracle authorization DB. Oracle `identity-meta-db` retains only key/Vault sync metadata. Future Redis is cache-only. 28 points below.
 
 ## 1. Authority boundary
 
-Keycloak owns users, credentials, sessions, tokens, groups, client roles, attributes, User Profile, and JWT signing. The .NET facade never mints tokens, never hashes passwords, never stores a parallel `Users/Roles/Permissions/Scopes` table. It proxies, validates, normalizes, provisions, and hardens.
+Keycloak owns users, credentials, sessions, tokens, groups, client roles, attributes, User Profile, and JWT signing. The .NET gateway never mints tokens, never hashes passwords, never stores a parallel `Users/Roles/Permissions/Scopes` table. It proxies, validates, normalizes, provisions, and hardens.
 
 ## 2. Canonical mappings
 
@@ -18,15 +18,15 @@ Keycloak owns users, credentials, sessions, tokens, groups, client roles, attrib
 | BusinessRole Assignment | User Group Membership | `PUT /admin/realms/{realm}/users/{id}/groups/{gid}` — `KeycloakUserGroupMembership` |
 | Dynamic Data Scope | User/Group Attribute `authz.scope.<key>` | Multivalued, one value per entry; effective = `Group ∪ User` per key |
 | Scope/Resource Registry | Dedicated config Group `/iam-scope-registry` | Attributes `scope.<key>={displayName,description,isActive,valueType}` + `resource.<name>=[scopes]` + per-group `authz.allowed-scopes` |
-| Normalized Authorization Context | Facade DTO + JWT claims | `permissions`/`permission` + flat `authz.scope.<key>` (+ legacy `iam_access` dual-write for one window) |
+| Normalized Authorization Context | Gateway DTO + JWT claims | `permissions`/`permission` + flat `authz.scope.<key>` (+ legacy `iam_access` dual-write for one window) |
 | Admin grant | Group `/key-admins` client-role mapping | Every newly registered permission is auto-mapped here |
 | Key/Vault metadata | Oracle | `SigningKeys`, `KeyHistories`, `RotationOperations` only |
 
-No dual writes for Groups/Roles/Mappings/Scopes in Oracle. Seven legacy scope tables remain in `KeyMetadataDbContext` as `[Obsolete]` only to keep `DynamicScopeTests` (InMemory) green during the migration window — they are not written by the facade at runtime.
+No dual writes for Groups/Roles/Mappings/Scopes in Oracle. Seven legacy scope tables remain in `KeyMetadataDbContext` as `[Obsolete]` only to keep `DynamicScopeTests` (InMemory) green during the migration window — they are not written by the gateway at runtime.
 
 ## 3. Client-role lifecycle
 
-- One client per service (`identity-facade`, `order-service`, ...).
+- One client per service (`identity-gateway`, `order-service`, ...).
 - `KeycloakClientRoleProvisioner.EnsureClientAsync` → `POST /admin/realms/{realm}/clients`.
 - `EnsureClientRoleAsync` → `GET .../clients/{uuid}/roles/{name}` then `POST` if missing; conflict = success.
 - `EnsureClientRoleMapperAsync` → one `oidc-usermodel-client-role-mapper` per client with `claim.name=permissions` (and `permission` alias) so Keycloak aggregates all client roles into the two claims.
@@ -43,7 +43,7 @@ No dual writes for Groups/Roles/Mappings/Scopes in Oracle. Seven legacy scope ta
 
 ## 6. Namespace enforcement
 
-`KeycloakSyncingPermissionRegistry.ValidateNamespace` — strict map `identity-facade → {Identity., identity.}`, `order-service → {Orders.}`; unknown `serviceId` is permissive (future services) but any mismatch throws `InvalidOperationException` → `PermissionEndpoints` returns `400 ProblemDetails`. Prevents a compromised `order-service` credential from minting `Identity.*`.
+`KeycloakSyncingPermissionRegistry.ValidateNamespace` — strict map `identity-gateway → {Identity., identity.}`, `order-service → {Orders.}`; unknown `serviceId` is permissive (future services) but any mismatch throws `InvalidOperationException` → `PermissionEndpoints` returns `400 ProblemDetails`. Prevents a compromised `order-service` credential from minting `Identity.*`.
 
 ## 7. Scope attributes — why `authz.scope.<key>` multivalued
 
@@ -81,7 +81,7 @@ Kept: `sub`, `preferred_username`, `permissions`/`permission` (now aggregated fr
 
 ## 15. Token freshness
 
-`identity-facade` client has `attributes.access.token.lifespan=300` (5 min) + refresh rotation. Short-lived AT bounds the revocation/attribute-propagation window without requiring a live Keycloak call per request. The realm import also sets the `authz-scopes` scope as a default so new tokens carry `authz.scope.*` automatically.
+`identity-gateway` client has `attributes.access.token.lifespan=300` (5 min) + refresh rotation. Short-lived AT bounds the revocation/attribute-propagation window without requiring a live Keycloak call per request. The realm import also sets the `authz-scopes` scope as a default so new tokens carry `authz.scope.*` automatically.
 
 ## 16. No human admin credentials
 
@@ -91,17 +91,17 @@ All Admin REST calls use `KeycloakAdminTokenProvider` — `client_credentials` w
 
 Permission registration derives `serviceId` from the validated credential (`client_id`/`azp`) and compares to `manifest.serviceId`; no client-supplied URL is fetched or trusted.
 
-## 18. DI wiring (`Identity.Api/Program.cs`)
+## 18. DI wiring (`Identity.Gateway/Program.cs`)
 
-`AddHttpClient` for `KeycloakScopeRegistryStore` (as `IScopeDefinitionLookup`/`IResourceScopeResolver`/`IScopeCacheInvalidator`), `KeycloakScopeAttributeStore` (`IUserScopeReader`/`IUserScopeWriter`), `KeycloakScopeClaimMapper`, `KeycloakUserProfileHardening`, `KeycloakClientRoleProvisioner`; startup runs four best-effort blocks: `FacadePermissionRegistrar`, `KeycloakIamAccessClaimMapper.EnsureAsync`, `KeycloakScopeClaimMapper.EnsureAsync`, `KeycloakUserProfileHardening.EnsureAsync`. Legacy `ScopeSeed.EnsureSeededAsync` is kept best-effort with comment "Oracle auth tables are legacy; Keycloak iam-scope-registry is source of truth."
+`AddHttpClient` for `KeycloakScopeRegistryStore` (as `IScopeDefinitionLookup`/`IResourceScopeResolver`/`IScopeCacheInvalidator`), `KeycloakScopeAttributeStore` (`IUserScopeReader`/`IUserScopeWriter`), `KeycloakScopeClaimMapper`, `KeycloakUserProfileHardening`, `KeycloakClientRoleProvisioner`; startup runs four best-effort blocks: `GatewayPermissionRegistrar`, `KeycloakIamAccessClaimMapper.EnsureAsync`, `KeycloakScopeClaimMapper.EnsureAsync`, `KeycloakUserProfileHardening.EnsureAsync`. Legacy `ScopeSeed.EnsureSeededAsync` is kept best-effort with comment "Oracle auth tables are legacy; Keycloak iam-scope-registry is source of truth."
 
 ## 19. Realm import (`deploy/realm-company.json`)
 
-Groups `iam-scope-registry` (8× `scope.*` JSON + 7× `resource.*` arrays covering `test-key→[ResourceA]` for isolation tests) + `key-admins`; `clientScopes: [authz-scopes]` with description "Maps authz.scope.*"; clients `identity-facade` (300 s, mappers `permission-claim` etc.) + `order-service`. Import is `IGNORE_EXISTING`; re-import requires `DELETE /admin/realms/company` then `docker compose restart keycloak` + `restart identity-facade order-service` to clear cached discovery.
+Groups `iam-scope-registry` (8× `scope.*` JSON + 7× `resource.*` arrays covering `test-key→[ResourceA]` for isolation tests) + `key-admins`; `clientScopes: [authz-scopes]` with description "Maps authz.scope.*"; clients `identity-gateway` (300 s, mappers `permission-claim` etc.) + `order-service`. Import is `IGNORE_EXISTING`; re-import requires `DELETE /admin/realms/company` then `docker compose restart keycloak` + `restart identity-gateway order-service` to clear cached discovery.
 
 ## 20. Compose (`deploy/docker-compose.yml`)
 
-Seven services: `keycloak-db`/`identity-meta-db` (`gvenzl/oracle-xe:21-slim`), `keycloak` (custom `Keycloak.Dockerfile` + `ojdbc11`), `identity-facade` (`Identity.Api.Dockerfile`, `http://keycloak:8080`, `Identity__KeycloakAdmin__*`, `healthcheck /health/live`), `order-service` (10 `[RequirePermission]` endpoints, registers on startup with retry), `vault` (`hashicorp/vault:1.20`), `redis` (`redis:7-alpine`). Health order `db → keycloak → facade → order-service`.
+Seven services: `keycloak-db`/`identity-meta-db` (`gvenzl/oracle-xe:21-slim`), `keycloak` (custom `Keycloak.Dockerfile` + `ojdbc11`), `identity-gateway` (`Identity.Gateway.Dockerfile`, `http://keycloak:8080`, `Identity__KeycloakAdmin__*`, `healthcheck /health/live`), `order-service` (10 `[RequirePermission]` endpoints, registers on startup with retry), `vault` (`hashicorp/vault:1.20`), `redis` (`redis:7-alpine`). Health order `db → keycloak → gateway → order-service`.
 
 ## 21. Oracle → Keycloak migration
 
@@ -144,7 +144,7 @@ curl -s http://localhost:5080/api/identity/scopes -H "Authorization: Bearer $TOK
 curl -s -X POST http://localhost:5080/api/identity/permissions/reconcile-admin -H "Authorization: Bearer $TOKEN" | jq
 curl -s -X POST http://localhost:5080/api/identity/auth/refresh \
   -H "Authorization: $token_type $refresh_token" \
-  -d "grant_type=refresh_token&client_id=identity-facade&client_secret=facade-development-only&refresh_token=$refresh_token" | jq
+  -d "grant_type=refresh_token&client_id=identity-gateway&client_secret=gateway-development-only&refresh_token=$refresh_token" | jq
 # New AT now carries the permission.
 ```
 
@@ -155,7 +155,7 @@ graph LR
   Browser[Browser / API client]
   Gateway[API gateway]
   OrderSvc[order-service\n10x RequirePermission]
-  Facade[Identity Facade\n.NET 10]
+  Gateway[Identity Gateway\n.NET 10]
   KC[Keycloak 26.4\ncompany realm]
   KCDB[(Oracle XE\nKeycloak DB)]
   Meta[(Oracle XE\nidentity-meta-db\nSigningKeys only)]
@@ -165,14 +165,14 @@ graph LR
   Browser -->|OIDC PKCE| KC
   Browser -->|Bearer Keycloak JWT| Gateway
   Gateway --> OrderSvc
-  OrderSvc -->|manifest REST| Facade
+  OrderSvc -->|manifest REST| Gateway
   OrderSvc -.->|local JWT + permissions + authz.scope.*| OrderSvc
-  Facade -->|Admin REST| KC
-  Facade -->|scope mapper + profile hardening| KC
+  Gateway -->|Admin REST| KC
+  Gateway -->|scope mapper + profile hardening| KC
   KC --> KCDB
-  Facade --> Meta
-  Facade --> Vault
-  Facade --> Redis
+  Gateway --> Meta
+  Gateway --> Vault
+  Gateway --> Redis
   KC -.->|authz-scopes clientScope| Browser
 
   subgraph Keycloak Primitives
@@ -201,4 +201,4 @@ graph LR
 
 ## 28. Commit
 
-Stage `docs/architecture.md`, `docs/running.md`, `postman/Identity service.postman_collection.json`, `src/Identity.Infrastructure.Keycloak/**`, `src/Identity.Application/**`, `src/Identity.Api/**`, `deploy/**`, `tests/Identity.Sample.Tests/**`, and this report; commit message ends with `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
+Stage `docs/architecture.md`, `docs/running.md`, `postman/Identity service.postman_collection.json`, `src/Identity.Infrastructure.Keycloak/**`, `src/Identity.Application/**`, `src/Identity.Gateway/**`, `deploy/**`, `tests/Identity.Sample.Tests/**`, and this report; commit message ends with `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.

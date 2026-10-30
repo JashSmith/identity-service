@@ -1,11 +1,11 @@
-using Company.Identity.Abstractions;
+using Avash.Identity.Abstractions;
 
 namespace SampleApp;
 
 /// <summary>
 /// Sample consumer service demonstrating the permission-registration flow:
 /// every action is annotated with <c>[RequirePermission]</c>; on startup the service
-/// discovers those permissions and pushes a manifest to the Identity Facade, which
+/// discovers those permissions and pushes a manifest to the Identity Gateway, which
 /// mirrors them into Keycloak realm roles so they appear in token claims.
 /// Exactly ten distinct permissions are declared — see <c>Identity.Sample.Tests</c>.
 /// </summary>

@@ -19,6 +19,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../../src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj"/>
+        <ProjectReference Include="../../src/Avash.Identity.PermissionDiscovery/Avash.Identity.PermissionDiscovery.csproj"/>
     </ItemGroup>
 </Project>

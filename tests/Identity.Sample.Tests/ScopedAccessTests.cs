@@ -1,6 +1,6 @@
 using System.Net.Http;
 using System.Security.Claims;
-using Company.Identity.Authorization;
+using Avash.Identity.Authorization;
 using Identity.Application;
 using Identity.Contracts;
 using Microsoft.AspNetCore.Http;
@@ -169,16 +169,16 @@ public sealed class OpenApiTests
     [Fact]
     public void Endpoints_Are_Registered_In_Program()
     {
-        // Contract test without hosting: verify the facade wires the new route groups.
+        // Contract test without hosting: verify the gateway wires the new route groups.
         // Full HTTP probe was validated manually: Kestrel__Endpoints__Http__Url=http://127.0.0.1:5099
         // yields 39 paths including the 5 below (see /tmp/openapi.json on the dev host).
-        var asm = typeof(Identity.Api.IamPermissions).Assembly;
+        var asm = typeof(Identity.Gateway.IamPermissions).Assembly;
         var src = string.Join("\n", asm.GetTypes().Select(t => t.Name));
         // BusinessRolesEndpoints / UserManagementEndpoints / AccessContextEndpoints must be present
         Assert.Contains("BusinessRolesEndpoints", src);
         Assert.Contains("UserManagementEndpoints", src);
         // AccessContextEndpoints lives in the same assembly; verify via type existence
-        Assert.NotNull(asm.GetType("Identity.Api.AccessContextEndpoints") ?? asm.GetType("Identity.Api.BusinessRolesEndpoints"));
+        Assert.NotNull(asm.GetType("Identity.Gateway.AccessContextEndpoints") ?? asm.GetType("Identity.Gateway.BusinessRolesEndpoints"));
     }
 }
 
@@ -238,29 +238,29 @@ public sealed class CompositeResolutionTests
     }
 }
 
-public sealed class FacadePermissionsRegistrationTests
+public sealed class GatewayPermissionsRegistrationTests
 {
     [Fact]
     public void IamPermissionSource_Exposes_Expected_Permissions()
     {
-        var src = new Identity.Api.IamPermissionSource();
+        var src = new Identity.Gateway.IamPermissionSource();
         var perms = src.GetPermissions();
         Assert.Equal(8, perms.Count);
-        Assert.Contains(perms, p => p.Name == Identity.Api.IamPermissions.UsersRead);
-        Assert.Contains(perms, p => p.Name == Identity.Api.IamPermissions.ScopesManage);
-        Assert.Contains(perms, p => p.Name == Identity.Api.IamPermissions.PermissionsRead);
-        Assert.Contains(perms, p => p.Name == Identity.Api.IamPermissions.PermissionsRegister);
+        Assert.Contains(perms, p => p.Name == Identity.Gateway.IamPermissions.UsersRead);
+        Assert.Contains(perms, p => p.Name == Identity.Gateway.IamPermissions.ScopesManage);
+        Assert.Contains(perms, p => p.Name == Identity.Gateway.IamPermissions.PermissionsRead);
+        Assert.Contains(perms, p => p.Name == Identity.Gateway.IamPermissions.PermissionsRegister);
     }
 
     [Fact]
     public void Existing_Manifest_Still_Discovers_Ten_Order_Permissions()
     {
-        var discovered = Company.Identity.PermissionDiscovery.PermissionDiscovery.Discover(typeof(SampleApp.OrderService).Assembly);
+        var discovered = Avash.Identity.PermissionDiscovery.PermissionDiscovery.Discover(typeof(SampleApp.OrderService).Assembly);
         Assert.Equal(10, discovered.Count);
     }
 }
 
-public sealed class FacadeResolvingAccessContextTests
+public sealed class GatewayResolvingAccessContextTests
 {
     private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
     {
@@ -293,15 +293,15 @@ public sealed class FacadeResolvingAccessContextTests
         return c;
     }
 
-    private static FacadeResolvingAccessContext Svc(ClaimsPrincipal principal, string authHeader, HttpMessageHandler handler, AccessContextOptions? opts = null)
+    private static GatewayResolvingAccessContext Svc(ClaimsPrincipal principal, string authHeader, HttpMessageHandler handler, AccessContextOptions? opts = null)
     {
-        opts ??= new AccessContextOptions { FacadeBaseUrl = "http://facade.test" };
+        opts ??= new AccessContextOptions { GatewayBaseUrl = "http://gateway.test" };
         var accessor = new HttpContextAccessor { HttpContext = CtxWith(authHeader) };
-        return new FacadeResolvingAccessContext(principal, accessor, new StubFactory(handler), Microsoft.Extensions.Options.Options.Create(opts));
+        return new GatewayResolvingAccessContext(principal, accessor, new StubFactory(handler), Microsoft.Extensions.Options.Options.Create(opts));
     }
 
     [Fact]
-    public async Task InlineClaim_Present_NoFacadeHit()
+    public async Task InlineClaim_Present_NoGatewayHit()
     {
         var iam = """[{"role":"Manager","scopes":{"region":["tehran-1"]}}]""";
         var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK));
@@ -312,17 +312,17 @@ public sealed class FacadeResolvingAccessContextTests
     }
 
     [Fact]
-    public async Task MissingFacadeUrl_NoFacadeHit()
+    public async Task MissingGatewayUrl_NoGatewayHit()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK));
-        var opts = new AccessContextOptions { FacadeBaseUrl = null };
+        var opts = new AccessContextOptions { GatewayBaseUrl = null };
         var ctx = Svc(Principal(["Orders.View"], null), "Bearer tok", handler, opts);
         await ctx.EnsureLoadedAsync(CancellationToken.None);
         Assert.Empty(handler.Urls);
     }
 
     [Fact]
-    public async Task Absent_Iam_Access_Calls_Facade_And_Populates_Scopes()
+    public async Task Absent_Iam_Access_Calls_Gateway_And_Populates_Scopes()
     {
         var body = """{"userId":"u1","username":"alice","permissions":["Orders.View"],"assignments":[{"role":"Manager","scopes":{"region":["tehran-2"]}}]}""";
         var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK)
@@ -333,7 +333,7 @@ public sealed class FacadeResolvingAccessContextTests
         Assert.Empty(ctx.GetScopeValues("region"));
         await ctx.EnsureLoadedAsync(CancellationToken.None);
         Assert.Single(handler.Urls);
-        Assert.Equal("http://facade.test/api/identity/access-context", handler.Urls[0]);
+        Assert.Equal("http://gateway.test/api/identity/access-context", handler.Urls[0]);
         Assert.Equal("Bearer tok", handler.AuthorizationHeaders[0]);
         Assert.Contains("tehran-2", ctx.GetScopeValues("region"));
     }
@@ -369,7 +369,7 @@ public sealed class FacadeResolvingAccessContextTests
     }
 
     [Fact]
-    public async Task FacadeError_KeepsClaimsOnlyView_BestEffort()
+    public async Task GatewayError_KeepsClaimsOnlyView_BestEffort()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable));
         var ctx = Svc(Principal(["Orders.View"], null), "Bearer tok", handler);
@@ -379,12 +379,12 @@ public sealed class FacadeResolvingAccessContextTests
     }
 
     [Fact]
-    public async Task FacadePerms_Overlay_PrincipalPerms()
+    public async Task GatewayPerms_Overlay_PrincipalPerms()
     {
         var body = """{"permissions":["Orders.View","Orders.Create"],"assignments":[{"role":"M","scopes":{"branch":["b-1"]}}]}""";
         var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK)
         { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") });
-        // Only Orders.View on the token, facade returns more.
+        // Only Orders.View on the token, gateway returns more.
         var ctx = Svc(Principal(["Orders.View"], null), "Bearer tok", handler);
         await ctx.EnsureLoadedAsync(CancellationToken.None);
         Assert.True(ctx.HasPermission("Orders.Create"));
@@ -395,9 +395,9 @@ public sealed class FacadeResolvingAccessContextTests
     public async Task NullHttpContext_DoesNotCrash()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.OK));
-        var opts = new AccessContextOptions { FacadeBaseUrl = "http://facade.test" };
+        var opts = new AccessContextOptions { GatewayBaseUrl = "http://gateway.test" };
         var accessor = new HttpContextAccessor { HttpContext = null };
-        var ctx = new FacadeResolvingAccessContext(Principal(["Orders.View"], null), accessor, new StubFactory(handler), Microsoft.Extensions.Options.Options.Create(opts));
+        var ctx = new GatewayResolvingAccessContext(Principal(["Orders.View"], null), accessor, new StubFactory(handler), Microsoft.Extensions.Options.Options.Create(opts));
         await ctx.EnsureLoadedAsync(CancellationToken.None);
         Assert.Empty(handler.Urls);
     }

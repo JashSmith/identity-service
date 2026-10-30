@@ -1,5 +1,5 @@
-using Company.Identity.Abstractions;
-using Company.Identity.PermissionDiscovery;
+using Avash.Identity.Abstractions;
+using Avash.Identity.PermissionDiscovery;
 
 namespace Identity.Authorization.Tests;
 

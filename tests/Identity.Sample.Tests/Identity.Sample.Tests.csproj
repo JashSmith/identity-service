@@ -20,10 +20,10 @@
 
   <ItemGroup>
     <ProjectReference Include="../../samples/OrderService.Sample/OrderService.Sample.csproj" />
-    <ProjectReference Include="../../src/Company.Identity.PermissionDiscovery/Company.Identity.PermissionDiscovery.csproj" />
-    <ProjectReference Include="../../src/Company.Identity.PermissionRegistration/Company.Identity.PermissionRegistration.csproj" />
+    <ProjectReference Include="../../src/Avash.Identity.PermissionDiscovery/Avash.Identity.PermissionDiscovery.csproj" />
+    <ProjectReference Include="../../src/Avash.Identity.PermissionRegistration/Avash.Identity.PermissionRegistration.csproj" />
     <ProjectReference Include="../../src/Identity.Application/Identity.Application.csproj" />
     <ProjectReference Include="../../src/Identity.Contracts/Identity.Contracts.csproj" />
-    <ProjectReference Include="../../src/Identity.Api/Identity.Api.csproj" />
+    <ProjectReference Include="../../src/Identity.Gateway/Identity.Gateway.csproj" />
   </ItemGroup>
 </Project>
