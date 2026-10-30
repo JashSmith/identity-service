@@ -1,150 +1,134 @@
-# Company Identity Platform
+# درگاه هویت آواش (Identity Gateway)
 
-This repository defines a production-oriented **Keycloak-centric Identity Platform** for .NET 10. Keycloak is the authoritative Identity Provider and OAuth 2.0/OIDC Authorization Server. The .NET application is an Identity Gateway / Identity Orchestrator for normalized APIs, Keycloak administration, proprietary organization SSO integration, permission registration, caching, audit, and integration concerns.
+درگاه هویت آواش یک لایه .NET بدون پایگاه داده روی Keycloak است. Keycloak را از دید کاربران و مدیران پنهان می‌کند، ولی بیشتر امکاناتش را از طریق APIهای یکپارچه و یک کنسول مدیریت فارسی در اختیار سازمان می‌گذارد.
 
-It does **not** implement passwords, credentials, sessions, MFA, access-token or refresh-token minting, token revocation, user federation, role semantics, or JWT signing. Application services accept genuine Keycloak-issued JWTs and validate them locally.
+- [معرفی](#معرفی)
+- [قابلیت‌ها](#قابلیتها)
+- [معماری در یک نگاه](#معماری-در-یک-نگاه)
+- [شروع سریع](#شروع-سریع)
+- [کنسول مدیریت](#کنسول-مدیریت)
+- [اتصال یک سرویس](#اتصال-یک-سرویس)
+- [تست‌ها](#تستها)
+- [مستندات بیشتر](#مستندات-بیشتر)
+- [محدودیت‌های شناخته‌شده](#محدودیتهای-شناختهشده)
 
-See [docs/architecture.md](docs/architecture.md) for the complete architecture, diagrams, ownership table, flows, extension design, threat model, cache policy, Vault key rotation, deployment model, and test strategy. See [docs/running.md](docs/running.md) for the step-by-step server run guide (compose up → login → call the gateway and the order-service sample).
+## معرفی
 
-## Developer integration
+مدیر سیستم، مدیر فناوری یا مدیری که مدیریت بخشی از سازمان به او سپرده شده، از این سامانه برای این کارها استفاده می‌کند:
 
-```csharp
-builder.Services
-    .AddAvashAuthentication(options =>
-    {
-        options.Authority = configuration["Identity:Authority"]!; // the gateway URL
-        options.Audience = configuration["Identity:Audience"]!;
-        options.AcceptIssuerFromDiscovery = true; // issuer comes from the proxied discovery doc
-    })
-    .AddAvashAuthorization();
+- تعریف اپلیکیشن‌ها و سرویس‌ها و دسترسی‌های هر کدام؛
+- تعریف نقش‌های سازمانی و دادن دسترسی به آن‌ها به‌صورت درختی (اپلیکیشن ← ماژول ← منبع ← عمل)؛
+- تعریف کاربر و محدود کردن او به بخشی از داده‌ها (مثلاً استان، شهر یا شعبه)؛
+- تعیین برنامه زمانی هفتگی برای نقش، دسترسی یا کاربر؛
+- مدیریت روش‌های ورود: ورود مستقیم، SSO با صفحه ورود اختصاصی هر اپلیکیشن، LDAP و Active Directory، ورود دومرحله‌ای.
 
-builder.Services.AddPermissionRegistration(options =>
-{
-    options.IdentityServer = new Uri(configuration["PermissionRegistration:IdentityServer"]!);
-    options.ServiceName = "order-service";
-    options.ClientId = "order-service";
-    options.ClientSecret = configuration["PermissionRegistration:ClientSecret"];
-});
+همه داده‌ها در Keycloak ذخیره می‌شوند. درگاه پایگاه داده‌ای ندارد و Redis فقط نقش Cache را دارد.
+
+## قابلیت‌ها
+
+| قابلیت | توضیح |
+|---|---|
+| اپلیکیشن و دسترسی | هر اپلیکیشن یک Client در Keycloak است. دسترسی‌ها به شکل `App:Module:Resource:Action` نام‌گذاری می‌شوند و سرویس‌ها می‌توانند دسترسی‌های خود را خودکار ثبت کنند. |
+| نقش سازمانی | هر نقش یک Group است. دسترسی‌ها با درخت و «انتخاب همه» در هر سطح، یا «همه دسترسی‌های خواندنی یک اپلیکیشن» انتخاب می‌شوند. |
+| محدوده داده | کلیدهای محدوده (مثل `province` و `city`) با سلسله‌مراتب والد و فرزند و فهرست مقادیر مجاز تعریف می‌شوند و روی کاربر ثبت می‌شوند. |
+| مدیریت تفویضی | هر نقش می‌تواند محدوده‌های الزامی داشته باشد. مدیر تفویضی فقط کاربران محدوده خودش را می‌بیند و فقط دسترسی‌هایی را می‌دهد که خودش دارد. |
+| برنامه زمانی | برنامه هفتگی روی سازمان، نقش، دسترسی یا کاربر، با اولویت کاربر ← دسترسی ← نقش ← سازمان. ورود، تمدید توکن و سرویس‌ها خارج از برنامه رد می‌شوند. |
+| چرخه کاربر | ایجاد، ویرایش، رمز عبور، رفع قفل، حذف رمز یک‌بارمصرف، اقدامات الزامی، نشست‌ها. |
+| تنظیمات احراز هویت | عمر توکن و نشست، سیاست رمز عبور، قفل حساب، ورود دومرحله‌ای، صفحه ورود فارسی، سرویس‌های ورود خارجی، LDAP و Active Directory. |
+| چندسازمانی | هر سازمان یک Realm جدا در Keycloak است. توکن هر سازمان فقط برای همان سازمان معتبر است. |
+| کنسول مدیریت | کنسول فارسی و راست‌به‌چپ با Radzen Blazor که منوها را بر اساس دسترسی‌های مدیر نشان می‌دهد. |
+
+## معماری در یک نگاه
+
+```mermaid
+flowchart LR
+    Admin[مدیر] -->|OIDC + PKCE| Console[کنسول مدیریت<br/>Identity.Admin]
+    Console -->|REST + Bearer| Gateway[درگاه هویت<br/>Identity.Gateway]
+    Service[سرویس‌های سازمان<br/>Avash.Identity.*] -->|ثبت دسترسی، برنامه زمانی| Gateway
+    User[کاربر] -->|ورود| Gateway
+    Gateway -->|Admin REST API| Keycloak[(Keycloak<br/>یک Realm برای هر سازمان)]
+    Gateway -.->|Cache| Redis[(Redis)]
+    Keycloak --> Postgres[(PostgreSQL)]
 ```
 
-A complete working consumer — ten `[RequirePermission]`-guarded endpoints plus the
-startup registration wiring — lives in [samples/OrderService.Sample](samples/OrderService.Sample/).
+جزئیات در [معماری](docs/architecture.md) آمده است.
 
-Protect an operation with a stable application permission:
+## شروع سریع
 
-```csharp
-[RequirePermission("Orders.Cancel")]
-public Task<IActionResult> Cancel(CancellationToken cancellationToken) => ...;
-```
-
-Authentication and authorization are independently installable. Authentication performs local issuer, audience, signature, expiration, not-before, algorithm, and token-type validation using Keycloak discovery and JWKS. It does not call the gateway on every request. Authorization evaluates trusted Keycloak role/permission claims locally.
-
-## Permission registration
-
-`Avash.Identity.PermissionRegistration` discovers permission metadata, creates a deterministic manifest hash, and registers directly with the gateway over REST using Keycloak client credentials. Registration is idempotent, namespace-scoped, retryable in the background (exponential backoff, default 8 retries), and never blocks application startup. RabbitMQ is not part of permission registration.
-
-Permissions are mirrored by the gateway into Keycloak **per-service client roles** (for example `orders-service: Orders.Cancel`), surfaced as the `permissions`/`permission` claims by one `oidc-usermodel-client-role-mapper` per client aggregating `resource_access.<client>.roles` → `permissions`. A newly registered permission is auto-mapped to the Admin Group (`key-admins`) and appears on the next refresh without re-login. Role provisioning and client-scope mapper creation are best-effort (409/race-safe) — a Keycloak outage never fails the registration response. Missing permissions are locally soft-deprecated, never deleted from Keycloak; drift is repaired via `POST /api/identity/permissions/reconcile-admin`.
-
-## Run with Docker (Oracle 21 default)
+پیش‌نیاز: ‏.NET 10 SDK و Docker. سپس:
 
 ```bash
-cd deploy
-docker compose up --build -d
-# Oracle XE 21 (Keycloak DB + gateway metadata), Keycloak 26.4, Vault, Redis,
-# Identity Gateway, and the order-service sample — all healthchecked.
-```
-
-Ports are overridable when the host already uses them: `GATEWAY_HTTP_PORT`,
-`KEYCLOAK_HTTP_PORT`, `ORDER_HTTP_PORT` (defaults 5080/8080/5180).
-
-Wait for the healthchecks (Oracle XE takes ~60s), then:
-
-| Endpoint | URL |
-| --- | --- |
-| Identity Gateway REST | http://localhost:5080 |
-| Business roles / scoped access | `POST /api/identity/business-roles`, `POST /api/identity/users`, `GET /api/identity/access-context` (claim `iam_access`) |
-| Scalar API reference (interactive, full Bearer "Try it" support) | http://localhost:5080/scalar |
-| OpenAPI document | http://localhost:5080/openapi/v1.json |
-| OIDC discovery + JWKS proxy (consumers point here) | http://localhost:5080/.well-known/openid-configuration |
-| Keycloak Admin Console | http://localhost:8080 (realm `company`) |
-| order-service sample | http://localhost:5180/api/orders |
-| Vault dev UI | http://localhost:8200 (token `root`) |
-| gRPC (IdentityService, KeyAdminService) | http://localhost:5080 |
-
-**Services never see Keycloak.** A consumer points `Identity:Authority` at the gateway; the
-gateway proxies OIDC discovery and rewrites `jwks_uri` to itself, and registration tokens are
-obtained through the gateway's login proxy. Keycloak's URL/realm/secrets exist only in the
-gateway's configuration.
-
-Quick test sequence:
-
-```bash
-# 1. Login through the gateway (Keycloak-issued token, never minted by .NET)
-curl -s -X POST http://localhost:5080/api/identity/auth/login \
-  -d "grant_type=password&client_id=identity-gateway&client_secret=gateway-development-only&username=admin&password=admin"
-
-# 2. Call a protected gateway route with the returned access_token
-curl -s http://localhost:5080/api/identity/me -H "Authorization: Bearer <token>"
-
-# 3. Call the sample service — its token comes from step 1, the audience already matches
-curl -s http://localhost:5180/api/orders -H "Authorization: Bearer <token>"
-```
-
-Dev credentials: user `admin` / password `admin` — member of `super-admins` (all registered
-service permissions) and `key-admins`. An end-to-end smoke test for the full target flow
-(super-admin login → create role → assign permissions → create scoped user → verify token
-claims) lives at `deploy/smoke-test.sh`:
-
-```bash
-cd deploy && ./smoke-test.sh
-```
-
-## External organization SSO
-
-An opaque organization token is validated through a dedicated adapter or the recommended Keycloak custom OAuth2 Grant Type SPI. The token is never logged or unnecessarily persisted. The validated immutable `(provider, subject)` is linked to or provisions a Keycloak user, only allowlisted attributes are synchronized, external roles require explicit mappings, and Keycloak issues the final token. The gateway never mints one.
-
-A signed OIDC/JWT provider should use native Keycloak Identity Brokering where possible. JWT Authorization Grant support and limitations are release-specific and must be tested against the pinned Keycloak version. Deprecated legacy external Token Exchange is not the default.
-
-## Key management
-
-Keycloak signs JWTs with RSA keys. Vault is the source of truth through release-pinned Keycloak Vault/key-provider extensions. Key IDs are immutable and rotate by overlap, for example `iam-rsa-2026-09` to `iam-rsa-2026-12`; old public keys remain in JWKS until all relevant old tokens expire. The .NET service has no private signing-key store or JWKS endpoint.
-
-## Business roles & scoped access
-
-Business roles are **Keycloak Groups** (e.g. `/Accountant`, `/Manager`); the gateway's `IBusinessRoleStore` is `KeycloakGroupBusinessRoleStore`. Permissions are **per-service client roles** (e.g. `order-service: Orders.Cancel`) aggregated into the `permissions` claim by one `oidc-usermodel-client-role-mapper` per client; assigning permissions to a business role maps the client roles onto its group (legacy realm-role mappings are still readable/removable). New permissions are auto-mapped to the admin groups (`super-admins` — the always-present unrestricted role — and `key-admins`) and reconciled via `POST /api/identity/permissions/reconcile-admin` without re-login (refresh picks up `resource_access` → `permissions`).
-
-Scoped assignments (`{role, scopes: {region:[...], branch:[...]}}`) are **Keycloak-attribute-driven, normalized and validated** against the dedicated config Group `/iam-scope-registry` (`scope.<key>` JSON `{displayName,description,isActive,valueType}` + `resource.<name>` multivalued, business-role Groups hold `authz.allowed-scopes`). User values live as multivalued attributes `authz.scope.<key>` (each value one entry), merged as Group ∪ User gated at write; the scalar `"test-key": "items-1"` form is normalized to `["items-1"]` via `ScopeDictionaryConverter`; unknown/inactive/disallowed scopes return field-level `400 ValidationProblem` (`assignments[0].scopes.test-key`). Oracle `identity-meta-db` retains only key/Vault metadata — the legacy Oracle scope tables were removed entirely (`deploy/migrate-oracle-to-keycloak.sh` migrates any old dumps into the registry group). The `authz-scopes` client scope exposes `authz.scope.*` as flat claims, hardened so only admins can write them via the User Profile. Registry data is cached in `IMemoryCache` (L1) + Redis (L2, `Identity:Redis:Configuration`) with invalidation on every role/scope mutation. Filter safely in consumers via `ScopeFilterService.ApplyAsync(query, effectiveScopes, ResourceKeys.Orders)` — deny-by-default, parameterized `Contains`/`IN`, no `EF.Property` on client-supplied names. See `samples/OrderService.Sample` (`ScopeFilters.cs`, `/api/orders/scoped`).
-
-### Adding a new scope (no DTO change)
-
-1. `POST /api/identity/scopes` with `{"key":"cost-center"}` — writes `scope.cost-center` into `/iam-scope-registry` and provisions the `authz.scope.cost-center` claim mapper immediately (no restart). 2. Add `resource.<name>` → `cost-center` in the registry group attributes. 3. Optionally set `authz.allowed-scopes` on business-role groups to restrict it. 4. Optionally register `IScopeValueValidator { ScopeKey = "cost-center" }`. 5. Register `IScopeFilterHandler<OrderDto> { ScopeKey = "cost-center", ResourceKey = ResourceKeys.Orders }` in the consuming service — unknown keys are rejected until step 1.
-
-## Build and test
-
-The environment must have the .NET 10 SDK and container runtime available:
-
-```bash
-dotnet restore IdentityService.slnx
 dotnet build IdentityService.slnx
-dotnet test IdentityService.slnx
+dotnet run --project src/Identity.AppHost --launch-profile http
 ```
 
-Integration tests use Testcontainers for the pinned Keycloak, PostgreSQL, Redis, and organization validation stub. Extension compatibility tests run separately against the pinned and next supported Keycloak releases.
+| سرویس | آدرس |
+|---|---|
+| کنسول مدیریت | `http://localhost:5090` |
+| درگاه هویت | `http://localhost:5080` |
+| ‏Keycloak | `https://localhost:18080` |
+| داشبورد Aspire | `http://localhost:15140` |
+| سرویس نمونه | `http://localhost:5081` |
 
-## Operational non-goals
+کاربر پیش‌فرض محیط توسعه `admin` با رمز `admin` در هر دو سازمان `company` و `acme` است. راهنمای کامل اجرا در [راهنمای اجرا](docs/running.md) است.
 
-- No second user/credential/session/token database.
-- No custom JWT issuer in .NET.
-- No raw-token, password, private-key, or Vault-secret logging.
-- No remote authorization call on every normal application request.
-- No automatic privilege assignment from external roles.
-- No automatic deletion of permissions from a manifest.
+## کنسول مدیریت
 
-## Database(Oracle only provided) | Create user and schema for database queries
+‏`http://localhost:5090` را باز کنید، سازمان را انتخاب کنید و در صفحه ورود فارسی Keycloak وارد شوید. بخش‌های کنسول:
 
-These queries provide schema, user and access to work service with database
+- داشبورد، کاربران، نقش‌ها، اپلیکیشن‌ها و دسترسی‌ها؛
+- محدوده‌ها و مقادیر مجاز، برنامه زمانی پیش‌فرض سازمان؛
+- تنظیمات احراز هویت و فهرست سازمان‌ها.
 
-```sql
-CREATE USER IDENTITY_META IDENTIFIED BY "identity-development-only" QUOTA UNLIMITED ON USERS;
-GRANT CONNECT, RESOURCE TO IDENTITY_META;
+هر بخش فقط برای مدیری نمایش داده می‌شود که دسترسی خواندن آن را دارد.
+
+## اتصال یک سرویس
+
+یک سرویس با بسته‌های `Avash.Identity.*` به درگاه وصل می‌شود:
+
+```csharp
+builder.Services.AddAvashAuthentication(o =>
+{
+    o.Authority = "http://localhost:5080";          // درگاه، نه Keycloak
+    o.AcceptIssuerFromDiscovery = true;
+});
+builder.Services.AddAvashAuthorization(o => o.ApplicationId = "order-service");
+builder.Services.AddAvashAccessSchedules(o => o.GatewayBaseUrl = "http://localhost:5080");
+builder.Services.AddPermissionRegistration(o =>
+{
+    o.IdentityServer = new Uri("http://localhost:5080");
+    o.ServiceName = "order-service";
+    o.ClientId = "order-service";
+    o.ClientSecret = builder.Configuration["PermissionRegistration:ClientSecret"];
+});
+
+app.MapGet("/api/orders", ListOrders).RequireAuthorization("Orders:Order:View");
 ```
+
+نمونه کامل در [`samples/OrderService.Sample`](samples/OrderService.Sample/) است. فهرست درخواست‌های API در [`Identity.Gateway.http`](src/Identity.Gateway/Identity.Gateway.http) و [خلاصه API](docs/api.md) آمده است.
+
+## تست‌ها
+
+```bash
+dotnet test IdentityService.slnx                          # تست‌های واحد و یکپارچگی
+IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests       # تست‌های سرتاسری روی Stack واقعی
+bash scripts/smoke-test.sh                                # سناریوی کسب‌وکار روی Stack در حال اجرا
+```
+
+تست‌های سرتاسری خودشان Stack را با `Aspire.Hosting.Testing` بالا می‌آورند. برای اجرای آن‌ها Docker لازم است و Stack توسعه باید خاموش باشد.
+
+## مستندات بیشتر
+
+- [معماری و مدل داده در Keycloak](docs/architecture.md)
+- [راهنمای اجرا و عیب‌یابی](docs/running.md)
+- [خلاصه API](docs/api.md)
+- ‏[CLAUDE.md](CLAUDE.md): راهنمای توسعه و تصمیم‌های الزام‌آور معماری
+
+مجموعه Postman در پوشه `postman` قدیمی است و نام دسترسی‌های قبلی را دارد؛ مرجع به‌روز فایل `Identity.Gateway.http` است.
+
+## محدودیت‌های شناخته‌شده
+
+- ورود با پیامک هنوز پیاده‌سازی نشده است و هر وقت لازم شد اضافه می‌شود.
+- برنامه زمانی در خود صفحه ورود Keycloak اعمال نمی‌شود؛ ورود از طریق درگاه، تمدید توکن و سرویس‌های متصل آن را اعمال می‌کنند. افزونه Keycloak برای این کار کار بعدی است.
+- ساخت Realm برای سازمان جدید هنوز خودکار نیست و طبق [راهنمای اجرا](docs/running.md) انجام می‌شود.
+- کنسول توکن‌ها را در حافظه سرور نگه می‌دارد؛ با راه‌اندازی دوباره کنسول، مدیران باید دوباره وارد شوند.
