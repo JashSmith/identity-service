@@ -18,4 +18,4 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-<ItemGroup><ProjectReference Include="../../src/Avash.Identity.Authentication/Avash.Identity.Authentication.csproj" /></ItemGroup></Project>
+<ItemGroup><ProjectReference Include="../../src/Avash.Identity.Authentication/Avash.Identity.Authentication.csproj" /><ProjectReference Include="../../src/Avash.Identity.Authentication.AspNetCore/Avash.Identity.Authentication.AspNetCore.csproj" /></ItemGroup></Project>

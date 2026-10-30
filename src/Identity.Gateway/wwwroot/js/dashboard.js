@@ -917,8 +917,9 @@
 
   // 0. Database Diagnostics Loader
   async function loadDatabaseInfo() {
+    if (!state.token) return;
     try {
-      const res = await fetch('/api/system/database-info');
+      const res = await apiFetch('/api/system/database-info');
       if (res.ok) {
         const db = await res.json();
         const rawProvider = db.provider || 'postgres';

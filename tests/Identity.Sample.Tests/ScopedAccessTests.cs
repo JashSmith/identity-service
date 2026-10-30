@@ -245,11 +245,12 @@ public sealed class GatewayPermissionsRegistrationTests
     {
         var src = new Identity.Gateway.IamPermissionSource();
         var perms = src.GetPermissions();
-        Assert.Equal(8, perms.Count);
+        Assert.Equal(9, perms.Count);
         Assert.Contains(perms, p => p.Name == Identity.Gateway.IamPermissions.UsersRead);
         Assert.Contains(perms, p => p.Name == Identity.Gateway.IamPermissions.ScopesManage);
         Assert.Contains(perms, p => p.Name == Identity.Gateway.IamPermissions.PermissionsRead);
         Assert.Contains(perms, p => p.Name == Identity.Gateway.IamPermissions.PermissionsRegister);
+        Assert.Contains(perms, p => p.Name == Identity.Gateway.IamPermissions.SystemRead);
     }
 
     [Fact]

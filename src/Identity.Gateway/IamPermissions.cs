@@ -10,4 +10,5 @@ public static class IamPermissions
     public const string ScopesManage = "identity.scopes.manage";
     public const string PermissionsRead = "identity.permissions.read";
     public const string PermissionsRegister = "identity.permissions.register";
+    public const string SystemRead = "identity.system.read";
 }
