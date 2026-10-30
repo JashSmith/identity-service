@@ -53,8 +53,9 @@ public sealed class ProtectedUserAttributesTests
         var request = new UpdateUserRequest(null, null, null, null,
             Attributes: new Dictionary<string, string[]> { ["authz.scope.region"] = ["*"] });
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            provisioner.UpdateUserAsync("user-1", request, CancellationToken.None));
+        var updated = await provisioner.UpdateUserAsync("user-1", request, CancellationToken.None);
+
+        Assert.Equal("user.protected_attributes", updated.Error?.Code);
 
         Assert.DoesNotContain(HttpMethod.Put, requests);
     }
