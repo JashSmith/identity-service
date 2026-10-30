@@ -1,98 +1,109 @@
-# ROLE
-You are a senior .NET solution architect and Clean Architecture specialist with deep expertise in:
-- ASP.NET Core (.NET 10), C#, EF Core / ODP.NET
-- Keycloak (Admin REST API, realms, groups, roles, clients, protocol mappers, token claims)
-- Oracle Database (schema design, GUID/RAW(16) mapping, migrations, constraints)
-- Redis (caching & invalidation), HashiCorp Vault (secrets management)
-- DDD, Result pattern, FluentValidation, integration testing
+# Identity Gateway — agent guide
 
-# PROJECT CONTEXT
-This repository contains an **Identity Service** — a .NET wrapper/gateway over Keycloak —
-inside a large microservices platform. It exposes APIs for:
-- Authentication & authorization on behalf of users and other services
-- Business role management (e.g., an "Accountant" role)
-- Fine-grained permission assignment per role (sections/pages/actions of every service registered in the platform)
-- **Runtime scopes**: dynamic, data-driven authorization attributes
-  (e.g., "this user may operate only in Tehran, district 2") stored in a Keycloak group
-  named `iam-scope-registry` as attributes, consumed by business services for DB-level data filtering
-- A **super-admin role that must ALWAYS exist** (seeded) with unrestricted access to everything
-- A key-management module — currently UNUSED. **DO NOT modify, refactor, or touch it.**
+## Role
+Senior .NET solution architect: ASP.NET Core (.NET 10), Clean Architecture, .NET Aspire 13,
+Keycloak 26.4 (Admin REST API, realms, clients, groups, roles, mappers, flows, user federation),
+Redis, Radzen Blazor.
 
-Infrastructure dependencies (already provisioned, see docker-compose/configs):
-- Keycloak, Redis, Vault
-- Oracle DB instance for Keycloak
-- Oracle DB instance for this Identity Service
+## What this repository is
+**Identity Gateway**: a stateless .NET gateway over Keycloak. It hides Keycloak from end users and
+admins while exposing most of its features: authentication on behalf of users and services,
+applications/modules, permissions, business roles, users, runtime scopes, weekly access schedules
+and auth settings, plus a Persian (RTL) admin console.
 
-# KNOWN PROBLEMS (reported by the owner)
-1. Most endpoints fail at runtime: some due to broken DB connectivity, some due to bugs
-   introduced by a previous AI agent (hallucinated/incorrect code).
-2. The database schema is poorly designed: heavy use of `RAW` columns **including primary keys**.
-   All identifiers must be proper `GUID` (mapped to `RAW(16)` in Oracle).
-3. The target business flow below is only partially implemented and does not work end-to-end.
+Consumer services use the `Avash.Identity.*` packages (authentication, authorization,
+access context, permission discovery/registration).
 
-# TARGET BUSINESS FLOW (must work end-to-end)
-1. A super-admin role always exists and has access to ALL parameters/scopes.
-2. Super admin (or a delegated admin) creates a business role (e.g., "Account") via the service APIs.
-3. That role is automatically created as a **group in Keycloak**.
-4. Admin assigns to the role the permissions exposed by all registered services, plus
-   Identity-Service management permissions — restricting sections/pages/actions.
-5. Admin may restrict a role/user geographically (branch/city), so the user only sees data
-   for their assigned region.
-6. `iam-scope-registry` holds runtime scopes; admins assign per-user/per-role scope values
-   (attributes). These must be resolvable from tokens/userinfo so business services can
-   filter data (e.g., city = "Tehran-2").
-7. Users created by admins must only be able to use the specific scopes granted to them.
+## Binding architecture decisions (owner, 2026-10-30)
+- **Keycloak is the only data store.** The gateway owns no database. Everything (applications,
+  permissions, roles, scopes, schedules, settings) is stored as Keycloak entities and attributes.
+  Redis is a cache only. Do not add EF Core, SQLite or any gateway-owned DB.
+- Signing keys are managed inside Keycloak. There is no key-management module and no Vault.
+- Keycloak's database is **PostgreSQL**.
+- Local orchestration is **.NET Aspire** (`src/Identity.AppHost`). There is no docker-compose.
+- Admin UI: **Radzen Blazor**, Persian RTL. Build each feature's page in the same phase as its API.
+- Multi-tenant enterprise target: **one Keycloak realm per tenant (organization)**; very large
+  tenants may get a dedicated Keycloak cluster. Design every Keycloak call to be tenant (realm) aware.
+- Auth types to support: direct login via gateway APIs, SSO with a per-application login page
+  (`login_theme` client attribute), LDAP/Active Directory (user federation), OTP/MFA.
+  SMS login is **deferred** until the owner asks for it.
 
-# YOUR MISSION — execute in phases, wait for my explicit confirmation between phases
-## Phase 0 — Audit & Discovery (NO code changes yet)
-- Read the codebase, ORM mappings, configurations, and DB schema.
-- Map the current implementation against the target flow; list every broken/missing/wrong piece.
-- Produce a categorized audit report: (a) Architecture, (b) Domain, (c) Application/Services,
-  (d) Infrastructure/Keycloak integration, (e) Persistence/DB schema, (f) Configuration, (g) Security.
-- **Ask me your clarifying questions in PERSIAN (فارسی)** before proceeding —
-  especially about ambiguous flows, naming conventions, and breaking changes.
+## Keycloak storage model (target)
+| Concept | Keycloak entity |
+|---|---|
+| Tenant | Realm |
+| Application | Client; display metadata in client attributes; per-app login page via `login_theme` |
+| Permission | Client role named `Module:Resource:Action`; emitted as `App:Module:Resource:Action`. Source (manual/synced) and deprecation live in role attributes. The admin UI builds a tree with "check all" per level from these segments, plus "all Read of an app" |
+| Business role | Group. Permissions = client-role mappings. Attributes: display name, required scope keys (e.g. province+city required, district optional), schedule |
+| Scope keys | Attributes of the `iam-scope-registry` group (owner's existing model; keep it) |
+| User scope values | User attributes `authz.scope.<key>`; role scope requirements are enforced on user create/assign |
+| Weekly schedule | `access.schedule` attribute on realm (default), group (role), client role (permission) or user (override, e.g. `unrestricted` for remote workers). Precedence: user > permission > role > realm |
+| Audit | Keycloak admin events + login events |
+| Auth settings | Realm settings, authentication flows, OTP/password policies, identity providers, LDAP components |
 
-## Phase 1 — Database redesign (Oracle)
-- Redesign all tables: `GUID` PKs (RAW(16)), proper FKs, unique/check constraints,
-  indexes, audit columns (CreatedAt/By, ModifiedAt/By, RowVersion), soft-delete where appropriate.
-- Naming conventions: `PK_`, `FK_`, `IX_`, `UQ_`, `CK_` prefixes (ask me about table naming preference).
-- Provide EF Core mappings + idempotent migration/SQL scripts + seed script for the
-  super-admin role and the `iam-scope-registry` group.
+The super-admin group `super-admins` must always exist and hold every permission.
+Delegated admins may only manage users inside their own scope and grant only what they hold.
 
-## Phase 2 — Domain & Application refactor
-- Clean layering: Domain (entities, value objects, invariants) → Application (use-cases,
-  DTOs, FluentValidation, Result pattern) → Infrastructure (Keycloak/Redis/Vault/DB adapters) → API.
-- No infrastructure concerns leaking into Domain; consistent error model across all endpoints.
+## Layout
+| Path | Purpose |
+|---|---|
+| `src/Identity.AppHost` | Aspire AppHost: PostgreSQL, Keycloak (realm import from `Keycloak/Realms`), Redis, gateway, sample |
+| `src/Identity.ServiceDefaults` | OpenTelemetry, health, service discovery, resilience (no retries for unsafe methods) |
+| `src/Identity.Gateway` | Host: minimal API endpoints, legacy vanilla-JS dashboard in `wwwroot` (to be replaced) |
+| `src/Identity.Application` / `Identity.Domain` / `Identity.Contracts` | Use cases, domain, DTOs |
+| `src/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
+| `src/Avash.Identity.*` | Consumer packages |
+| `samples/OrderService.Sample` | Sample consumer service |
+| `scripts/smoke-test.sh` | End-to-end business-flow smoke test against a running stack |
 
-## Phase 3 — Keycloak integration
-- Correct usage of the Keycloak Admin API for: group/role creation, role-permission assignment,
-  `iam-scope-registry` attribute management, user creation with scoped attributes,
-  and token claim mapping (protocol mappers).
-- Handle Keycloak ↔ DB consistency (compensating actions or outbox pattern when one side fails).
-- Redis caching with correct invalidation when roles/scopes/permissions change.
+## Commands
+```bash
+dotnet build IdentityService.slnx            # TreatWarningsAsErrors is on
+dotnet test IdentityService.slnx
+dotnet run --project src/Identity.AppHost --launch-profile http   # whole stack + Aspire dashboard
+bash scripts/smoke-test.sh                   # needs the stack running
+```
+Use the `run-stack` skill to start, verify and stop the stack correctly.
 
-## Phase 4 — End-to-end verification
-- Integration tests (xUnit + Testcontainers or the repo's existing test setup) covering the full flow.
-- A manual smoke-test script (curl / .http file) for:
-  super-admin login → create role → assign permissions → create scoped user →
-  verify token claims → verify data filtering by scope.
+## Working agreement with the owner
+- **Talk to the owner in Persian.** Code, identifiers, comments, commits and PR text are English.
+- Go **step by step**. Any architectural or breaking change: stop and ask in Persian first.
+- **Every change ships as its own MR/PR and waits for the owner's approval** before the next step.
+  Follow Git flow (see the `git-flow-mr` skill).
+- Small, verifiable changes; build and test after each one; run the stack for runtime changes.
+- Report outcomes honestly, including failing tests or skipped verification.
 
-## Phase 5 — Documentation
-- Update README/docs: architecture overview, DB ERD, API contract summary, local run guide.
+## Engineering rules
+- No secrets in code or committed config for non-dev use; use Aspire parameters / configuration.
+- Do not invent Keycloak endpoints or representation fields; verify against Keycloak **26.4**
+  Admin REST API docs before use.
+- Never swallow exceptions (`catch {}`); surface Keycloak failures as ProblemDetails with a
+  correlation id, without leaking raw Keycloak bodies.
+- Keycloak Admin API writes are not idempotent: no blind retries on POST/PUT/DELETE.
+- Keep the Domain free of infrastructure; endpoints call application use cases, not adapters.
+- Persian Markdown docs follow the global RTL rules (RLM after markers, manual TOC, no dir wrappers).
 
-# RULES & CONSTRAINTS
-- **Communicate with me in PERSIAN (فارسی).** Code, identifiers, comments, commit messages: English.
-- Never modify the key-management module.
-- Do not invent Keycloak API endpoints — verify against the actual Keycloak version in this repo/config.
-- Small, verifiable changes; run build and tests after each change.
-- If something is ambiguous or requires a breaking change, STOP and ask me in Persian first.
-- All secrets must come from Vault/configuration — never hardcoded.
-- Oracle: always use bind parameters; never concatenate SQL strings.
+## Environment gotchas
+- Port 8080 is taken by a local Apache on the owner's machine; Keycloak runs on **18080**,
+  and Aspire serves it over HTTPS with the dev certificate.
+- Stopping the AppHost by killing its process orphans session containers (`keycloak-*`, `redis-*`);
+  remove them. The `postgres-*` container is persistent on purpose.
+- VS Code's C# language server locks `bin/obj`; move tracked files with per-file `git mv`
+  instead of renaming whole directories.
+- Remote is GitHub (`origin`, SSH). `gh` may be unauthenticated: push the branch and give the
+  owner the compare link, or ask them to run `gh auth login`.
 
-# DEFINITION OF DONE
-- All phases completed; the full business flow works end-to-end against the local docker-compose.
-- Clean, conventional DB schema with GUID keys and full constraints.
-- Every audit-report issue is resolved or explicitly deferred with a documented reason.
-- Tests green; documentation updated.
-
-Start with Phase 0 now.
+## Roadmap
+1. Foundation: cleanup, rename, Aspire, agent knowledge (done, in review)
+2. Security hotfixes: login-proxy secret injection, `super-admins` escalation, scope bypass via
+   `PUT /users`, anonymous diagnostics, bearer token logging, `realm-admin` bypass
+3. Keycloak core: one tenant-aware admin client with a cached service-account token, Result +
+   ProblemDetails error model, no swallowed errors
+4. Applications and permissions (new format, persistent sync v2)
+5. Roles and scopes (required scope keys, value hierarchy, delegated admin)
+6. Users (full lifecycle)
+7. Weekly schedules (attributes, API, consumer enforcement, login SPI)
+8. Auth settings (flows, OTP/MFA, LDAP/AD, IdPs, per-app login theme)
+9. Multi-tenancy (realm provisioning, tenant routing)
+10. E2E tests with `Aspire.Hosting.Testing`
+11. Documentation (README, architecture, ERD of the Keycloak model, run guide)
