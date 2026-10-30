@@ -20,6 +20,8 @@ public sealed class KeycloakGroupBusinessRoleStore(
     ILogger<KeycloakGroupBusinessRoleStore> logger) : IBusinessRoleStore
 {
     private const string Resource = "role";
+    private const string RequiredScopesAttribute = "iam.required_scopes";
+    private const string AllowedScopesAttribute = "authz.allowed-scopes";
     private readonly KeycloakAdminApi _api = new(http, opts.Value, tokenProvider, logger);
 
     private sealed record GroupRef(string Id, string Name, string Path, Dictionary<string, string[]> Attributes);
@@ -56,7 +58,7 @@ public sealed class KeycloakGroupBusinessRoleStore(
     }
 
     public async Task<Result<BusinessRoleDto>> CreateAsync(
-        string name, string? description, IReadOnlyCollection<string> permissions, CancellationToken ct)
+        string name, string? description, IReadOnlyCollection<string> permissions, RoleScopePolicy? scopePolicy, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         name = name.Trim();
@@ -72,9 +74,10 @@ public sealed class KeycloakGroupBusinessRoleStore(
         var resolved = await ResolvePermissionsAsync(permissions, ct);
         if (!resolved.IsSuccess) return resolved.Error!;
 
-        var body = new Dictionary<string, object> { ["name"] = name };
-        if (!string.IsNullOrWhiteSpace(description))
-            body["attributes"] = new Dictionary<string, string[]> { ["description"] = [description] };
+        var attributes = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(description)) attributes["description"] = [description];
+        ApplyPolicy(attributes, scopePolicy ?? RoleScopePolicy.None);
+        var body = new Dictionary<string, object> { ["name"] = name, ["attributes"] = attributes };
 
         var created = await _api.SendAsync(HttpMethod.Post, "groups", body, Resource, ct);
         if (!created.IsSuccess)
@@ -118,6 +121,31 @@ public sealed class KeycloakGroupBusinessRoleStore(
         var updated = await _api.SendWithoutResultAsync(HttpMethod.Put, $"groups/{Escape(group.Value.Id)}", body, Resource, ct);
         if (!updated.IsSuccess) return updated.Error!;
         return await GetAsync(name, ct);
+    }
+
+    public async Task<Result> SetScopePolicyAsync(string name, RoleScopePolicy policy, CancellationToken ct)
+    {
+        var group = await FindGroupAsync(name, ct);
+        if (!group.IsSuccess) return group.Error!;
+        var attributes = new Dictionary<string, string[]>(group.Value.Attributes, StringComparer.Ordinal);
+        ApplyPolicy(attributes, policy);
+        return await _api.SendWithoutResultAsync(HttpMethod.Put, $"groups/{Escape(group.Value.Id)}",
+            new Dictionary<string, object> { ["name"] = group.Value.Name, ["path"] = group.Value.Path, ["attributes"] = attributes },
+            Resource, ct);
+    }
+
+    /// <summary>Required keys are always allowed: they are added to a non-empty allowed list.</summary>
+    private static void ApplyPolicy(Dictionary<string, string[]> attributes, RoleScopePolicy policy)
+    {
+        var required = policy.Required.Where(k => !string.IsNullOrWhiteSpace(k)).Select(k => k.Trim())
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var allowed = policy.Allowed.Where(k => !string.IsNullOrWhiteSpace(k)).Select(k => k.Trim()).ToArray();
+        if (allowed.Length > 0) allowed = allowed.Concat(required).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
+        if (required.Length > 0) attributes[RequiredScopesAttribute] = required;
+        else attributes.Remove(RequiredScopesAttribute);
+        if (allowed.Length > 0) attributes[AllowedScopesAttribute] = allowed;
+        else attributes.Remove(AllowedScopesAttribute);
     }
 
     public async Task<Result> DeleteAsync(string name, CancellationToken ct)
@@ -217,7 +245,9 @@ public sealed class KeycloakGroupBusinessRoleStore(
         if (!assigned.IsSuccess) return assigned.Error!;
         var description = group.Attributes.TryGetValue("description", out var d) ? d.FirstOrDefault() : null;
         var permissions = assigned.Value.Select(r => r.Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-        return new BusinessRoleDto(group.Name, description, true, permissions);
+        return new BusinessRoleDto(group.Name, description, true, permissions,
+            group.Attributes.GetValueOrDefault(RequiredScopesAttribute, []),
+            group.Attributes.GetValueOrDefault(AllowedScopesAttribute, []));
     }
 
     /// <summary>Roles mapped directly onto the group: realm roles and the client roles of every client, in one call.</summary>

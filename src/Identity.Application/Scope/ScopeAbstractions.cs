@@ -1,3 +1,5 @@
+using Identity.Contracts;
+
 namespace Identity.Application.Scope;
 
 public interface IScopeValueValidator
@@ -41,9 +43,16 @@ public interface IScopeDefinitionLookup
 
     /// <summary>True when the role restricts nothing (no authz.allowed-scopes) or lists the scope.</summary>
     Task<Result<bool>> IsScopeAllowedForRoleAsync(string role, string scopeKey, CancellationToken ct);
+
+    /// <summary>Parent key and value catalog of an active scope; scope.not_found otherwise.</summary>
+    Task<Result<ScopeRules>> GetRulesAsync(string key, CancellationToken ct);
 }
 
-public sealed record ScopeDefinitionDto(string Key, string DisplayName, string? Description, bool IsActive, string ValueType);
+public sealed record ScopeDefinitionDto(string Key, string DisplayName, string? Description, bool IsActive, string ValueType,
+    string? Parent = null);
+
+/// <summary>What validation needs to know about one scope key.</summary>
+public sealed record ScopeRules(string Key, string? Parent, IReadOnlyCollection<ScopeValueDto> Values);
 
 public sealed record ResourceScopeMappingDto(string Key, IReadOnlyCollection<string> Scopes);
 
@@ -59,9 +68,11 @@ public interface IScopeRegistryAdmin
     Task<Result<IReadOnlyCollection<ResourceScopeMappingDto>>> ListResourcesAsync(CancellationToken ct);
     Task<Result<IReadOnlyCollection<string>>> GetResourcesForScopeAsync(string key, CancellationToken ct);
     Task<Result<ScopeDefinitionDto>> CreateScopeAsync(string key, string? displayName, string? description,
-        IReadOnlyCollection<string>? resources, CancellationToken ct);
+        IReadOnlyCollection<string>? resources, string? parent, CancellationToken ct);
     Task<Result<ScopeDefinitionDto>> UpdateScopeAsync(string key, string? displayName, string? description, bool? isActive,
-        IReadOnlyCollection<string>? resources, CancellationToken ct);
+        IReadOnlyCollection<string>? resources, string? parent, CancellationToken ct);
+    Task<Result<IReadOnlyCollection<ScopeValueDto>>> GetValuesAsync(string key, CancellationToken ct);
+    Task<Result> SetValuesAsync(string key, IReadOnlyCollection<ScopeValueDto> values, CancellationToken ct);
     Task<Result> DeleteScopeAsync(string key, CancellationToken ct);
     Task<Result> SetScopeResourcesAsync(string key, IReadOnlyCollection<string> resources, CancellationToken ct);
 }

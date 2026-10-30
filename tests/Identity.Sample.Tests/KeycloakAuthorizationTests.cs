@@ -50,7 +50,7 @@ public sealed class KeycloakAuthorizationTests
             Task.FromResult(_roles.Contains(name) ? Result<BusinessRoleDto>.Success(Dto(name)) : Missing(name));
         public Task<Result<IReadOnlyCollection<BusinessRoleDto>>> ListAsync(CancellationToken ct) =>
             Task.FromResult(Result<IReadOnlyCollection<BusinessRoleDto>>.Success(_roles.Select(Dto).ToArray()));
-        public Task<Result<BusinessRoleDto>> CreateAsync(string name, string? desc, IReadOnlyCollection<string> perms, CancellationToken ct)
+        public Task<Result<BusinessRoleDto>> CreateAsync(string name, string? desc, IReadOnlyCollection<string> perms, RoleScopePolicy? policy, CancellationToken ct)
         { _roles.Add(name); return Task.FromResult(Result<BusinessRoleDto>.Success(Dto(name))); }
         public Task<Result<BusinessRoleDto>> UpdateAsync(string name, string? desc, CancellationToken ct) => GetAsync(name, ct);
         public Task<Result> DeleteAsync(string name, CancellationToken ct) =>
@@ -60,6 +60,7 @@ public sealed class KeycloakAuthorizationTests
         public Task<Result> AddPermissionsAsync(string name, IReadOnlyCollection<string> perms, CancellationToken ct) => Task.FromResult(Result.Success());
         public Task<Result> RemovePermissionAsync(string name, string perm, CancellationToken ct) => Task.FromResult(Result.Success());
         public Task<Result> SetPermissionsAsync(string name, IReadOnlyCollection<string> perms, CancellationToken ct) => Task.FromResult(Result.Success());
+        public Task<Result> SetScopePolicyAsync(string name, RoleScopePolicy policy, CancellationToken ct) => Task.FromResult(Result.Success());
     }
 
     private static HttpResponseMessage Json(object obj, HttpStatusCode code = HttpStatusCode.OK)

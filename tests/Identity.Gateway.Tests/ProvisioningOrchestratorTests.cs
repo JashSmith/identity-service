@@ -78,13 +78,14 @@ public sealed class ProvisioningOrchestratorTests
         public Task<Result<BusinessRoleDto>> GetAsync(string name, CancellationToken ct) =>
             Task.FromResult(names.Contains(name) ? Result<BusinessRoleDto>.Success(Dto(name)) : Error.NotFound("role.not_found", name));
         public Task<Result<IReadOnlyCollection<BusinessRoleDto>>> ListAsync(CancellationToken ct) => throw new NotSupportedException();
-        public Task<Result<BusinessRoleDto>> CreateAsync(string name, string? description, IReadOnlyCollection<string> permissions, CancellationToken ct) => throw new NotSupportedException();
+        public Task<Result<BusinessRoleDto>> CreateAsync(string name, string? description, IReadOnlyCollection<string> permissions, RoleScopePolicy? scopePolicy, CancellationToken ct) => throw new NotSupportedException();
         public Task<Result<BusinessRoleDto>> UpdateAsync(string name, string? description, CancellationToken ct) => throw new NotSupportedException();
         public Task<Result> DeleteAsync(string name, CancellationToken ct) => throw new NotSupportedException();
         public Task<Result<IReadOnlyCollection<string>>> GetEffectivePermissionsAsync(string name, CancellationToken ct) => throw new NotSupportedException();
         public Task<Result> AddPermissionsAsync(string name, IReadOnlyCollection<string> permissions, CancellationToken ct) => throw new NotSupportedException();
         public Task<Result> RemovePermissionAsync(string name, string permission, CancellationToken ct) => throw new NotSupportedException();
         public Task<Result> SetPermissionsAsync(string name, IReadOnlyCollection<string> permissions, CancellationToken ct) => throw new NotSupportedException();
+        public Task<Result> SetScopePolicyAsync(string name, RoleScopePolicy policy, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private static ScopedRoleAssignmentDto Assignment(string role, string region = "tehran") =>

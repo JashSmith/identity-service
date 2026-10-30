@@ -165,10 +165,25 @@ public sealed class BusinessRoleStoreTests
     {
         var kc = WithOrdersPermissions();
 
-        var created = await Store(kc).CreateAsync("Accountant", "desc", ["orders:Sales:Order:Read"], Ct);
+        var created = await Store(kc).CreateAsync("Accountant", "desc", ["orders:Sales:Order:Read"], null, Ct);
 
         Assert.True(created.IsSuccess);
         Assert.Equal(["orders:Sales:Order:Read"], created.Value.Permissions);
+    }
+
+    [Fact]
+    public async Task Create_stores_the_scope_policy_and_always_allows_required_keys()
+    {
+        var kc = new FakeKeycloak();
+
+        var created = await Store(kc).CreateAsync("TehranManager", null, [],
+            new RoleScopePolicy(["province", "city"], ["district"]), Ct);
+
+        Assert.True(created.IsSuccess);
+        var body = JsonDocument.Parse(kc.Requests.Single(r => r.Method == HttpMethod.Post && r.Path.EndsWith("/groups", StringComparison.Ordinal)).Body!);
+        var attributes = body.RootElement.GetProperty("attributes");
+        Assert.Equal(["city", "province"], attributes.GetProperty("iam.required_scopes").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(["city", "district", "province"], attributes.GetProperty("authz.allowed-scopes").EnumerateArray().Select(e => e.GetString()));
     }
 
     [Fact]
@@ -176,7 +191,7 @@ public sealed class BusinessRoleStoreTests
     {
         var kc = WithOrdersPermissions();
 
-        var created = await Store(kc).CreateAsync("Accountant", null, ["orders:Sales:Order:Read", "orders:Sales:Order:Fly"], Ct);
+        var created = await Store(kc).CreateAsync("Accountant", null, ["orders:Sales:Order:Read", "orders:Sales:Order:Fly"], null, Ct);
 
         Assert.Equal("permission.not_found", created.Error?.Code);
         Assert.Contains("orders:Sales:Order:Fly", created.Error!.Message);
@@ -190,7 +205,7 @@ public sealed class BusinessRoleStoreTests
         kc.FailWith = (method, path) => method == HttpMethod.Post && path.Contains("/role-mappings/", StringComparison.Ordinal)
             ? HttpStatusCode.Forbidden : null;
 
-        var created = await Store(kc).CreateAsync("Accountant", null, ["orders:Sales:Order:Read"], Ct);
+        var created = await Store(kc).CreateAsync("Accountant", null, ["orders:Sales:Order:Read"], null, Ct);
 
         Assert.Equal("keycloak.access_denied", created.Error?.Code);
         Assert.Empty(kc.Groups);
@@ -203,7 +218,7 @@ public sealed class BusinessRoleStoreTests
         var kc = new FakeKeycloak();
         kc.Groups.Add(new("g1", "Accountant", []));
 
-        var created = await Store(kc).CreateAsync("Accountant", null, [], Ct);
+        var created = await Store(kc).CreateAsync("Accountant", null, [], null, Ct);
 
         Assert.Equal("role.already_exists", created.Error?.Code);
         Assert.Empty(kc.Writes);

@@ -14,7 +14,9 @@ public sealed class ProvisioningOrchestrator(
     IBusinessRoleStore roles,
     IUserRoleMapping roleMapping,
     ScopeAssignmentValidator? scopeValidator = null,
-    IUserProfileRequirements? profileRequirements = null)
+    IUserProfileRequirements? profileRequirements = null,
+    DelegationGuard? delegation = null,
+    IScopeDefinitionLookup? scopeLookup = null)
 {
     public async Task<Result<(UserDto User, ScopedAccessDocument Scoped)>> CreateUserWithAssignmentsAsync(
         CreateUserRequest request, CancellationToken ct)
@@ -23,6 +25,8 @@ public sealed class ProvisioningOrchestrator(
         var assignments = request.Assignments ?? [];
         var invalid = await ValidateProfileAsync(request, ct) ?? await ValidateAssignmentsAsync(assignments, ct);
         if (invalid is not null) return invalid;
+        var delegated = await CheckDelegationAsync(null, assignments, ct);
+        if (!delegated.IsSuccess) return delegated.Error!;
 
         var created = await users.CreateUserAsync(request, ct);
         if (!created.IsSuccess) return created.Error!;
@@ -46,6 +50,8 @@ public sealed class ProvisioningOrchestrator(
         if (!user.IsSuccess) return user.Error!;
         var invalid = await ValidateAssignmentsAsync([assignment], ct);
         if (invalid is not null) return invalid;
+        var delegated = await CheckDelegationAsync(userId, [assignment], ct);
+        if (!delegated.IsSuccess) return delegated.Error!;
 
         var current = await ReadScopesAsync(userId, ct);
         if (!current.IsSuccess) return current.Error!;
@@ -65,6 +71,8 @@ public sealed class ProvisioningOrchestrator(
         if (!user.IsSuccess) return user.Error!;
         var invalid = await ValidateAssignmentsAsync(assignments, ct);
         if (invalid is not null) return invalid;
+        var delegated = await CheckDelegationAsync(userId, assignments, ct);
+        if (!delegated.IsSuccess) return delegated.Error!;
 
         var current = await ReadScopesAsync(userId, ct);
         if (!current.IsSuccess) return current.Error!;
@@ -81,6 +89,8 @@ public sealed class ProvisioningOrchestrator(
         if (!user.IsSuccess) return user.Error!;
         var invalid = await ValidateAssignmentsAsync([new ScopedRoleAssignmentDto(role, scopes)], ct);
         if (invalid is not null) return invalid;
+        var delegated = await CheckDelegationAsync(userId, [new ScopedRoleAssignmentDto(role, scopes)], ct);
+        if (!delegated.IsSuccess) return delegated.Error!;
 
         var current = await ReadScopesAsync(userId, ct);
         if (!current.IsSuccess) return current.Error!;
@@ -100,6 +110,8 @@ public sealed class ProvisioningOrchestrator(
     {
         var user = await users.GetAsync(userId, ct);
         if (!user.IsSuccess) return user.Error!;
+        var delegated = await CheckDelegationAsync(userId, [], ct);
+        if (!delegated.IsSuccess) return delegated;
 
         var current = await ReadScopesAsync(userId, ct);
         if (!current.IsSuccess) return current.Error!;
@@ -114,12 +126,80 @@ public sealed class ProvisioningOrchestrator(
     public Task<Result> DeleteBusinessRoleSafeAsync(string roleName, CancellationToken ct) =>
         roles.DeleteAsync(roleName, ct);
 
-    public Task<Result<BusinessRoleDto>> CreateBusinessRoleAsync(string name, string? description, IReadOnlyCollection<string> permissions, CancellationToken ct)
+    /// <summary>Creates a role; delegated admins may only grant permissions they hold, policy keys must be registry scopes.</summary>
+    public async Task<Result<BusinessRoleDto>> CreateBusinessRoleAsync(string name, string? description,
+        IReadOnlyCollection<string> permissions, RoleScopePolicy? policy, CancellationToken ct)
     {
-        // Permission existence is validated by the role store against Keycloak (source of truth).
-        // The in-memory registry is deliberately not consulted: it is empty after a restart
-        // until services re-register, which would reject valid permissions.
-        return roles.CreateAsync(name.Trim(), description, permissions ?? Array.Empty<string>(), ct);
+        var granted = delegation is null ? Result.Success() : await delegation.EnsureCanGrantPermissionsAsync(permissions, ct);
+        if (!granted.IsSuccess) return granted.Error!;
+        var validPolicy = await ValidatePolicyAsync(policy, ct);
+        if (!validPolicy.IsSuccess) return validPolicy.Error!;
+        // Permission existence is checked by the role store against Keycloak (source of truth).
+        return await roles.CreateAsync(name.Trim(), description, permissions ?? [], policy, ct);
+    }
+
+    /// <summary>Changes the description, the exact permission set and/or the scope policy of a role.</summary>
+    public async Task<Result<BusinessRoleDto>> UpdateBusinessRoleAsync(string name, UpdateBusinessRoleRequest request, CancellationToken ct)
+    {
+        var updated = await roles.UpdateAsync(name, request.Description, ct);
+        if (!updated.IsSuccess) return updated;
+
+        if (request.Permissions is not null)
+        {
+            var added = request.Permissions.Except(updated.Value.Permissions, StringComparer.Ordinal).ToArray();
+            var granted = delegation is null ? Result.Success() : await delegation.EnsureCanGrantPermissionsAsync(added, ct);
+            if (!granted.IsSuccess) return granted.Error!;
+            var set = await roles.SetPermissionsAsync(name, request.Permissions, ct);
+            if (!set.IsSuccess) return set.Error!;
+        }
+
+        if (request.RequiredScopes is not null || request.AllowedScopes is not null)
+        {
+            var policy = new RoleScopePolicy(request.RequiredScopes ?? updated.Value.RequiredScopes ?? [],
+                request.AllowedScopes ?? updated.Value.AllowedScopes ?? []);
+            var validPolicy = await ValidatePolicyAsync(policy, ct);
+            if (!validPolicy.IsSuccess) return validPolicy.Error!;
+            var set = await roles.SetScopePolicyAsync(name, policy, ct);
+            if (!set.IsSuccess) return set.Error!;
+        }
+        return await roles.GetAsync(name, ct);
+    }
+
+    public async Task<Result> AddRolePermissionsAsync(string name, IReadOnlyCollection<string> permissions, CancellationToken ct)
+    {
+        var granted = delegation is null ? Result.Success() : await delegation.EnsureCanGrantPermissionsAsync(permissions, ct);
+        return granted.IsSuccess ? await roles.AddPermissionsAsync(name, permissions, ct) : granted;
+    }
+
+    /// <summary>Delegated admins may only change users and assignments inside their own scope.</summary>
+    public Task<Result> EnsureCanManageUserAsync(string userId, CancellationToken ct) =>
+        delegation is null ? Task.FromResult(Result.Success()) : delegation.EnsureCanManageUserAsync(userId, ct);
+
+    private async Task<Result> CheckDelegationAsync(string? targetUserId, IReadOnlyCollection<ScopedRoleAssignmentDto> assignments, CancellationToken ct)
+    {
+        if (delegation is null) return Result.Success();
+        if (targetUserId is not null)
+        {
+            var managed = await delegation.EnsureCanManageUserAsync(targetUserId, ct);
+            if (!managed.IsSuccess) return managed;
+        }
+        return assignments.Count == 0 ? Result.Success() : await delegation.EnsureCanAssignAsync(assignments, ct);
+    }
+
+    private async Task<Result> ValidatePolicyAsync(RoleScopePolicy? policy, CancellationToken ct)
+    {
+        if (policy is null || scopeLookup is null) return Result.Success();
+        var unknown = new List<string>();
+        foreach (var key in policy.Required.Concat(policy.Allowed).Distinct(StringComparer.Ordinal))
+        {
+            var rules = await scopeLookup.GetRulesAsync(key, ct);
+            if (rules.IsSuccess) continue;
+            if (rules.Error!.Kind != ErrorKind.NotFound) return rules.Error;
+            unknown.Add(key);
+        }
+        return unknown.Count == 0
+            ? Result.Success()
+            : Error.Validation("scope.not_found", $"Unknown scope keys: {string.Join(", ", unknown)}.");
     }
 
     /// <summary>

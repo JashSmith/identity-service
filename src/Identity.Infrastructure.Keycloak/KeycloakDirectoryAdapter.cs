@@ -82,6 +82,14 @@ public sealed class KeycloakDirectoryAdapter(
         return roles;
     }
 
+    public async Task<Result<bool>> IsSuperAdminAsync(string id, CancellationToken ct)
+    {
+        var groups = await _api.GetAsync(
+            $"{UserPath(id)}/groups?search={Uri.EscapeDataString(ReservedGroups.SuperAdmins)}&briefRepresentation=true", UserResource, ct);
+        if (!groups.IsSuccess) return NamedNotFound(groups.Error!, id);
+        return groups.Value.EnumerateArray().Any(g => KeycloakAdminApi.GetString(g, "name") == ReservedGroups.SuperAdmins);
+    }
+
     public async Task<Result<IReadOnlyCollection<PermissionDto>>> GetUserPermissionsAsync(string id, CancellationToken ct)
     {
         var permissions = new Dictionary<string, PermissionDto>(StringComparer.OrdinalIgnoreCase);

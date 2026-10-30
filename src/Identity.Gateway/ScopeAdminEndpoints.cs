@@ -39,7 +39,7 @@ public static class ScopeAdminEndpoints
             .Produces<object>(200).ProducesProblem(404);
 
         g.MapPost("", async (CreateScopeRequest req, IScopeRegistryAdmin registry, CancellationToken ct) =>
-                (await registry.CreateScopeAsync(req.Key.Trim(), req.DisplayName, req.Description, req.TargetResources, ct))
+                (await registry.CreateScopeAsync(req.Key.Trim(), req.DisplayName, req.Description, req.TargetResources, req.Parent, ct))
                 .ToHttpResult(created => Results.Created($"/api/identity/scopes/{Uri.EscapeDataString(created.Key)}", created)))
             .WithValidation<CreateScopeRequest>()
             .RequireAuthorization(IamPermissions.ScopesManage)
@@ -47,7 +47,7 @@ public static class ScopeAdminEndpoints
             .Produces<ScopeDefinitionDto>(201).ProducesProblem(400).ProducesProblem(409);
 
         g.MapPut("/{key}", async (string key, UpdateScopeRequest req, IScopeRegistryAdmin registry, CancellationToken ct) =>
-                (await registry.UpdateScopeAsync(key, req.DisplayName, req.Description, req.IsActive, req.TargetResources, ct))
+                (await registry.UpdateScopeAsync(key, req.DisplayName, req.Description, req.IsActive, req.TargetResources, req.Parent, ct))
                 .ToHttpResult(updated => Results.Ok(updated)))
             .WithValidation<UpdateScopeRequest>()
             .RequireAuthorization(IamPermissions.ScopesManage)
@@ -61,6 +61,24 @@ public static class ScopeAdminEndpoints
             .RequireAuthorization(IamPermissions.ScopesManage)
             .WithName("SetScopeResources")
             .Produces<object>(200).ProducesProblem(400).ProducesProblem(404);
+
+        g.MapGet("/{key}/values", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
+                (await registry.GetValuesAsync(key, ct)).ToHttpResult(values => Results.Ok(values)))
+            .RequireAuthorization(IamPermissions.ScopesRead)
+            .WithName("GetScopeValues")
+            .Produces<IReadOnlyCollection<ScopeValueDto>>(200).ProducesProblem(404);
+
+        g.MapPut("/{key}/values", async (string key, SetScopeValuesRequest req, IScopeRegistryAdmin registry,
+                IScopeCacheInvalidator scopeCache, CancellationToken ct) =>
+            {
+                var set = await registry.SetValuesAsync(key, req.Values, ct);
+                scopeCache.Invalidate();
+                return set.ToHttpResult(() => Results.Ok(req.Values));
+            })
+            .WithValidation<SetScopeValuesRequest>()
+            .RequireAuthorization(IamPermissions.ScopesManage)
+            .WithName("SetScopeValues")
+            .Produces<IReadOnlyCollection<ScopeValueDto>>(200).ProducesProblem(400).ProducesProblem(404);
 
         g.MapDelete("/{key}", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
                 (await registry.DeleteScopeAsync(key, ct)).ToHttpResult(() => Results.NoContent()))

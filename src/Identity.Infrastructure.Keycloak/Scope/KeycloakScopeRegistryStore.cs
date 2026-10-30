@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Identity.Application;
 using Identity.Application.Scope;
+using Identity.Contracts;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -32,6 +33,8 @@ public sealed class KeycloakScopeRegistryStore(
     private const string Resource = "scope";
     private const string ScopePrefix = "scope.";
     private const string ResourcePrefix = "resource.";
+    private const string ValuePrefix = "value.";
+    private const int MaxValueEntryBytes = 255;
     private const string AllowedScopesAttribute = "authz.allowed-scopes";
     private const string RegistryCacheKey = "scopes:registry:kc:v2";
     private const string RoleAllowedKey = "scopes:roleAllowed:kc:v2";
@@ -193,7 +196,8 @@ public sealed class KeycloakScopeRegistryStore(
                 KeycloakAdminApi.GetString(root, "displayName") ?? key,
                 KeycloakAdminApi.GetString(root, "description"),
                 !root.TryGetProperty("isActive", out var active) || active.ValueKind != JsonValueKind.False,
-                KeycloakAdminApi.GetString(root, "valueType") ?? "String");
+                KeycloakAdminApi.GetString(root, "valueType") ?? "String",
+                KeycloakAdminApi.GetString(root, "parent"));
         }
         catch (JsonException ex)
         {
@@ -282,16 +286,19 @@ public sealed class KeycloakScopeRegistryStore(
     }
 
     public async Task<Result<ScopeDefinitionDto>> CreateScopeAsync(
-        string key, string? displayName, string? description, IReadOnlyCollection<string>? resources, CancellationToken ct)
+        string key, string? displayName, string? description, IReadOnlyCollection<string>? resources, string? parent, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        var definition = SerializeDefinition(string.IsNullOrWhiteSpace(displayName) ? key : displayName, description, true, "String");
+        parent = string.IsNullOrWhiteSpace(parent) ? null : parent.Trim();
+        var definition = SerializeDefinition(string.IsNullOrWhiteSpace(displayName) ? key : displayName, description, true, "String", parent);
 
         // Definition and resource mappings are written together in one PUT.
         var written = await ModifyRegistryAsync(attributes =>
         {
             if (attributes.ContainsKey(ScopePrefix + key))
                 return Error.Conflict("scope.already_exists", $"Scope '{key}' already exists.");
+            var parentCheck = CheckParent(attributes, key, parent);
+            if (!parentCheck.IsSuccess) return parentCheck;
             attributes[ScopePrefix + key] = ChunkAttributeValue(definition);
             SetResources(attributes, key, resources ?? []);
             return Result.Success();
@@ -312,15 +319,20 @@ public sealed class KeycloakScopeRegistryStore(
     }
 
     public async Task<Result<ScopeDefinitionDto>> UpdateScopeAsync(
-        string key, string? displayName, string? description, bool? isActive, IReadOnlyCollection<string>? resources, CancellationToken ct)
+        string key, string? displayName, string? description, bool? isActive, IReadOnlyCollection<string>? resources,
+        string? parent, CancellationToken ct)
     {
         var current = await GetScopeAsync(key, ct);
         if (!current.IsSuccess) return current.Error!;
 
+        // null keeps the parent, "" removes it.
+        var newParent = parent is null ? current.Value.Parent : parent.Trim() is { Length: > 0 } p ? p : null;
         var definition = SerializeDefinition(displayName ?? current.Value.DisplayName, description ?? current.Value.Description,
-            isActive ?? current.Value.IsActive, current.Value.ValueType);
+            isActive ?? current.Value.IsActive, current.Value.ValueType, newParent);
         var written = await ModifyRegistryAsync(attributes =>
         {
+            var parentCheck = CheckParent(attributes, key, newParent);
+            if (!parentCheck.IsSuccess) return parentCheck;
             attributes[ScopePrefix + key] = ChunkAttributeValue(definition);
             if (resources is not null) SetResources(attributes, key, resources);
             return Result.Success();
@@ -344,6 +356,51 @@ public sealed class KeycloakScopeRegistryStore(
             return Result.Success();
         }, ct);
 
+    public async Task<Result<ScopeRules>> GetRulesAsync(string key, CancellationToken ct)
+    {
+        var registry = await GetRegistryAsync(ct);
+        if (!registry.IsSuccess) return registry.Error!;
+        var scope = Definitions(registry.Value).FirstOrDefault(s => s.IsActive && string.Equals(s.Key, key, StringComparison.OrdinalIgnoreCase));
+        return scope is null ? ScopeNotFound(key) : new ScopeRules(scope.Key, scope.Parent, Values(registry.Value, scope.Key));
+    }
+
+    public async Task<Result<IReadOnlyCollection<ScopeValueDto>>> GetValuesAsync(string key, CancellationToken ct)
+    {
+        var scope = await GetScopeAsync(key, ct);
+        if (!scope.IsSuccess) return scope.Error!;
+        var registry = await GetRegistryAsync(ct);
+        return registry.IsSuccess ? Result<IReadOnlyCollection<ScopeValueDto>>.Success(Values(registry.Value, key)) : registry.Error!;
+    }
+
+    public Task<Result> SetValuesAsync(string key, IReadOnlyCollection<ScopeValueDto> values, CancellationToken ct) =>
+        ModifyRegistryAsync(attributes =>
+        {
+            if (!attributes.ContainsKey(ScopePrefix + key)) return ScopeNotFound(key);
+            var definition = Definitions(attributes).First(d => d.Key == key);
+
+            var duplicates = values.GroupBy(v => v.Value.Trim(), StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => g.Key).ToArray();
+            if (duplicates.Length > 0) return Error.Validation("scope.duplicate_values", $"Duplicate values: {string.Join(", ", duplicates)}.");
+
+            // Values of a child scope must point at existing values of the parent (when the parent has a catalog).
+            if (definition.Parent is not null)
+            {
+                var parentValues = Values(attributes, definition.Parent).Select(v => v.Value).ToHashSet(StringComparer.Ordinal);
+                var orphans = values.Where(v => parentValues.Count > 0 && (v.Parent is null || !parentValues.Contains(v.Parent)))
+                    .Select(v => v.Value).ToArray();
+                if (orphans.Length > 0)
+                    return Error.Validation("scope.invalid_parent_value",
+                        $"Values without a known '{definition.Parent}' parent: {string.Join(", ", orphans)}.");
+            }
+
+            var entries = values.Select(v => JsonSerializer.Serialize(new { v = v.Value.Trim(), l = v.Label, p = v.Parent }, CompactJson)).ToArray();
+            var tooLong = entries.Where(e => Encoding.UTF8.GetByteCount(e) > MaxValueEntryBytes).ToArray();
+            if (tooLong.Length > 0) return Error.Validation("scope.value_too_long", "A value with its label must stay under 255 bytes.");
+
+            if (entries.Length == 0) attributes.Remove(ValuePrefix + key);
+            else attributes[ValuePrefix + key] = entries;
+            return Result.Success();
+        }, ct);
+
     /// <summary>
     /// Ensures the registry group exists and seeds the default <c>region</c> scope when it defines none;
     /// then makes every registry key usable (profile declaration and token mapper).
@@ -357,7 +414,7 @@ public sealed class KeycloakScopeRegistryStore(
         {
             var seeded = await ModifyRegistryAsync(attributes =>
             {
-                attributes[ScopePrefix + "region"] = ChunkAttributeValue(SerializeDefinition("Region", "Geographic region", true, "String"));
+                attributes[ScopePrefix + "region"] = ChunkAttributeValue(SerializeDefinition("Region", "Geographic region", true, "String", null));
                 return Result.Success();
             }, ct);
             if (!seeded.IsSuccess) return seeded;
@@ -420,11 +477,44 @@ public sealed class KeycloakScopeRegistryStore(
     private static void RemoveScope(Dictionary<string, string[]> attributes, string key)
     {
         attributes.Remove(ScopePrefix + key);
+        attributes.Remove(ValuePrefix + key);
         SetResources(attributes, key, []);
     }
 
-    private static string SerializeDefinition(string displayName, string? description, bool isActive, string valueType) =>
-        JsonSerializer.Serialize(new { displayName, description, isActive, valueType }, CompactJson);
+    private static string SerializeDefinition(string displayName, string? description, bool isActive, string valueType, string? parent) =>
+        JsonSerializer.Serialize(new { displayName, description, isActive, valueType, parent }, CompactJson);
+
+    /// <summary>The parent must be another existing scope, and following parents must never lead back to the key.</summary>
+    private Result CheckParent(Dictionary<string, string[]> attributes, string key, string? parent)
+    {
+        if (parent is null) return Result.Success();
+        var definitions = Definitions(attributes).ToDictionary(d => d.Key, StringComparer.Ordinal);
+        for (var current = parent; current is not null; current = definitions[current].Parent)
+        {
+            if (current == key) return Error.Validation("scope.parent_cycle", $"Scope '{parent}' cannot be the parent of '{key}': it would form a cycle.");
+            if (!definitions.ContainsKey(current)) return Error.Validation("scope.parent_not_found", $"Parent scope '{current}' does not exist.");
+        }
+        return Result.Success();
+    }
+
+    private static IReadOnlyCollection<ScopeValueDto> Values(Dictionary<string, string[]> attributes, string key)
+    {
+        var values = new List<ScopeValueDto>();
+        foreach (var entry in attributes.GetValueOrDefault(ValuePrefix + key, []))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(entry);
+                if (KeycloakAdminApi.GetString(doc.RootElement, "v") is { Length: > 0 } value)
+                    values.Add(new ScopeValueDto(value, KeycloakAdminApi.GetString(doc.RootElement, "l"), KeycloakAdminApi.GetString(doc.RootElement, "p")));
+            }
+            catch (JsonException)
+            {
+                // Entries are written by this store; a foreign/corrupt entry is skipped rather than failing every read.
+            }
+        }
+        return values.OrderBy(v => v.Value, StringComparer.Ordinal).ToArray();
+    }
 
     private static Dictionary<string, string[]> Attributes(JsonElement group)
     {

@@ -115,7 +115,11 @@ builder.Services.AddScoped<ProvisioningOrchestrator>(sp =>
         sp.GetRequiredService<IBusinessRoleStore>(),
         sp.GetRequiredService<IUserRoleMapping>(),
         sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>(),
-        sp.GetRequiredService<IUserProfileRequirements>()));
+        sp.GetRequiredService<IUserProfileRequirements>(),
+        sp.GetRequiredService<DelegationGuard>(),
+        sp.GetRequiredService<Identity.Application.Scope.IScopeDefinitionLookup>()));
+builder.Services.AddScoped<ICurrentAdministrator, HttpCurrentAdministrator>();
+builder.Services.AddScoped<DelegationGuard>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
 builder.Services.AddTransient<Identity.Infrastructure.Keycloak.Scope.IScopeAttributeProvisioner,
