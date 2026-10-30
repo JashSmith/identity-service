@@ -482,7 +482,9 @@ $RECYCLE.BIN/
 *.swp
 
 /prompts
-.claude
+.claude/*
+!.claude/agents/
+!.claude/skills/
 identity-signing-keys.json
 identity-data-protection-keys/
 identity-design-time.db
