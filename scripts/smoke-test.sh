@@ -3,7 +3,7 @@
 #   super-admin login → create business role → assign permissions → create scoped user
 #   → verify token claims (permissions + authz scope) → verify access-context.
 # Requires: running stack (gateway on :5080), curl, python3 (jq not needed).
-# Usage: cd deploy && ./smoke-test.sh   (override: GATEWAY=http://host:5080 ./smoke-test.sh)
+# Usage: start the AppHost, then ./scripts/smoke-test.sh   (override: GATEWAY=http://host:5080 ./smoke-test.sh)
 set -euo pipefail
 
 GATEWAY="${GATEWAY:-http://localhost:5080}"
