@@ -496,3 +496,5 @@ identity-signing-keys.json
 .claude-sync/conflicts/
 
 .tmp*
+# Tenant provisioning output: client secrets and temporary passwords (never commit)
+*.tenant.env

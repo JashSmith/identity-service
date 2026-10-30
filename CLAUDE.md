@@ -55,6 +55,7 @@ Delegated admins may only manage users inside their own scope and grant only wha
 | `src/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
 | `src/Avash.Identity.*` | Consumer packages |
 | `samples/OrderService.Sample` | Sample consumer service |
+| `tools/Identity.TenantProvisioning` | Operator tool: creates a new tenant realm with master credentials (the gateway never gets them) |
 | `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |
 | `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`) |
 | `docs/` | Persian docs: architecture + Keycloak ERD, run guide, API summary |
@@ -111,7 +112,6 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - `GatewayResolvingAccessContext` (consumer package) still swallows gateway failures with `catch {}`.
 - Weekly schedules are not enforced on Keycloak's own login page (only gateway login/refresh and
   consumers); a Keycloak authenticator SPI is a follow-up.
-- Realm provisioning for a new tenant is manual (see `docs/running.md`).
 - The console keeps tokens in server memory: a console restart signs administrators out.
 
 ## Roadmap
@@ -123,7 +123,7 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 6. Users: lockout, credentials/OTP reset, required actions, delegated visibility (done)
 7. Weekly schedules: attributes, API, gateway login/refresh and consumer enforcement (done; login SPI open)
 8. Auth settings: tokens, password policy, brute force, OTP/MFA, IdPs, LDAP/AD, Persian login theme (done)
-9. Multi-tenancy: realm per tenant, tenant header, per-issuer token validation (done; provisioning manual)
+9. Multi-tenancy: realm per tenant, tenant header, per-issuer token validation, provisioning tool (done)
 10. Radzen admin console and E2E tests with `Aspire.Hosting.Testing` (done)
 11. Documentation in Persian (done)
-12. Next: SMS login (when the owner asks), Keycloak schedule SPI, automated realm provisioning
+12. Next: Keycloak schedule SPI (approved 2026-10-31), SMS login (when the owner asks)
