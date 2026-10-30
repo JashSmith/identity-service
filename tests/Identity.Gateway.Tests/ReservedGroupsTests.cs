@@ -47,8 +47,7 @@ public sealed class ReservedGroupsTests
     {
         BaseUrl = "http://kc.test",
         Realm = "company",
-        AdminUsername = "admin",
-        AdminPassword = "admin",
+        AdminClientSecret = "secret",
     });
 
     private static KeycloakGroupBusinessRoleStore Store(FakeKeycloak kc) => new(

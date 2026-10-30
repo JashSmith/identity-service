@@ -94,6 +94,7 @@ builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
 builder.Services.AddScoped<Identity.Application.Scope.IUserScopeWriter>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
+builder.Services.AddSingleton<Identity.Infrastructure.Keycloak.KeycloakAdminTokenCache>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>();
 builder.Services.AddSingleton<IBusinessRoleStore>(sp =>
