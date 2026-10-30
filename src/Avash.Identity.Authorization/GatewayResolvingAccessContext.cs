@@ -3,6 +3,8 @@ using System.Security.Claims;
 using System.Text.Json;
 using Identity.Contracts;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Avash.Identity.Authorization;
@@ -21,6 +23,7 @@ public sealed class GatewayResolvingAccessContext : ICurrentAccessContext
     private readonly IHttpContextAccessor _httpAccessor;
     private readonly IHttpClientFactory _httpFactory;
     private readonly AccessContextOptions _options;
+    private readonly ILogger _logger;
 
     private ClaimsPrincipalAccessContext _inner;
     private bool _resolved;
@@ -30,8 +33,10 @@ public sealed class GatewayResolvingAccessContext : ICurrentAccessContext
         ClaimsPrincipal principal,
         IHttpContextAccessor httpAccessor,
         IHttpClientFactory httpFactory,
-        IOptions<AccessContextOptions> options)
+        IOptions<AccessContextOptions> options,
+        ILogger<GatewayResolvingAccessContext>? logger = null)
     {
+        _logger = (ILogger?)logger ?? NullLogger.Instance;
         _principal = principal;
         _httpAccessor = httpAccessor;
         _httpFactory = httpFactory;
@@ -75,7 +80,12 @@ public sealed class GatewayResolvingAccessContext : ICurrentAccessContext
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", header.Parameter);
             using var resp = await client.SendAsync(req, cts.Token).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode) return;
+            if (!resp.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Access context from {Url}: gateway answered {Status}; using the token's claims",
+                    url, (int)resp.StatusCode);
+                return;
+            }
             var json = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
             var dto = JsonSerializer.Deserialize<AccessContextResponse>(json,
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
@@ -101,7 +111,15 @@ public sealed class GatewayResolvingAccessContext : ICurrentAccessContext
                 _resolved = true;
             }
         }
-        catch (OperationCanceledException) { }
-        catch { /* best-effort: leave claims-derived view intact */ }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Our own timeout, not the caller's cancellation: keep the claims-derived view.
+            _logger.LogWarning("Access context from {Url} timed out after {Timeout}; using the token's claims", url, _options.Timeout);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            // Best effort: the claims-derived view stays in place, but the failure is visible.
+            _logger.LogWarning(ex, "Access context from {Url} could not be read; using the token's claims", url);
+        }
     }
 }

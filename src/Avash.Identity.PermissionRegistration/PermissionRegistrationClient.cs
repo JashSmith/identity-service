@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Avash.Identity.PermissionRegistration;
@@ -21,7 +23,7 @@ public sealed record RegistrationResponse(
 /// Registers discovered permissions with the Identity Gateway. The service token is obtained
 /// <b>through the gateway's own auth proxy</b> (<c>POST /api/identity/auth/login</c>) with the
 /// client-credentials grant — the consuming service never needs to know where Keycloak is.
-/// Returns <c>null</c> on transient failure (caller retries).
+/// Returns <c>null</c> on failure (logged; the caller retries).
 /// </summary>
 public interface IPermissionRegistrationClient
 {
@@ -30,9 +32,11 @@ public interface IPermissionRegistrationClient
 
 internal sealed class PermissionRegistrationClient(
     HttpClient http,
-    IOptions<PermissionRegistrationOptions> opts) : IPermissionRegistrationClient
+    IOptions<PermissionRegistrationOptions> opts,
+    ILogger<PermissionRegistrationClient>? logger = null) : IPermissionRegistrationClient
 {
     private readonly PermissionRegistrationOptions _o = opts.Value;
+    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     private static readonly JsonSerializerOptions s_json = new()
     {
@@ -52,13 +56,14 @@ internal sealed class PermissionRegistrationClient(
                 Content = JsonContent.Create(manifest, options: s_json)
             };
             req.Headers.Add("Authorization", $"Bearer {token}");
-            var res = await http.SendAsync(req, ct);
-            return res.IsSuccessStatusCode
-                ? await res.Content.ReadFromJsonAsync<RegistrationResponse>(s_json, ct)
-                : null;
+            using var res = await http.SendAsync(req, ct);
+            if (res.IsSuccessStatusCode) return await res.Content.ReadFromJsonAsync<RegistrationResponse>(s_json, ct);
+            _logger.LogWarning("Permission registration at {Url} was rejected with {Status}", registerUrl, (int)res.StatusCode);
+            return null;
         }
-        catch
+        catch (Exception ex) when (ex is HttpRequestException or JsonException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
         {
+            _logger.LogWarning(ex, "Permission registration at {Url} failed", registerUrl);
             return null;
         }
     }
@@ -80,14 +85,19 @@ internal sealed class PermissionRegistrationClient(
                 ["client_id"] = _o.ClientId,
                 ["client_secret"] = _o.ClientSecret,
             }), ct);
-            if (!res.IsSuccessStatusCode) return string.Empty;
-            var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+            if (!res.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Service token request at {Url} was rejected with {Status}", loginUrl, (int)res.StatusCode);
+                return string.Empty;
+            }
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
             return doc.RootElement.TryGetProperty("access_token", out var t)
                 ? t.GetString() ?? string.Empty
                 : string.Empty;
         }
-        catch
+        catch (Exception ex) when (ex is HttpRequestException or JsonException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
         {
+            _logger.LogWarning(ex, "Service token request at {Url} failed", loginUrl);
             return string.Empty;
         }
     }

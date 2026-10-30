@@ -43,7 +43,8 @@ public static class AccessContextExtensions
             if (string.IsNullOrWhiteSpace(opts.Value.GatewayBaseUrl))
                 return new ClaimsPrincipalAccessContext(principal);
             var factory = sp.GetRequiredService<IHttpClientFactory>();
-            return new GatewayResolvingAccessContext(principal, accessor, factory, opts);
+            return new GatewayResolvingAccessContext(principal, accessor, factory, opts,
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<GatewayResolvingAccessContext>>());
         });
         return services;
     }

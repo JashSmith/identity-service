@@ -212,12 +212,16 @@ public static class AuthEndpoints
         {
             try
             {
-                var doc = await JsonDocument.ParseAsync(ctx.Request.Body, cancellationToken: ct);
+                using var doc = await JsonDocument.ParseAsync(ctx.Request.Body, cancellationToken: ct);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new ErrorException(Error.Validation("request.malformed", "The request body must be a JSON object."));
                 return doc.RootElement.EnumerateObject().ToDictionary(p => p.Name,
-                    p => p.Value.GetString() ?? p.Value.ToString()!, StringComparer.Ordinal);
+                    p => p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString()! : p.Value.GetRawText(), StringComparer.Ordinal);
             }
-            catch
+            catch (JsonException)
             {
+                // A broken body must not silently fall back to the query string.
+                throw new ErrorException(Error.Validation("request.malformed", "The request body is not valid JSON."));
             }
         }
 
