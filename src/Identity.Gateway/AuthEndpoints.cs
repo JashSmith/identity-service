@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Identity.Contracts;
 using Microsoft.Extensions.Options;
+using Identity.Application;
+using Identity.Gateway.Errors;
 
 namespace Identity.Gateway;
 
@@ -13,7 +15,7 @@ public static class AuthEndpoints
     {
         var g = app.MapGroup("/api/identity/auth").WithTags("Auth");
         g.MapPost("/login", Login).WithName("AuthLogin").AllowAnonymous()
-            .Produces<AccessTokenResponse>(200).Produces<ProblemResponse>(400)
+            .Produces<AccessTokenResponse>(200).ProducesProblem(400)
             .WithOpenApi(o =>
             {
                 o.Summary = "Login via Keycloak (password grant)";
@@ -51,8 +53,7 @@ public static class AuthEndpoints
             gt.Equals("client_credentials", StringComparison.OrdinalIgnoreCase);
         if (!isClientCredentials &&
             (!form.ContainsKey("username") || !form.ContainsKey("password")))
-            return Results.BadRequest(new ProblemResponse("validation_error", "username and password required",
-                Correlation(ctx)));
+            return Error.Validation("request.invalid", "username and password required").ToProblem();
 
         var rejected = ApplyClientCredentials(form, cfg, ctx);
         if (rejected is not null) return rejected;
@@ -81,7 +82,7 @@ public static class AuthEndpoints
             ? t
             : ctx.Request.Headers.Authorization.ToString().Replace("Bearer ", "");
         if (string.IsNullOrWhiteSpace(token))
-            return Results.BadRequest(new ProblemResponse("validation_error", "token required", Correlation(ctx)));
+            return Error.Validation("request.invalid", "token required").ToProblem();
         using var http = httpFactory.CreateClient();
         var req = new HttpRequestMessage(HttpMethod.Post,
                 $"{baseUrl}/realms/{realm}/protocol/openid-connect/token/introspect")
@@ -146,9 +147,7 @@ public static class AuthEndpoints
 
         return outcome switch
         {
-            GatewayClientCredentials.Outcome.ClientCredentialsNotAllowed => Results.BadRequest(
-                new ProblemResponse("unauthorized_client",
-                    "client_credentials requires the caller's own client_id and client_secret", Correlation(ctx))),
+            GatewayClientCredentials.Outcome.ClientCredentialsNotAllowed => Error.Validation("auth.unauthorized_client", "client_credentials requires the caller's own client_id and client_secret").ToProblem(),
             GatewayClientCredentials.Outcome.MissingGatewaySecret => Results.Problem(
                 title: "Gateway client is not configured",
                 detail: "Identity:Keycloak:ClientSecret is missing.",
@@ -162,8 +161,6 @@ public static class AuthEndpoints
 
     private static string BaseUrl(IConfiguration c) =>
         (c["Identity:Keycloak:BaseUrl"] ?? c["Identity:KeycloakAdmin:BaseUrl"] ?? "http://localhost:8080").TrimEnd('/');
-
-    private static string Correlation(HttpContext c) => c.TraceIdentifier ?? Guid.NewGuid().ToString("N");
 
     private static async Task<Dictionary<string, string>> ReadFormAsync(HttpContext ctx, CancellationToken ct)
     {

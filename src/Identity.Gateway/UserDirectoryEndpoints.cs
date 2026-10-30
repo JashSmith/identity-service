@@ -1,6 +1,7 @@
 #pragma warning disable ASPDEPR002
 using Identity.Application;
 using Identity.Contracts;
+using Identity.Gateway.Errors;
 
 namespace Identity.Gateway;
 
@@ -24,7 +25,7 @@ public static class UserDirectoryEndpoints
             {
                 var u = await dir.GetUserAsync(id, ct);
                 return u is null
-                    ? Results.NotFound(new ProblemResponse("not_found", "user not found", Guid.NewGuid().ToString("N")))
+                    ? Error.NotFound("resource.not_found", "user not found").ToProblem()
                     : Results.Ok(u);
             }).RequireAuthorization("Identity.Users.Read").WithName("GetUser").Produces<UserDto>(200)
             .WithOpenApi(o =>

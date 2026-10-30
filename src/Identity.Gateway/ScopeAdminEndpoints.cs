@@ -1,5 +1,7 @@
 using Identity.Application.Scope;
 using Identity.Contracts;
+using Identity.Application;
+using Identity.Gateway.Errors;
 
 namespace Identity.Gateway;
 
@@ -29,7 +31,7 @@ public static class ScopeAdminEndpoints
             {
                 var s = await registry.GetScopeAsync(key, ct);
                 return s is null
-                    ? Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")))
+                    ? Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem()
                     : Results.Ok(s);
             })
             .RequireAuthorization(IamPermissions.ScopesRead)
@@ -39,7 +41,7 @@ public static class ScopeAdminEndpoints
         g.MapGet("/{key}/resources", async (string key, IScopeRegistryAdmin registry, CancellationToken ct) =>
             {
                 if (await registry.GetScopeAsync(key, ct) is null)
-                    return Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")));
+                    return Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem();
                 var resources = await registry.GetResourcesForScopeAsync(key, ct);
                 return Results.Ok(new { scope = key, resources });
             })
@@ -57,7 +59,7 @@ public static class ScopeAdminEndpoints
                 {
                     var created = await registry.CreateScopeAsync(req.Key.Trim(), req.DisplayName, req.Description, ct);
                     if (created is null)
-                        return Results.Conflict(new ProblemResponse("conflict", $"Scope '{req.Key}' already exists.", Guid.NewGuid().ToString("N")));
+                        return Error.Conflict("resource.conflict", $"Scope '{req.Key}' already exists.").ToProblem();
                     if (req.TargetResources is not null && req.TargetResources.Count > 0)
                     {
                         try { await registry.SetScopeResourcesAsync(created.Key, req.TargetResources, ct); } catch { /* best-effort */ }
@@ -74,7 +76,7 @@ public static class ScopeAdminEndpoints
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", ex.Message).ToProblem();
                 }
             })
             .RequireAuthorization(IamPermissions.ScopesManage)
@@ -87,7 +89,7 @@ public static class ScopeAdminEndpoints
                 {
                     var updated = await registry.UpdateScopeAsync(key, req.DisplayName, req.Description, req.IsActive, ct);
                     if (updated is null)
-                        return Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")));
+                        return Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem();
                     if (req.TargetResources is not null)
                     {
                         try { await registry.SetScopeResourcesAsync(key, req.TargetResources, ct); } catch { /* best-effort */ }
@@ -96,7 +98,7 @@ public static class ScopeAdminEndpoints
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", ex.Message).ToProblem();
                 }
             })
             .RequireAuthorization(IamPermissions.ScopesManage)
@@ -107,11 +109,11 @@ public static class ScopeAdminEndpoints
             {
                 var s = await registry.GetScopeAsync(key, ct);
                 if (s is null)
-                    return Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")));
+                    return Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem();
                 var ok = await registry.SetScopeResourcesAsync(key, req.Resources ?? [], ct);
                 return ok
                     ? Results.Ok(new { scope = key, resources = req.Resources ?? [] })
-                    : Results.BadRequest(new ProblemResponse("update_failed", "Failed to update resources", Guid.NewGuid().ToString("N")));
+                    : Error.Validation("scope.resources_update_failed", "Failed to update resources").ToProblem();
             })
             .RequireAuthorization(IamPermissions.ScopesManage)
             .WithName("SetScopeResources")
@@ -124,16 +126,16 @@ public static class ScopeAdminEndpoints
                     var ok = await registry.DeleteScopeAsync(key, ct);
                     return ok
                         ? Results.NoContent()
-                        : Results.NotFound(new ProblemResponse("not_found", $"scope '{key}' not found", Guid.NewGuid().ToString("N")));
+                        : Error.NotFound("resource.not_found", $"scope '{key}' not found").ToProblem();
                 }
                 catch (InvalidOperationException ex)
                 {
-                    return Results.BadRequest(new ProblemResponse("validation_error", ex.Message, Guid.NewGuid().ToString("N")));
+                    return Error.Validation("request.invalid", ex.Message).ToProblem();
                 }
             })
             .RequireAuthorization(IamPermissions.ScopesManage)
             .WithName("DeleteScope")
-            .Produces(204).Produces<ProblemResponse>(400);
+            .Produces(204).ProducesProblem(400);
 
         return g;
     }

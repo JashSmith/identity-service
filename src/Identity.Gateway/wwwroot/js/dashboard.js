@@ -842,7 +842,7 @@
 
       const body = await res.json();
       if (!res.ok) {
-        showLoginAlert(body.message || body.error_description || 'Sign in failed: invalid credentials');
+        showLoginAlert(body.detail || body.message || body.error_description || 'Sign in failed: invalid credentials');
         return;
       }
 
@@ -1628,7 +1628,7 @@
         updateMetrics();
       } else {
         const err = await res.json().catch(() => ({}));
-        showToast(`Failed to create user: ${err.message || 'Validation error'}`, 'error');
+        showToast(`Failed to create user: ${err.detail || err.message || 'Validation error'}`, 'error');
       }
     } catch {
       showToast('Error sending create user request.', 'error');
@@ -1667,7 +1667,7 @@
         await loadUsers();
       } else {
         const err = await res.json().catch(() => ({}));
-        showToast(`Failed to update scopes: ${err.message || 'Validation error'}`, 'error');
+        showToast(`Failed to update scopes: ${err.detail || err.message || 'Validation error'}`, 'error');
       }
     } catch {
       showToast('Error updating user scopes.', 'error');
@@ -1699,7 +1699,7 @@
         await loadUsers();
       } else {
         const err = await res.json().catch(() => ({}));
-        showToast(`Failed to update user: ${err.message || 'Update failed'}`, 'error');
+        showToast(`Failed to update user: ${err.detail || err.message || 'Update failed'}`, 'error');
       }
     } catch {
       showToast('Error updating user profile.', 'error');
@@ -1834,7 +1834,7 @@
         updateMetrics();
       } else {
         const err = await res.json().catch(() => ({}));
-        showToast(`Failed to create role: ${err.message || 'Already exists'}`, 'error');
+        showToast(`Failed to create role: ${err.detail || err.message || 'Already exists'}`, 'error');
       }
     } catch {
       showToast('Error creating business role.', 'error');
@@ -1863,7 +1863,7 @@
           updateMetrics();
         } else {
           const err = await res.json().catch(() => ({}));
-          showToast(`Failed to register scope: ${err.message || 'Already exists'}`, 'error');
+          showToast(`Failed to register scope: ${err.detail || err.message || 'Already exists'}`, 'error');
         }
       } catch {
         showToast('Error registering scope.', 'error');
@@ -1894,7 +1894,7 @@
           updateMetrics();
         } else {
           const err = await res.json().catch(() => ({}));
-          showToast(`Failed to register scope: ${err.message || 'Already exists'}`, 'error');
+          showToast(`Failed to register scope: ${err.detail || err.message || 'Already exists'}`, 'error');
         }
       } catch {
         showToast('Error registering scope.', 'error');
@@ -1923,7 +1923,7 @@
         await loadScopes();
       } else {
         const err = await res.json().catch(() => ({}));
-        showToast(`Failed to update scope: ${err.message || 'Error'}`, 'error');
+        showToast(`Failed to update scope: ${err.detail || err.message || 'Error'}`, 'error');
       }
     } catch {
       showToast('Error updating scope.', 'error');
@@ -1948,7 +1948,7 @@
           updateMetrics();
         } else {
           const err = await res.json().catch(() => ({}));
-          showToast(`Failed to delete scope: ${err.message || 'Deletion error'}`, 'error');
+          showToast(`Failed to delete scope: ${err.detail || err.message || 'Deletion error'}`, 'error');
         }
       } catch {
         showToast('Error sending delete scope request.', 'error');
@@ -1977,7 +1977,7 @@
           await loadBusinessRoles();
         } else {
           const err = await res.json().catch(() => ({}));
-          showToast(`Failed to update role: ${err.message || 'Validation error'}`, 'error');
+          showToast(`Failed to update role: ${err.detail || err.message || 'Validation error'}`, 'error');
         }
       } catch {
         showToast('Error updating business role.', 'error');
@@ -2064,7 +2064,7 @@
 
       const body = await res.json();
       if (!res.ok) {
-        elements.tokenOutputConsole.textContent = `// Error: ${(body.message || body.error_description || 'Authentication failed')}\n` + JSON.stringify(body, null, 2);
+        elements.tokenOutputConsole.textContent = `// Error: ${(body.detail || body.message || body.error_description || 'Authentication failed')}\n` + JSON.stringify(body, null, 2);
         elements.btnTestMe.disabled = true;
         elements.btnTestContext.disabled = true;
         return;
