@@ -9,8 +9,6 @@ set -euo pipefail
 GATEWAY="${GATEWAY:-http://localhost:5080}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 ADMIN_PASS="${ADMIN_PASS:-admin}"
-CLIENT_ID="identity-gateway"
-CLIENT_SECRET="${CLIENT_SECRET:-gateway-development-only}"
 TS=$(date +%s)
 ROLE_NAME="smoke-accountant-$TS"
 TEST_USER="smoke-user-$TS"
@@ -50,7 +48,7 @@ print($2)
 
 step "1/7 — Super-admin login (gateway proxy → Keycloak)"
 LOGIN=$(curl -fsS -X POST "$GATEWAY/api/identity/auth/login" \
-  -d "grant_type=password&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&username=$ADMIN_USER&password=$ADMIN_PASS")
+  -d "grant_type=password&username=$ADMIN_USER&password=$ADMIN_PASS")
 ADMIN_TOKEN=$(json_field "$LOGIN" "d['access_token']")
 [ -n "$ADMIN_TOKEN" ] || fail "login" "no access_token in: $LOGIN"
 pass "login OK, Keycloak token issued"
@@ -96,7 +94,7 @@ pass "user '$TEST_USER' created (id=$USER_ID)"
 
 step "6/7 — Login as the new user and verify token claims"
 USER_LOGIN=$(curl -fsS -X POST "$GATEWAY/api/identity/auth/login" \
-  -d "grant_type=password&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&username=$TEST_USER&password=$TEST_PASS")
+  -d "grant_type=password&username=$TEST_USER&password=$TEST_PASS")
 USER_TOKEN=$(json_field "$USER_LOGIN" "d['access_token']")
 [ -n "$USER_TOKEN" ] || fail "user login" "$USER_LOGIN"
 UPAYLOAD=$(decode_jwt "$USER_TOKEN")
