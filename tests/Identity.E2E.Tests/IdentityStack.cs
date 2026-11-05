@@ -29,6 +29,9 @@ public sealed class IdentityStack : IAsyncLifetime
     public HttpClient Gateway { get; private set; } = default!;
     public HttpClient Console { get; private set; } = default!;
 
+    /// <summary>Keycloak's own pages (login page checks). The local dev certificate is accepted for this client only.</summary>
+    public HttpClient Keycloak { get; private set; } = default!;
+
     public async Task InitializeAsync()
     {
         if (Environment.GetEnvironmentVariable("IDENTITY_E2E") != "1") return;
@@ -42,6 +45,10 @@ public sealed class IdentityStack : IAsyncLifetime
         await _app.ResourceNotifications.WaitForResourceHealthyAsync("identity-admin", timeout.Token);
         Gateway = _app.CreateHttpClient("identity-gateway", "http");
         Console = _app.CreateHttpClient("identity-admin", "http");
+        Keycloak = new HttpClient(new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (request, _, _, _) => request.RequestUri?.IsLoopback == true,
+        }) { BaseAddress = _app.GetEndpoint("keycloak", "http") };
 
         // Liveness is not readiness: wait until the Keycloak bootstrap (claim mappers, super-admins, ...) completed.
         while (true)

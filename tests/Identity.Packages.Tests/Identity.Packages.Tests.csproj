@@ -19,10 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Avash.Identity.PermissionDiscovery/Avash.Identity.PermissionDiscovery.csproj" />
-    <ProjectReference Include="../../src/Avash.Identity.PermissionRegistration/Avash.Identity.PermissionRegistration.csproj" />
-    <ProjectReference Include="../../src/Identity.Application/Identity.Application.csproj" />
-    <ProjectReference Include="../../src/Identity.Contracts/Identity.Contracts.csproj" />
-    <ProjectReference Include="../../src/Identity.Gateway/Identity.Gateway.csproj" />
+    <ProjectReference Include="../../src/Packages/Avash.Identity.PermissionDiscovery/Avash.Identity.PermissionDiscovery.csproj" />
+    <ProjectReference Include="../../src/Packages/Avash.Identity.PermissionRegistration/Avash.Identity.PermissionRegistration.csproj" />
+    <ProjectReference Include="../../src/Core/Identity.Application/Identity.Application.csproj" />
+    <ProjectReference Include="../../src/Core/Identity.Contracts/Identity.Contracts.csproj" />
+    <ProjectReference Include="../../src/Hosts/Identity.Gateway/Identity.Gateway.csproj" />
   </ItemGroup>
 </Project>

@@ -11,7 +11,8 @@ admins while exposing most of its features: authentication on behalf of users an
 applications/modules, permissions, business roles, users, runtime scopes, weekly access schedules
 and auth settings, plus a Persian (RTL) admin console.
 
-Consumer services use the `Avash.Identity.*` packages (authentication, authorization,
+Consumer services use the `Avash.Identity.*` packages (bearer authentication for APIs, `AddAvashWebSso` +
+`MapAvashSso` for server-rendered web apps/BFFs with single sign-on and back-channel logout, authorization,
 access context, permission discovery/registration).
 
 ## Binding architecture decisions (owner, 2026-10-30)
@@ -20,7 +21,7 @@ access context, permission discovery/registration).
   Redis is a cache only. Do not add EF Core, SQLite or any gateway-owned DB.
 - Signing keys are managed inside Keycloak. There is no key-management module and no Vault.
 - Keycloak's database is **PostgreSQL**.
-- Local orchestration is **.NET Aspire** (`src/Identity.AppHost`). There is no docker-compose.
+- Local orchestration is **.NET Aspire** (`src/Hosts/Identity.AppHost`). There is no docker-compose.
 - Admin UI: **Radzen Blazor**, Persian RTL. Build each feature's page in the same phase as its API.
 - Multi-tenant enterprise target: **one Keycloak realm per tenant (organization)**; very large
   tenants may get a dedicated Keycloak cluster. Design every Keycloak call to be tenant (realm) aware.
@@ -32,7 +33,7 @@ access context, permission discovery/registration).
 | Concept | Keycloak entity |
 |---|---|
 | Tenant | Realm |
-| Application | Client; display metadata in client attributes; per-app login page via `login_theme` |
+| Application | Client; display metadata in client attributes. Login page mode in `iam.login.mode`: `inherit` (realm theme), `branded` (`login_theme=avash` + `iam.login.{title,subtitle,logo_url,primary_color,background}`, rendered by `keycloak/themes/avash/login/footer.ftl`), `theme` (any installed theme in `login_theme`), `embedded` (app's own form via the direct login API; only this mode enables `directAccessGrantsEnabled`) |
 | Permission | Client role named `Module:Resource:Action`; emitted as `App:Module:Resource:Action`. Source (manual/synced) and deprecation live in role attributes. The admin UI builds a tree with "check all" per level from these segments, plus "all Read of an app" |
 | Business role | Group. Permissions = client-role mappings. Attributes: display name, required scope keys (e.g. province+city required, district optional), schedule |
 | Scope keys | Attributes of the `iam-scope-registry` group (owner's existing model; keep it) |
@@ -47,25 +48,28 @@ Delegated admins may only manage users inside their own scope and grant only wha
 ## Layout
 | Path | Purpose |
 |---|---|
-| `src/Identity.AppHost` | Aspire AppHost: PostgreSQL, Keycloak (realms `company` + demo tenant `acme` from `Keycloak/Realms`, Persian `avash` login theme from `Keycloak/Themes`), Redis, gateway, console |
-| `src/Identity.ServiceDefaults` | OpenTelemetry, health, service discovery, resilience (no retries for unsafe methods) |
-| `src/Identity.Gateway` | Host: minimal API endpoints, error model, tenancy (`Tenancy/`), Keycloak bootstrap (`Bootstrap/`) |
-| `src/Identity.Admin` | Persian RTL admin console (Radzen Blazor, interactive server, OIDC code + PKCE per tenant) |
-| `src/Identity.Application` / `Identity.Domain` / `Identity.Contracts` | Use cases, domain, DTOs |
-| `src/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
-| `src/Avash.Identity.*` | Consumer packages |
+| `src/Hosts/Identity.AppHost` | Aspire AppHost: PostgreSQL, Keycloak (realms, themes and providers from `keycloak/`), Redis, gateway, console |
+| `src/Hosts/Identity.ServiceDefaults` | OpenTelemetry, health, service discovery, resilience (no retries for unsafe methods) |
+| `src/Hosts/Identity.Gateway` | Host: minimal API endpoints, error model, tenancy (`Tenancy/`), Keycloak bootstrap (`Bootstrap/`) |
+| `src/Hosts/Identity.Admin` | Persian RTL admin console (Radzen Blazor, interactive server, OIDC code + PKCE per tenant) |
+| `src/Core/Identity.Application` / `Identity.Domain` / `Identity.Contracts` | Use cases, domain, DTOs |
+| `src/Infrastructure/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
+| `src/Packages/Avash.Identity.*` | Consumer packages |
 | `tools/Identity.TenantProvisioning` | Operator tool: creates a new tenant realm with master credentials (the gateway never gets them) |
-| `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator), built in Docker by `scripts/build-keycloak-extensions.sh` into `Keycloak/Providers` |
+| `keycloak/realms` | Realm imports: `company` and the demo tenant `acme` (imported only when the realm does not exist) |
+| `keycloak/themes` | Keycloak themes mounted into the container (Persian `avash` login theme) |
+| `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator), built in Docker by `scripts/build-keycloak-extensions.sh` into `keycloak/providers` |
 | `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |
+| `tests/Identity.Admin.Tests` | bUnit tests of the console (design-system components, menu permissions, Persian formatting) |
 | `tests/Identity.Packages.Tests` | Consumer-package tests (permission discovery, manifests, scope filters) against a test-only fixture |
 | `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`); `ConsumerHost` is an in-process consumer service |
-| `docs/` | Persian docs: architecture + Keycloak ERD, run guide, API summary |
+| `docs/` | Persian docs: index (`docs/README.md`), integration guide, per-app login pages, console guide, architecture, run guide, API summary; screenshots in `docs/images`. Check/fix the RTL rules with `python scripts/check-docs.py --fix` |
 
 ## Commands
 ```bash
 dotnet build IdentityService.slnx            # TreatWarningsAsErrors is on
 dotnet test IdentityService.slnx
-dotnet run --project src/Identity.AppHost --launch-profile http   # whole stack + Aspire dashboard
+dotnet run --project src/Hosts/Identity.AppHost --launch-profile http   # whole stack + Aspire dashboard
 bash scripts/smoke-test.sh                   # needs the stack running
 IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests   # starts its own stack; dev stack must be stopped
 ```
@@ -88,12 +92,18 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - Keycloak Admin API writes are not idempotent: no blind retries on POST/PUT/DELETE.
 - Keep the Domain free of infrastructure; endpoints call application use cases, not adapters.
 - Persian Markdown docs follow the global RTL rules (RLM after markers, manual TOC, no dir wrappers).
+- Console design system: colours only through the `--av-*` tokens in `wwwroot/css/theme.css` (never hard-coded),
+  layout in `wwwroot/app.css`, shared components in `Components/Shared` (`PageHeader`, `StatCard`, `EmptyState`,
+  `ThemeSwitch`, `Girih`). Fonts (Vazirmatn, Vazir Code) are self-hosted. No `letter-spacing` or `uppercase` on
+  Persian text. Numbers and dates shown to users go through `PersianFormat` (Persian digits, Jalali, Tehran time).
+  After upgrading Radzen.Blazor rerun `python scripts/generate-radzen-dark-css.py`.
 
 ## Environment gotchas
 - Port 8080 is taken by a local Apache on the owner's machine; Keycloak runs on **18080**,
   and Aspire serves it over HTTPS with the dev certificate.
 - Stopping the AppHost by killing its process orphans session containers (`keycloak-*`, `redis-*`);
-  remove them. The `postgres-*` container is persistent on purpose.
+  remove them. The `identity-postgres` container (volume `identity-postgres-data`) is persistent on purpose;
+  its name is pinned in the AppHost because Aspire's default names hash the AppHost path.
 - VS Code's C# language server locks `bin/obj`; move tracked files with per-file `git mv`
   instead of renaming whole directories.
 - Remote is GitHub (`origin`, SSH). `gh` may be unauthenticated: push the branch and give the

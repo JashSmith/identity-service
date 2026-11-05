@@ -1,0 +1,143 @@
+/*
+ * Avash look for Keycloak's keycloak.v2 (PatternFly 5) login pages: Persian typeface, the Avash palette
+ * (turquoise, lapis, saffron, straw-clay / indigo night) and a girih background in the brand colour.
+ * --avash-brand is the application's colour on branded pages (footer.ftl), the organisation's turquoise otherwise.
+ * Dark mode follows the operating system (keycloak.v2 adds .pf-v5-theme-dark to <html>).
+ */
+
+@font-face {
+    font-family: "Vazirmatn";
+    src: url("../fonts/Vazirmatn-Variable.woff2") format("woff2");
+    font-weight: 100 900;
+    font-display: swap;
+}
+
+:root {
+    --avash-brand: #0A7471;
+    --avash-brand-strong: color-mix(in srgb, var(--avash-brand) 82%, #000);
+    --avash-bg: #F5F2EB;
+    --avash-card: #FFFFFF;
+    --avash-text: #1B1916;
+    --avash-text-muted: #57524A;
+    --avash-pattern-opacity: 0.12;
+
+    --pf-v5-global--FontFamily--text: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+    --pf-v5-global--FontFamily--heading: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+    --pf-v5-global--FontFamily--redhat-updated--sans-serif: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+    --pf-v5-global--FontFamily--redhat-updated--heading--sans-serif: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+    --pf-v5-global--primary-color--100: var(--avash-brand);
+    --pf-v5-global--primary-color--200: var(--avash-brand-strong);
+    --pf-v5-global--link--Color: var(--avash-brand);
+    --pf-v5-global--link--Color--hover: var(--avash-brand-strong);
+    --pf-v5-global--BorderRadius--sm: 8px;
+    --keycloak-card-top-color: var(--avash-brand);
+}
+
+/* PatternFly redefines its primary colours for .pf-v5-theme-dark, so the brand is set again here.
+   Links need a lighter shade of the brand on dark surfaces; buttons keep the brand (white text on it). */
+:root.pf-v5-theme-dark {
+    --pf-v5-global--primary-color--100: var(--avash-brand);
+    --pf-v5-global--primary-color--200: color-mix(in srgb, var(--avash-brand) 80%, #FFF);
+    /* Dark buttons use --300 (and --400 on hover) in PatternFly 5. */
+    --pf-v5-global--primary-color--300: var(--avash-brand);
+    --pf-v5-global--primary-color--400: color-mix(in srgb, var(--avash-brand) 80%, #FFF);
+    --avash-bg: #0E141B;
+    --avash-card: #161E28;
+    --avash-text: #E7EBF1;
+    --avash-text-muted: #A5AFBD;
+    --avash-pattern-opacity: 0.18;
+    --pf-v5-global--link--Color: color-mix(in srgb, var(--avash-brand) 55%, #FFF);
+    --pf-v5-global--link--Color--hover: color-mix(in srgb, var(--avash-brand) 40%, #FFF);
+}
+
+/* Persian is cursive: no letter-spacing or uppercase anywhere. */
+.login-pf, .login-pf * { letter-spacing: 0 !important; text-transform: none !important; }
+
+.login-pf body {
+    background: var(--avash-bg);
+    font-family: var(--pf-v5-global--FontFamily--text);
+}
+
+/* Girih pattern in the brand colour (the SVG is a mask, so any colour works). */
+.login-pf body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: var(--avash-brand);
+    opacity: var(--avash-pattern-opacity);
+    -webkit-mask: url("../img/girih.svg") repeat;
+    mask: url("../img/girih.svg") repeat;
+    -webkit-mask-size: 56px;
+    mask-size: 56px;
+}
+
+body:has(.avash-brand[data-background="plain"])::before { display: none; }
+body:has(.avash-brand[data-background="gradient"]) {
+    background: linear-gradient(160deg, color-mix(in srgb, var(--avash-brand) 22%, var(--avash-bg)), var(--avash-bg) 65%);
+}
+body:has(.avash-brand[data-background="gradient"])::before { display: none; }
+
+/* Organisation name above the card (central page) */
+#kc-header-wrapper {
+    color: var(--avash-text) !important;
+    font-size: 1.6rem;
+    font-weight: 800;
+}
+
+.pf-v5-c-login__main {
+    display: flex;
+    flex-direction: column;
+    background: var(--avash-card);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.pf-v5-c-login__main-header { border-top-width: 5px; }
+
+/* White text on the brand in both modes (the gateway only accepts brand colours with >= 3:1 against white;
+   PatternFly's dark mode would put dark text on it). */
+.pf-v5-c-button.pf-m-primary {
+    font-weight: 700;
+    --pf-v5-c-button--m-primary--Color: #FFF;
+    --pf-v5-c-button--m-primary--hover--Color: #FFF;
+    --pf-v5-c-button--m-primary--focus--Color: #FFF;
+    --pf-v5-c-button--m-primary--active--Color: #FFF;
+}
+
+/* ---------- Branded application page ---------- */
+/* footer.ftl renders the brand inside the card's last footer; it moves to the top of the card. */
+.pf-v5-c-login__main-footer:has(> .avash-brand) { order: -1; }
+body:has(.avash-brand) #kc-header { visibility: hidden; height: 1.5rem; }
+
+.avash-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 1.75rem 1.5rem 0.25rem;
+    text-align: center;
+}
+
+.avash-brand__logo {
+    max-width: 180px;
+    max-height: 64px;
+    object-fit: contain;
+    margin-bottom: 0.5rem;
+}
+
+.avash-brand__title {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--avash-text);
+}
+
+.avash-brand__subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.8;
+    color: var(--avash-text-muted);
+}

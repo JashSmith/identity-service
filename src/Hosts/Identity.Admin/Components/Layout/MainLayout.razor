@@ -1,0 +1,60 @@
+﻿@inherits LayoutComponentBase
+
+<RadzenComponents />
+<a class="av-skip-link" href="#main">رفتن به محتوای اصلی</a>
+<RadzenLayout class="av-shell" Style="grid-template-areas: 'rz-sidebar rz-header' 'rz-sidebar rz-body';">
+    <RadzenHeader class="av-header">
+        <div class="av-header__bar">
+            <RadzenSidebarToggle Click="@(() => sidebarExpanded = !sidebarExpanded)" aria-label="نمایش یا پنهان کردن منو" />
+            <span class="av-header__spacer"></span>
+            <AuthorizeView>
+                <Authorized>
+                    <span class="av-tenant-chip" title="سازمانی که مدیریت می‌کنید">
+                        <RadzenIcon Icon="domain" aria-hidden="true" />
+                        <span class="ltr">@context.User.FindFirst(ConsoleClaims.Tenant)?.Value</span>
+                    </span>
+                    <ThemeSwitch />
+                    <div class="av-user">
+                        <span class="av-user__avatar" aria-hidden="true">@Initial(context.User.Identity?.Name)</span>
+                        <span class="av-user__name">@context.User.Identity?.Name</span>
+                        <form method="post" action="/auth/logout">
+                            <AntiforgeryToken />
+                            <RadzenButton ButtonType="ButtonType.Submit" Icon="logout" ButtonStyle="ButtonStyle.Base" Variant="Variant.Text"
+                                          Size="ButtonSize.Small" title="خروج" aria-label="خروج از حساب" />
+                        </form>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </RadzenHeader>
+    <RadzenSidebar @bind-Expanded="sidebarExpanded" class="av-sidebar">
+        <div class="av-brand">
+            <Girih Class="av-brand__pattern" Size="14" />
+            <div class="av-brand__body">
+                <span class="av-brand__mark" aria-hidden="true">
+                    <svg viewBox="0 0 40 40">
+                        <path class="av-brand__star" d="M20 6 L24.1 15.9 L34 20 L24.1 24.1 L20 34 L15.9 24.1 L6 20 L15.9 15.9 Z" />
+                        <rect class="av-brand__ring" x="14" y="14" width="12" height="12" transform="rotate(45 20 20)" />
+                    </svg>
+                </span>
+                <span class="av-brand__text">
+                    <span class="av-brand__name">هویت آواش</span>
+                    <span class="av-brand__caption">کنسول مدیریت</span>
+                </span>
+            </div>
+        </div>
+        <NavMenu />
+    </RadzenSidebar>
+    <RadzenBody class="av-body">
+        <main id="main" class="av-main">
+            @Body
+        </main>
+    </RadzenBody>
+</RadzenLayout>
+
+@code {
+    private bool sidebarExpanded = true;
+
+    private static string Initial(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? "؟" : name.Trim()[..1].ToUpperInvariant();
+}
