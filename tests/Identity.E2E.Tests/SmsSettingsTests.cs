@@ -10,6 +10,16 @@ public sealed class SmsSettingsTests(IdentityStack stack)
 {
     private static async Task<JsonElement> Json(HttpResponseMessage response) => await response.Content.ReadFromJsonAsync<JsonElement>();
 
+    /// <summary>A test message; another test (the console's) may have sent one moments ago, so the cooldown is waited out once.</summary>
+    private async Task<HttpResponseMessage> SendTestAsync(string token, string phone)
+    {
+        var sent = await stack.CallAsync(HttpMethod.Post, "/api/identity/settings/sms/test", token, new { phoneNumber = phone });
+        if (sent.StatusCode != HttpStatusCode.BadRequest || !(await sent.Content.ReadAsStringAsync()).Contains("sms.test_rate_limited")) return sent;
+        sent.Dispose();
+        await Task.Delay(TimeSpan.FromSeconds(21));
+        return await stack.CallAsync(HttpMethod.Post, "/api/identity/settings/sms/test", token, new { phoneNumber = phone });
+    }
+
     [E2EFact]
     public async Task Sms_is_configured_per_tenant_tested_through_the_development_provider_and_secrets_stay_hidden()
     {
@@ -48,7 +58,7 @@ public sealed class SmsSettingsTests(IdentityStack stack)
         }
 
         // A test message goes to the development outbox of this tenant only.
-        using (var sent = await stack.CallAsync(HttpMethod.Post, "/api/identity/settings/sms/test", company, new { phoneNumber = "۰۹۱۲۱۲۳۴۵۶۷" }))
+        using (var sent = await SendTestAsync(company, "۰۹۱۲۱۲۳۴۵۶۷"))
         {
             Assert.Equal(HttpStatusCode.OK, sent.StatusCode);
             var result = await Json(sent);

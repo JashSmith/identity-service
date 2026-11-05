@@ -133,9 +133,10 @@ public sealed class ConsoleUiTests(IdentityStack stack, BrowserSession browser)
         await Assertions.Expect(ui.Page.Locator("[role=note]")).ToContainTextAsync("هیچ پیامکی ارسال نمی‌شود");
         var enabled = ui.Page.Locator(".rz-switch").Filter(new() { Has = ui.Page.Locator("input[name='sms-enabled']") });
         if (!(await enabled.GetAttributeAsync("class") ?? "").Contains("rz-switch-checked")) await enabled.ClickAsync();
-        await ui.Page.Locator("button", new() { HasText = "ذخیره" }).First.ClickAsync();
+        await ui.Page.Locator("button[name=sms-save]").ClickAsync();
         await Assertions.Expect(ui.Page.Locator(".rz-notification")).ToContainTextAsync("تنظیمات پیامک ذخیره شد");
         await ui.Page.Locator("input[name=sms-test-number]").FillAsync("09121234567");
+        await ui.Page.Locator("input[name=sms-test-number]").PressAsync("Tab"); // Radzen binds on change (blur)
         await ui.Page.Locator("button", new() { HasText = "ارسال آزمایشی" }).ClickAsync();
 
         await Assertions.Expect(ui.Page.Locator("[role=status]")).ToContainTextAsync("پیام در حالت آزمایشی ثبت شد");
