@@ -1,0 +1,133 @@
+@*
+    Stacked columns of successful (bottom) and failed (top) sign-ins per day. Plain SVG: thin columns with 4px rounded
+    tops, a 2px surface gap between the two segments, recessive grid, legend for both series, a keyboard/hover tooltip
+    per day and a table view. Days run right to left (RTL reading order). Colours: --av-chart-ok / --av-chart-failed.
+*@
+<figure class="av-chart" aria-labelledby="@($"{_id}-caption")">
+    <figcaption id="@($"{_id}-caption")" class="av-chart__head">
+        @if (ShowTitle)
+        {
+            <span class="av-chart__title">@Title</span>
+        }
+        <span class="av-chart__legend">
+            <span class="av-chart__key"><span class="av-chart__swatch av-chart__swatch--ok"></span>موفق</span>
+            <span class="av-chart__key"><span class="av-chart__swatch av-chart__swatch--failed"></span>ناموفق</span>
+        </span>
+    </figcaption>
+
+    <div class="av-chart__plot">
+        <svg viewBox="0 0 @Width @Height" role="img" aria-label="@AriaSummary">
+            @foreach (var tick in Ticks)
+            {
+                var y = Y(tick);
+                <g aria-hidden="true">
+                    <line x1="@Num(PadStart)" x2="@Num(Width - PadEnd)" y1="@Num(y)" y2="@Num(y)" class="av-chart__grid" />
+                    <text x="@Num(Width - 4)" y="@Num(y + 4)" class="av-chart__tick" text-anchor="end">@PersianFormat.Number(tick)</text>
+                </g>
+            }
+            @for (var i = 0; i < Days.Count; i++)
+            {
+                var day = Days[i];
+                var x = ColumnX(i);
+                var okTop = Y(day.Succeeded);
+                var failTop = Y(day.Succeeded + day.Failed);
+                <g class="av-chart__day" tabindex="0" aria-label="@DayText(day)">
+                    <title>@DayText(day)</title>
+                    <rect x="@Num(x - Slot / 2)" y="@Num(PadTop)" width="@Num(Slot)" height="@Num(Baseline - PadTop)" class="av-chart__hit" />
+                    @if (day.Succeeded > 0)
+                    {
+                        <path d="@Column(x, okTop, Baseline, rounded: day.Failed == 0)" class="av-chart__ok" />
+                    }
+                    @if (day.Failed > 0)
+                    {
+                        <path d="@Column(x, failTop, day.Succeeded > 0 ? okTop - Gap : Baseline, rounded: true)" class="av-chart__failed" />
+                    }
+                    <text x="@Num(x)" y="@Num(Height - 6)" class="av-chart__label" text-anchor="middle">@PersianFormat.DayLabel(day.Date)</text>
+                </g>
+            }
+            <line x1="@Num(PadStart)" x2="@Num(Width - PadEnd)" y1="@Num(Baseline)" y2="@Num(Baseline)" class="av-chart__axis" />
+        </svg>
+    </div>
+
+    <details class="av-chart__table">
+        <summary>نمایش جدول</summary>
+        <table>
+            <thead><tr><th scope="col">روز</th><th scope="col">موفق</th><th scope="col">ناموفق</th></tr></thead>
+            <tbody>
+                @foreach (var day in Days)
+                {
+                    <tr>
+                        <th scope="row">@PersianFormat.Weekday(day.Date) @PersianFormat.DayLabel(day.Date)</th>
+                        <td>@PersianFormat.Number(day.Succeeded)</td>
+                        <td>@PersianFormat.Number(day.Failed)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </details>
+</figure>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DailyLoginCountDto> Days { get; set; } = [];
+    [Parameter] public string Title { get; set; } = "ورود کاربران";
+
+    /// <summary>False when the surrounding panel already shows the title (the title still names the chart for screen readers).</summary>
+    [Parameter] public bool ShowTitle { get; set; } = true;
+
+    private const double Width = 640, Height = 220, PadTop = 12, PadStart = 8, PadEnd = 40, PadBottom = 28, Gap = 2, Radius = 4;
+    private readonly string _id = "chart-" + Guid.NewGuid().ToString("N")[..8];
+
+    private double Baseline => Height - PadBottom;
+    private double Slot => (Width - PadStart - PadEnd) / Math.Max(1, Days.Count);
+    private double BarWidth => Math.Min(20, Slot * 0.4);
+    private int Max => Math.Max(1, Days.Count == 0 ? 1 : Days.Max(d => d.Succeeded + d.Failed));
+
+    /// <summary>Round ticks from zero (about three steps) up to the tallest day.</summary>
+    private IEnumerable<long> Ticks
+    {
+        get
+        {
+            var step = NiceStep(Max / 3.0);
+            // The last tick is the first one at or above the tallest day, so no column leaves the plot.
+            for (long t = 0; ; t += step)
+            {
+                yield return t;
+                if (t >= Max) yield break;
+            }
+        }
+    }
+
+    private long TopValue => Ticks.Last();
+
+    private static long NiceStep(double raw)
+    {
+        if (raw <= 1) return 1;
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(raw)));
+        var norm = raw / magnitude;
+        var nice = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+        return (long)(nice * magnitude);
+    }
+
+    private double Y(long value) => Baseline - (Baseline - PadTop) * value / Math.Max(1, TopValue);
+
+    // Index 0 is the oldest day; in RTL it sits at the right edge.
+    private double ColumnX(int index) => Width - PadEnd - Slot * (index + 0.5);
+
+    private string Column(double x, double top, double bottom, bool rounded)
+    {
+        var left = x - BarWidth / 2;
+        var right = x + BarWidth / 2;
+        var height = Math.Max(0, bottom - top);
+        var r = rounded ? Math.Min(Radius, Math.Min(height, BarWidth / 2)) : 0;
+        return FormattableString.Invariant(
+            $"M{left:0.##},{bottom:0.##} L{left:0.##},{top + r:0.##} Q{left:0.##},{top:0.##} {left + r:0.##},{top:0.##} L{right - r:0.##},{top:0.##} Q{right:0.##},{top:0.##} {right:0.##},{top + r:0.##} L{right:0.##},{bottom:0.##} Z");
+    }
+
+    private static string Num(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string DayText(DailyLoginCountDto day) =>
+        $"{PersianFormat.Weekday(day.Date)} {PersianFormat.DayLabel(day.Date)}: {PersianFormat.Number(day.Succeeded)} ورود موفق، {PersianFormat.Number(day.Failed)} ناموفق";
+
+    private string AriaSummary =>
+        $"{Title}: {PersianFormat.Number(Days.Sum(d => d.Succeeded))} ورود موفق و {PersianFormat.Number(Days.Sum(d => d.Failed))} ناموفق در {PersianFormat.Number(Days.Count)} روز";
+}

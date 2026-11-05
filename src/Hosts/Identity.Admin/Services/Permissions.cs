@@ -18,5 +18,6 @@ public static class Permissions
     public const string SchedulesManage = App + ":Access:Schedule:Manage";
     public const string SettingsRead = App + ":Settings:Realm:Read";
     public const string SettingsManage = App + ":Settings:Realm:Manage";
+    public const string AuditRead = App + ":System:Audit:Read";
     public const string SystemRead = App + ":System:Diagnostics:Read";
 }

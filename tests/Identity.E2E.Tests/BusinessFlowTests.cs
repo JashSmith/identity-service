@@ -126,6 +126,27 @@ public sealed class BusinessFlowTests(IdentityStack stack)
     }
 
     [E2EFact]
+    public async Task Failed_sign_in_is_recorded_and_counted_in_the_audit_summary()
+    {
+        var ghost = $"e2e-ghost-{Run}";
+        using (var refused = await stack.LoginResponseAsync(ghost, "wrong-password"))
+            Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+        var admin = await stack.LoginAsync(Admin, Admin);
+
+        using var events = await stack.CallAsync(HttpMethod.Get, "/api/identity/audit/login-events?type=LOGIN_ERROR&max=100", admin);
+        using var summary = await stack.CallAsync(HttpMethod.Get, "/api/identity/audit/summary?days=1", admin);
+        using var anonymous = await stack.Gateway.GetAsync("/api/identity/audit/summary");
+
+        Assert.Equal(HttpStatusCode.OK, events.StatusCode);
+        Assert.Contains((await JsonAsync(events)).EnumerateArray(), e => e.GetProperty("username").GetString() == ghost);
+        var s = await JsonAsync(summary);
+        Assert.True(s.GetProperty("loginEventsEnabled").GetBoolean());
+        Assert.True(s.GetProperty("failedLogins").GetInt32() >= 1);
+        Assert.True(s.GetProperty("logins").GetInt32() >= 1);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+    }
+
+    [E2EFact]
     public async Task Tokens_only_work_for_their_own_tenant()
     {
         var company = await stack.LoginAsync(Admin, Admin);

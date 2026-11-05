@@ -4,10 +4,20 @@
 <PageTitle>داشبورد | کنسول مدیریت هویت</PageTitle>
 
 <PageHeader Title="داشبورد" Icon="space_dashboard">
-    <Description>نمای کلی این سازمان. هر کارت فقط برای مدیرانی دیده می‌شود که اجازه خواندن آن بخش را دارند.</Description>
+    <Description>نمای کلی این سازمان در هفت روز اخیر. هر بخش فقط برای مدیرانی دیده می‌شود که اجازه خواندن آن را دارند.</Description>
+    <Actions>
+        @if (canManageUsers)
+        {
+            <RadzenButton Icon="person_add" Text="کاربر جدید" ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" Click="@(() => Navigation.NavigateTo("/users"))" />
+        }
+        @if (canManageApps)
+        {
+            <RadzenButton Icon="add" Text="اپلیکیشن جدید" ButtonStyle="ButtonStyle.Base" Variant="Variant.Outlined" Click="@(() => Navigation.NavigateTo("/applications"))" />
+        }
+    </Actions>
 </PageHeader>
 
-@if (cards.Count == 0 && loaded)
+@if (loaded && cards.Count == 0 && !canAudit)
 {
     <EmptyState Icon="lock" Title="بخشی برای نمایش ندارید">
         حساب شما هیچ‌یک از دسترسی‌های خواندن کنسول را ندارد. از مدیر سامانه بخواهید نقش مناسب را به شما بدهد.
@@ -19,9 +29,115 @@
     {
         <StatCard Label="@card.Label" Icon="@card.Icon" Tone="@card.Tone" Path="@card.Path" Value="@card.Value" Failed="@card.Failed" />
     }
+    @if (canAudit)
+    {
+        <StatCard Label="ورود موفق (۷ روز)" Icon="login" Tone="success" Value="@(summary?.LoginEventsEnabled == false ? null : summary?.Logins)"
+                  Failed="@(summaryFailed || summary?.LoginEventsEnabled == false)" />
+        <StatCard Label="ورود ناموفق (۷ روز)" Icon="gpp_maybe" Tone="danger" Value="@(summary?.LoginEventsEnabled == false ? null : summary?.FailedLogins)"
+                  Failed="@(summaryFailed || summary?.LoginEventsEnabled == false)" />
+    }
 </section>
 
+@if (canAudit)
+{
+    <div class="av-dash-grid">
+        <section class="av-panel av-dash-grid__wide" aria-labelledby="trend-title">
+            <h2 id="trend-title" class="av-panel__title">
+                <span>روند ورود در هفت روز اخیر</span>
+                @if (summary?.Truncated == true)
+                {
+                    <span class="av-muted av-small" title="رویدادها بیش از سقف خواندن بودند؛ اعداد کمینه هستند">بیش از @PersianFormat.Number(AuditSummaryLimit) رویداد</span>
+                }
+            </h2>
+            @if (summaryFailed)
+            {
+                <EmptyState Icon="cloud_off" Title="رویدادها خوانده نشد">
+                    <ChildContent>ارتباط با Keycloak برقرار نشد. کمی بعد دوباره تلاش کنید.</ChildContent>
+                    <Action><RadzenButton Icon="refresh" Text="تلاش دوباره" Variant="Variant.Outlined" Click="@LoadSummaryAsync" /></Action>
+                </EmptyState>
+            }
+            else if (summary is null)
+            {
+                <div class="av-chart-skeleton av-skeleton" aria-label="در حال بارگذاری"></div>
+            }
+            else if (!summary.LoginEventsEnabled)
+            {
+                <EmptyState Icon="history_toggle_off" Title="ثبت رویدادهای ورود خاموش است">
+                    <ChildContent>تا وقتی Keycloak رویدادهای ورود را ثبت نکند، روند ورود و ورودهای ناموفق نمایش داده نمی‌شود.</ChildContent>
+                    <Action>
+                        @if (canManageSettings)
+                        {
+                            <RadzenButton Icon="toggle_on" Text="روشن کردن در تنظیمات" Click="@(() => Navigation.NavigateTo("/settings?tab=events"))" />
+                        }
+                        else
+                        {
+                            <span class="av-muted">از مدیر سامانه بخواهید آن را روشن کند.</span>
+                        }
+                    </Action>
+                </EmptyState>
+            }
+            else
+            {
+                <LoginTrendChart Days="@summary.Days" Title="ورود کاربران در هفت روز اخیر" ShowTitle="false" />
+            }
+        </section>
+
+        <section class="av-panel" aria-labelledby="apps-title">
+            <h2 id="apps-title" class="av-panel__title">پرکاربردترین اپلیکیشن‌ها</h2>
+            @if (summary is { LoginEventsEnabled: true } s && s.TopApplications.Count > 0)
+            {
+                var max = s.TopApplications.Max(a => a.Logins);
+                <ol class="av-rank">
+                    @foreach (var app in s.TopApplications)
+                    {
+                        <li class="av-rank__row">
+                            <span class="ltr av-rank__name">@app.ClientId</span>
+                            <span class="av-rank__bar" aria-hidden="true"><span style="inline-size: @(Percent(app.Logins, max))%"></span></span>
+                            <span class="av-rank__value">@PersianFormat.Number(app.Logins)</span>
+                        </li>
+                    }
+                </ol>
+            }
+            else if (summary is { LoginEventsEnabled: true })
+            {
+                <EmptyState Icon="apps" Title="ورودی در این هفته ثبت نشده است" />
+            }
+            else if (summary is not null || summaryFailed)
+            {
+                <p class="av-muted av-small">بدون رویدادهای ورود در دسترس نیست.</p>
+            }
+        </section>
+
+        <section class="av-panel" aria-labelledby="changes-title">
+            <h2 id="changes-title" class="av-panel__title">آخرین تغییرات مدیریتی</h2>
+            @if (summary is { AdminEventsEnabled: true } s2 && s2.RecentChanges.Count > 0)
+            {
+                <ul class="av-feed">
+                    @foreach (var change in s2.RecentChanges)
+                    {
+                        <li class="av-feed__item">
+                            <span class="av-feed__op av-tone-@OperationTone(change.Operation)">@OperationName(change.Operation)</span>
+                            <span class="av-feed__what">@ResourceName(change.ResourceType) <span class="ltr av-muted">@Shorten(change.ResourcePath)</span></span>
+                            <time class="av-feed__time av-muted" datetime="@change.Time.ToString("O")">@PersianFormat.DateAndTime(change.Time)</time>
+                        </li>
+                    }
+                </ul>
+            }
+            else if (summary is { AdminEventsEnabled: true })
+            {
+                <EmptyState Icon="history" Title="تغییری در این هفته ثبت نشده است" />
+            }
+            else if (summary is not null)
+            {
+                <p class="av-muted av-small">ثبت رویدادهای مدیریتی خاموش است.</p>
+            }
+        </section>
+    </div>
+}
+
 @code {
+    private const int AuditSummaryLimit = 2000;
+
     private sealed class Card(string label, string icon, string tone, string path)
     {
         public string Label { get; } = label;
@@ -33,10 +149,16 @@
     }
 
     private readonly List<Card> cards = [];
-    private bool loaded;
+    private AuditSummaryDto? summary;
+    private bool loaded, summaryFailed, canAudit, canManageUsers, canManageApps, canManageSettings;
 
     protected override async Task OnInitializedAsync()
     {
+        canAudit = await Can(Permissions.AuditRead);
+        canManageUsers = await Can(Permissions.UsersManage);
+        canManageApps = await Can(Permissions.ApplicationsManage);
+        canManageSettings = await Can(Permissions.SettingsManage);
+
         var loads = new List<Task>();
         if (await Can(Permissions.UsersRead))
             loads.Add(Load(new("کاربران", "group", "primary", "/users"),
@@ -50,15 +172,64 @@
         if (await Can(Permissions.PermissionsRead))
             loads.Add(Load(new("دسترسی‌ها", "key", "warning", "/applications"),
                 async () => (await Api.GetAsync<List<CatalogPermissionDto>>("api/identity/permissions")).Count));
+        if (canAudit) loads.Add(LoadSummaryAsync());
         loaded = true;
         await Task.WhenAll(loads);
     }
 
-    // Each card loads on its own: one failing section leaves the others visible (partial dashboard).
+    // Each section loads on its own: one failing section leaves the others visible (partial dashboard).
     private async Task Load(Card card, Func<Task<long>> read)
     {
         cards.Add(card);
         if (!await RunAsync(async () => card.Value = await read())) card.Failed = true;
         StateHasChanged();
     }
+
+    private async Task LoadSummaryAsync()
+    {
+        summaryFailed = false;
+        summary = null;
+        if (!await RunAsync(async () => summary = await Api.GetAsync<AuditSummaryDto>("api/identity/audit/summary?days=7")))
+            summaryFailed = true;
+        StateHasChanged();
+    }
+
+    private static int Percent(int value, int max) => max == 0 ? 0 : Math.Max(4, value * 100 / max);
+
+    private static string OperationName(string op) => op switch
+    {
+        "CREATE" => "ایجاد",
+        "UPDATE" => "ویرایش",
+        "DELETE" => "حذف",
+        "ACTION" => "اقدام",
+        _ => op,
+    };
+
+    private static string OperationTone(string op) => op switch
+    {
+        "CREATE" => "success",
+        "DELETE" => "danger",
+        "ACTION" => "warning",
+        _ => "info",
+    };
+
+    private static string ResourceName(string type) => type switch
+    {
+        "USER" => "کاربر",
+        "GROUP" => "نقش",
+        "GROUP_MEMBERSHIP" => "عضویت در نقش",
+        "CLIENT" => "اپلیکیشن",
+        "CLIENT_ROLE" => "دسترسی",
+        "CLIENT_ROLE_MAPPING" => "تخصیص دسترسی",
+        "REALM" => "تنظیمات سازمان",
+        "REALM_ROLE_MAPPING" => "نقش سازمانی",
+        "IDENTITY_PROVIDER" => "سرویس ورود بیرونی",
+        "COMPONENT" => "اتصال LDAP",
+        "AUTH_FLOW" or "AUTH_EXECUTION" => "جریان ورود",
+        "USER_SESSION" => "نشست کاربر",
+        _ => type,
+    };
+
+    private static string Shorten(string? path) =>
+        string.IsNullOrEmpty(path) ? "" : path.Length <= 42 ? path : "…" + path[^41..];
 }

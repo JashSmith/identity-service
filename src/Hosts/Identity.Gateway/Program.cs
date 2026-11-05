@@ -117,6 +117,10 @@ builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakSchedule
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>();
 builder.Services.AddSingleton<Identity.Application.Settings.IAuthSettingsService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuditAdapter>();
+builder.Services.AddSingleton<Identity.Application.Audit.IAuditEventReader>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuditAdapter>());
+builder.Services.AddSingleton<Identity.Application.Audit.AuditService>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>();
 builder.Services.AddSingleton<Identity.Application.Schedules.IAccessScheduleStore>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>());
@@ -238,6 +242,7 @@ app.MapUserManagement();
 app.MapUserLifecycle();
 app.MapSchedules();
 app.MapSettings();
+app.MapAudit();
 app.MapGet("/api/identity/tenants", (Identity.Gateway.Tenancy.TenantRegistry tenants) =>
         Results.Ok(tenants.All.Select(tenants.ToDto).ToArray()))
     .RequireAuthorization(IamPermissions.SystemRead).WithTags("Tenants").WithName("ListTenants")

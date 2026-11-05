@@ -9,6 +9,7 @@
 - [محدوده‌ها](#محدودهها)
 - [برنامه زمانی](#برنامه-زمانی)
 - [تنظیمات احراز هویت](#تنظیمات-احراز-هویت)
+- [رویدادها و ممیزی](#رویدادها-و-ممیزی)
 - [سازمان‌ها](#سازمانها)
 
 ## ورود و توکن
@@ -92,6 +93,17 @@
 | ‏`GET` و `PUT /settings/login` | گزینه‌ها و قالب صفحه ورود |
 | ‏`/settings/identity-providers` | سرویس‌های ورود خارجی (OIDC، ‏SAML، ‏Google، ‏Microsoft، ‏GitHub) |
 | ‏`/settings/ldap` | ‏LDAP و Active Directory؛ ‏`POST /settings/ldap/test` و `POST /settings/ldap/{id}/sync` |
+| ‏`GET` و `PUT /settings/events` | روشن یا خاموش کردن ثبت رویدادهای ورود و مدیریتی و مدت نگهداری (۱ تا ۳۶۵ روز) |
+
+## رویدادها و ممیزی
+
+رویدادها در خود Keycloak ثبت و نگه داشته می‌شوند؛ درگاه فقط آن‌ها را می‌خواند. همه مسیرها دسترسی `identity-gateway:System:Audit:Read` می‌خواهند.
+
+| مسیر | توضیح |
+|---|---|
+| ‏`GET /audit/login-events` | رویدادهای ورود؛ فیلترها: `from`، ‏`to` (تاریخ میلادی `yyyy-MM-dd`)، ‏`type` (چندتایی، مثل `LOGIN_ERROR`)، ‏`client`، ‏`user`، ‏`first` و `max` (حداکثر ۲۰۰) |
+| ‏`GET /audit/admin-events` | تغییرات مدیریتی؛ فیلترها: `from`، ‏`to`، ‏`resourceType`، ‏`operation` (`CREATE`، ‏`UPDATE`، ‏`DELETE`، ‏`ACTION`)، ‏`first` و `max` |
+| ‏`GET /audit/summary?days=7` | خلاصه داشبورد: ورود موفق و ناموفق هر روز، پرکاربردترین اپلیکیشن‌ها و آخرین تغییرات (حداکثر ۳۰ روز) |
 
 ## سازمان‌ها
 

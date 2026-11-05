@@ -192,6 +192,11 @@ html[data-theme] {
     --rz-grid-header-background-color: var(--av-surface-muted);
     --rz-grid-hover-background-color: var(--av-primary-tint);
 
+    /* Login chart (validated with the dataviz palette checks against the surface) */
+    --av-chart-ok: #008C83;
+    --av-chart-failed: #B42318;
+    --av-chart-grid: #ECE7DD;
+
     /* Chart series: turquoise, lapis, saffron, pomegranate, pistachio, sumac, sky, clay */
     --rz-series-1: #0A7471;
     --rz-series-2: #26428B;
@@ -257,6 +262,9 @@ html[data-theme="dark"] {
     --av-danger-dark: #DB6F63;
     --av-danger-tint: rgba(242, 139, 128, 0.16);
     --av-on-danger: #2A0B08;
+    --av-chart-ok: #1FA8A1;
+    --av-chart-failed: #E06B5E;
+    --av-chart-grid: #283342;
     --rz-series-1: #3BC2BC;
     --rz-series-2: #93A6EE;
     --rz-series-3: #EDB04A;
@@ -320,6 +328,9 @@ html[data-theme="dark"] {
         --av-danger-dark: #DB6F63;
         --av-danger-tint: rgba(242, 139, 128, 0.16);
         --av-on-danger: #2A0B08;
+        --av-chart-ok: #1FA8A1;
+        --av-chart-failed: #E06B5E;
+        --av-chart-grid: #283342;
         --rz-series-1: #3BC2BC;
         --rz-series-2: #93A6EE;
         --rz-series-3: #EDB04A;

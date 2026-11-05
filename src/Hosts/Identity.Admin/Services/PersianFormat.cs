@@ -43,6 +43,28 @@ public static class PersianFormat
     /// <summary>Jalali date in Tehran, e.g. ۱۴۰۵/۰۸/۱۴.</summary>
     public static string Date(DateTimeOffset? value) => value is null ? "—" : DateAndTime(value)[..10];
 
+    private static readonly string[] Months =
+        ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+
+    /// <summary>Short Jalali day label, e.g. ۱۴ آبان.</summary>
+    public static string DayLabel(DateOnly date)
+    {
+        var d = date.ToDateTime(TimeOnly.MinValue);
+        return Digits(Calendar.GetDayOfMonth(d).ToString(CultureInfo.InvariantCulture)) + " " + Months[Calendar.GetMonth(d) - 1];
+    }
+
+    /// <summary>Persian weekday name, e.g. پنجشنبه.</summary>
+    public static string Weekday(DateOnly date) => date.DayOfWeek switch
+    {
+        DayOfWeek.Saturday => "شنبه",
+        DayOfWeek.Sunday => "یکشنبه",
+        DayOfWeek.Monday => "دوشنبه",
+        DayOfWeek.Tuesday => "سه‌شنبه",
+        DayOfWeek.Wednesday => "چهارشنبه",
+        DayOfWeek.Thursday => "پنجشنبه",
+        _ => "جمعه",
+    };
+
     private static TimeZoneInfo FindTehran()
     {
         foreach (var id in new[] { "Asia/Tehran", "Iran Standard Time" })

@@ -7,7 +7,7 @@
     <Description>توکن و نشست، سیاست رمز، مقابله با حدس رمز، ورود دومرحله‌ای، صفحه ورود، ورود با سرویس‌های بیرونی و LDAP.</Description>
 </PageHeader>
 
-<RadzenTabs RenderMode="TabRenderMode.Client">
+<RadzenTabs RenderMode="TabRenderMode.Client" @bind-SelectedIndex="selectedTab">
     <Tabs>
         <RadzenTabsItem Text="توکن و نشست">
             @if (tokens is not null)
@@ -116,6 +116,22 @@
         <RadzenTabsItem Text="LDAP / Active Directory">
             <LdapProviders CanManage="@canManage" />
         </RadzenTabsItem>
+
+        <RadzenTabsItem Text="رویدادها و ممیزی">
+            @if (events is not null)
+            {
+                <RadzenStack Gap="0.75rem">
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="events.LoginEventsEnabled" Disabled="@(!canManage)" /><RadzenText class="rz-m-0">ثبت رویدادهای ورود، خروج و ورود ناموفق</RadzenText></RadzenStack>
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="events.AdminEventsEnabled" Disabled="@(!canManage)" /><RadzenText class="rz-m-0">ثبت تغییرات مدیریتی (کاربران، نقش‌ها، اپلیکیشن‌ها، تنظیمات)</RadzenText></RadzenStack>
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem"><RadzenSwitch @bind-Value="events.AdminEventDetails" Disabled="@(!canManage || !events.AdminEventsEnabled)" /><RadzenText class="rz-m-0">ذخیره جزئیات هر تغییر (ممکن است داده شخصی داشته باشد)</RadzenText></RadzenStack>
+                    <RadzenRow Gap="1rem">
+                        <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="مدت نگهداری رویدادهای ورود (روز)" Style="width: 100%;"><RadzenNumeric TValue="int" Min="1" Max="365" @bind-Value="events.RetentionDays" Disabled="@(!canManage)" /></RadzenFormField></RadzenColumn>
+                    </RadzenRow>
+                    <RadzenText TextStyle="TextStyle.Caption">رویدادها در خود Keycloak نگه داشته می‌شوند و داشبورد از همین‌ها ساخته می‌شود.</RadzenText>
+                </RadzenStack>
+                <SaveButton Visible="@canManage" Click="@(() => SaveAsync("events", ToEvents()))" />
+            }
+        </RadzenTabsItem>
     </Tabs>
 </RadzenTabs>
 
@@ -125,6 +141,7 @@
     private sealed class Password { public int? MinLength, Digits, UpperCase, LowerCase, SpecialChars, History, ExpireDays; public bool NotUsername, NotEmail; }
     private sealed class BruteForce { public bool Enabled, PermanentLockout; public int FailureFactor, WaitIncrementSeconds, MaxFailureWaitSeconds, MaxDeltaTimeSeconds; }
     private sealed class Otp { public string Type = "totp", Algorithm = "HmacSHA1"; public int Digits, Period, LookAheadWindow; public bool RequiredForNewUsers; }
+    private sealed class Events { public bool LoginEventsEnabled, AdminEventsEnabled, AdminEventDetails; public int RetentionDays = 30; }
     private sealed class Login { public bool RegistrationAllowed, ResetPasswordAllowed, RememberMe, VerifyEmail, LoginWithEmailAllowed; public string? LoginTheme, DefaultLocale; }
 
     private Tokens? tokens;
@@ -132,11 +149,17 @@
     private BruteForce? bruteForce;
     private Otp? otp;
     private Login? login;
+    private Events? events;
     private bool canManage;
+    private int selectedTab;
+
+    /// <summary>Deep link to a tab, e.g. /settings?tab=events from the dashboard.</summary>
+    [SupplyParameterFromQuery] public string? Tab { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         canManage = await Can(Permissions.SettingsManage);
+        if (Tab == "events") selectedTab = 7;
         await RunAsync(async () =>
         {
             var t = await Api.GetAsync<TokenSettingsDto>("api/identity/settings/tokens");
@@ -165,6 +188,12 @@
                 RegistrationAllowed = l.RegistrationAllowed, ResetPasswordAllowed = l.ResetPasswordAllowed, RememberMe = l.RememberMe,
                 VerifyEmail = l.VerifyEmail, LoginWithEmailAllowed = l.LoginWithEmailAllowed, LoginTheme = l.LoginTheme, DefaultLocale = l.DefaultLocale,
             };
+            var e = await Api.GetAsync<EventSettingsDto>("api/identity/settings/events");
+            events = new Events
+            {
+                LoginEventsEnabled = e.LoginEventsEnabled, AdminEventsEnabled = e.AdminEventsEnabled, AdminEventDetails = e.AdminEventDetails,
+                RetentionDays = e.RetentionDays > 0 ? e.RetentionDays : 30,
+            };
         });
     }
 
@@ -182,6 +211,9 @@
     private LoginSettingsDto ToLogin() => new(login!.RegistrationAllowed, login.ResetPasswordAllowed, login.RememberMe, login.VerifyEmail,
         login.LoginWithEmailAllowed, string.IsNullOrWhiteSpace(login.LoginTheme) ? null : login.LoginTheme,
         string.IsNullOrWhiteSpace(login.DefaultLocale) ? null : login.DefaultLocale);
+
+    private EventSettingsDto ToEvents() => new(events!.LoginEventsEnabled, events.AdminEventsEnabled,
+        events.AdminEventsEnabled && events.AdminEventDetails, Math.Clamp(events.RetentionDays, 1, 365));
 
     private Task SaveAsync(string section, object body) =>
         RunAsync(() => Api.SendAsync(HttpMethod.Put, $"api/identity/settings/{section}", body), "تنظیمات ذخیره شد");
