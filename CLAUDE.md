@@ -115,6 +115,12 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - Docker Desktop on the owner's machine can leak thousands of half-closed connections (port 8888, `gost-proxy`),
   exhausting Windows ephemeral ports: `WSAENOBUFS`, `ERR_NO_BUFFER_SPACE`, `ERR_ADDRESS_IN_USE`. Check with
   `netstat -ano`; the owner decides on restarting Docker Desktop.
+- The owner's Windows system proxy (172.20.20.136:8888) has no local bypass, and .NET follows it when no HTTP(S)_PROXY
+  variables are set: `LoopbackProxyBypass` (AppHost + AddServiceDefaults) keeps localhost/127.0.0.1/::1 direct. Without
+  it the AppHost's DCP calls time out after 2 minutes from a plain terminal (but work from shells that set NO_PROXY).
+- `keycloak/providers/*.jar` is not in git: rebuild it after switching branches. A jar older than the realm's flows
+  (e.g. SMS steps in the database, no SMS authenticators in the jar) breaks the flow: "Could not find authenticator
+  provider", bootstrap `schedule-authenticator failed: auth_flow.not_found`.
 - The AppHost refuses to start when ports 5080/5090/18080 are taken (`PortPreflight`): never run the dev stack and the
   E2E tests at the same time; without the check Aspire's DCP only failed after a 2-minute `TimeoutRejectedException`.
 - Stopping the AppHost by killing its process orphans session containers (`keycloak-*`, `redis-*`);

@@ -10,6 +10,10 @@
         <PackageReference Include="Aspire.Hosting.Redis"/>
     </ItemGroup>
     <ItemGroup>
+        <!-- Shared with the services; the AppHost does not reference ServiceDefaults itself. -->
+        <Compile Include="../Identity.ServiceDefaults/LoopbackProxyBypass.cs" Link="LoopbackProxyBypass.cs"/>
+    </ItemGroup>
+    <ItemGroup>
         <ProjectReference Include="../Identity.Gateway/Identity.Gateway.csproj"/>
         <ProjectReference Include="../Identity.Admin/Identity.Admin.csproj"/>
     </ItemGroup>

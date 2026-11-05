@@ -8,6 +8,10 @@ const string KeycloakImageTag = "26.4";
 // commonly taken by other local web servers.
 const int KeycloakPort = 18080;
 
+// Before anything creates an HttpClient: with a Windows system proxy that does not bypass local addresses, the
+// AppHost's calls to Aspire's orchestrator on localhost would go to the proxy and time out after two minutes.
+Identity.ServiceDefaults.LoopbackProxyBypass.Install();
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Explicit names: Aspire's defaults hash the AppHost's path, so moving the project would silently start

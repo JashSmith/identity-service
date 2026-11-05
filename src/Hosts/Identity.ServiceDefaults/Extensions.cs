@@ -25,6 +25,8 @@ public static class Extensions
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
+        // localhost must never go through a system proxy (gateway -> Keycloak, console -> gateway in development).
+        global::Identity.ServiceDefaults.LoopbackProxyBypass.Install();
         builder.ConfigureOpenTelemetry();
         builder.AddDefaultHealthChecks();
         builder.Services.AddServiceDiscovery();
