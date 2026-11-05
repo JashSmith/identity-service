@@ -37,7 +37,10 @@ public sealed class IdentityStack : IAsyncLifetime
         if (Environment.GetEnvironmentVariable("IDENTITY_E2E") != "1") return;
 
         using var timeout = new CancellationTokenSource(StartTimeout);
-        var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Identity_AppHost>(timeout.Token);
+        // Fixed ports (as in development): Keycloak's redirect URIs for the console are registered for localhost:5090,
+        // so the browser tests need the real ports. The development stack must be stopped.
+        var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.Identity_AppHost>(
+            ["DcpPublisher:RandomizePorts=false"], timeout.Token);
         _app = await builder.BuildAsync(timeout.Token);
         await _app.StartAsync(timeout.Token);
 
@@ -113,7 +116,7 @@ public sealed class IdentityStack : IAsyncLifetime
 }
 
 [CollectionDefinition(Name)]
-public sealed class StackCollection : ICollectionFixture<IdentityStack>
+public sealed class StackCollection : ICollectionFixture<IdentityStack>, ICollectionFixture<Ui.BrowserSession>
 {
     public const string Name = "identity-stack";
 }
