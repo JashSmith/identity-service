@@ -541,6 +541,9 @@ h1:focus { outline: none; }
 .av-chart__day { outline: none; cursor: default; }
 .av-chart__day:hover .av-chart__hit,
 .av-chart__day:focus-visible .av-chart__hit { fill: var(--av-primary-tint); }
+/* Keyboard focus needs more than a tint: a 2px frame around the focused day. */
+.av-chart__day:focus-visible .av-chart__hit { stroke: var(--av-primary); stroke-width: 2; rx: 4; }
+.av-main:focus { outline: none; }
 .av-chart__day:focus-visible .av-chart__label { fill: var(--av-primary); font-weight: 700; }
 .av-chart__table { margin-top: 0.75rem; font-size: 0.85rem; }
 .av-chart__table summary { cursor: pointer; color: var(--av-primary); }
