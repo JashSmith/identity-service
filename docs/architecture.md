@@ -27,13 +27,16 @@
 
 | پروژه | نقش |
 |---|---|
-| ‏`Identity.AppHost` | میزبان Aspire: ‏PostgreSQL، ‏Keycloak با Import دو Realm و تم فارسی، Redis، درگاه و کنسول |
-| ‏`Identity.Gateway` | ‏Minimal API، مدل خطا، احراز هویت چند صادرکننده، چندسازمانی، Bootstrap کلیدکول |
-| ‏`Identity.Admin` | کنسول مدیریت فارسی با Radzen Blazor |
-| ‏`Identity.Application` | منطق کاربرد: هماهنگ‌سازی کاربر و نقش، تفویض، اعتبارسنجی محدوده، برنامه زمانی |
-| ‏`Identity.Contracts` | ‏DTOها و قالب برنامه زمانی که بین درگاه و سرویس‌ها مشترک است |
-| ‏`Identity.Infrastructure.Keycloak` | آداپترهای Admin API کلیدکول |
-| ‏`Avash.Identity.*` | بسته‌های سرویس‌ها: احراز هویت، مجوز، زمینه دسترسی، ثبت دسترسی‌ها، برنامه زمانی |
+| پوشه | پروژه | نقش |
+|---|---|---|
+| ‏`src/Hosts` | ‏`Identity.AppHost` | میزبان Aspire: ‏PostgreSQL، ‏Keycloak (Realmها، قالب‌ها و افزونه‌ها از پوشه `keycloak`)، Redis، درگاه و کنسول |
+| ‏`src/Hosts` | ‏`Identity.Gateway` | ‏Minimal API، مدل خطا، احراز هویت چند صادرکننده، چندسازمانی، Bootstrap کلیدکول |
+| ‏`src/Hosts` | ‏`Identity.Admin` | کنسول مدیریت فارسی با Radzen Blazor |
+| ‏`src/Core` | ‏`Identity.Application` | منطق کاربرد: هماهنگ‌سازی کاربر و نقش، تفویض، محدوده، برنامه زمانی، ممیزی، صفحه ورود |
+| ‏`src/Core` | ‏`Identity.Contracts` | ‏DTOهای مشترک بین درگاه، کنسول و سرویس‌ها |
+| ‏`src/Infrastructure` | ‏`Identity.Infrastructure.Keycloak` | آداپترهای Admin API کلیدکول |
+| ‏`src/Packages` | ‏`Avash.Identity.*` | بسته‌های سرویس‌ها: احراز هویت (Bearer و ورود یکپارچه وب)، مجوز، زمینه دسترسی، ثبت دسترسی‌ها، برنامه زمانی |
+| ‏`keycloak` | ‏`realms`، ‏`themes`، ‏`extensions` | ‏Import سازمان‌ها، قالب فارسی `avash`، افزونه Java برنامه زمانی |
 
 وابستگی‌ها از بیرون به داخل است: Gateway به Application و Infrastructure، و Application فقط به Domain و Contracts وابسته است. تست‌های معماری این قاعده را بررسی می‌کنند.
 
@@ -157,6 +160,29 @@ sequenceDiagram
     G->>K: افزودن به گروه super-admins
     G-->>S: نتیجه همگام‌سازی
 ```
+
+ورود یکپارچه یک وب‌اپلیکیشن (بسته `AddAvashWebSso`):
+
+```mermaid
+sequenceDiagram
+    participant B as مرورگر
+    participant A as وب‌اپلیکیشن
+    participant G as درگاه هویت
+    participant K as Keycloak
+    A->>G: discovery (یک بار)
+    B->>A: صفحه محافظت‌شده
+    A-->>B: هدایت به authorize (code + PKCE، ui_locales=fa)
+    B->>K: صفحه ورود (قالب اپلیکیشن یا سازمان)
+    K-->>B: بازگشت به اپلیکیشن با code
+    B->>A: /signin-oidc
+    A->>K: تبدیل code به توکن (پشت صحنه)
+    A-->>B: کوکی اپلیکیشن
+    Note over K: خروج از هر اپلیکیشن، نشست SSO را می‌بندد و<br/>Keycloak به آدرس back-channel اپلیکیشن‌های دیگر خبر می‌دهد
+```
+
+صفحه ورودی که Keycloak نشان می‌دهد از ویژگی‌های کلاینت اپلیکیشن انتخاب می‌شود؛ جزئیات در [صفحه ورود اپلیکیشن‌ها](login-pages.md).
+
+داشبورد و ممیزی رویدادهای خود Keycloak را می‌خوانند (`GET events` و `GET admin-events` با نقش view-events). روشن و خاموش کردن ثبت رویدادها با به‌روزرسانی جزئی Realm انجام می‌شود، چون `PUT events/config` نقش manage-events می‌خواهد که حساب سرویس درگاه ندارد.
 
 ## مدل خطا
 
