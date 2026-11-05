@@ -26,3 +26,35 @@ public sealed record SmsTestResultDto(string Provider, bool Delivered, string? M
 
 /// <summary>A message recorded by the development provider (nothing is sent).</summary>
 public sealed record SmsOutboxItemDto(DateTimeOffset Time, string PhoneNumber, string Text);
+
+/// <summary>SMS sign-in modes of a tenant.</summary>
+public static class SmsLoginModes
+{
+    /// <summary>No SMS sign-in.</summary>
+    public const string Off = "off";
+
+    /// <summary>Mobile number + SMS code, no password (password sign-in stays available).</summary>
+    public const string Passwordless = "passwordless";
+
+    /// <summary>Password first, then an SMS code to the user's registered number.</summary>
+    public const string SecondFactor = "second-factor";
+
+    public static readonly IReadOnlyList<string> All = [Off, Passwordless, SecondFactor];
+}
+
+/// <summary>
+/// SMS sign-in of the tenant, on Keycloak's login page and in the gateway's login API.
+/// </summary>
+/// <param name="Mode">off, passwordless or second-factor (see <see cref="SmsLoginModes"/>).</param>
+/// <param name="CodeLength">Digits of the code (4-8).</param>
+/// <param name="CodeLifetimeSeconds">How long a code stays valid (60-600).</param>
+/// <param name="ResendSeconds">Wait before another code may be requested (30-300).</param>
+/// <param name="MaxAttempts">Wrong codes allowed before a new code is needed (1-10).</param>
+/// <param name="FlowsReady">False when Keycloak lacks the Avash extension, so the mode cannot take effect yet.</param>
+public sealed record SmsLoginSettingsDto(
+    string Mode,
+    int CodeLength = 6,
+    int CodeLifetimeSeconds = 120,
+    int ResendSeconds = 60,
+    int MaxAttempts = 5,
+    bool FlowsReady = true);

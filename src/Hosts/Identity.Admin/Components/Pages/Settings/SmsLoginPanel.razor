@@ -1,0 +1,134 @@
+@inherits ConsolePage
+@* SMS sign-in of the tenant: off, passwordless (mobile number + code) or second factor (password + code), with the
+   code rules. Keycloak's Avash authenticators make and check the codes; the gateway sends them with the SMS service above. *@
+
+<section class="av-panel" aria-labelledby="sms-login-title">
+    <h3 id="sms-login-title" class="av-panel__title">ورود با پیامک</h3>
+
+    @if (settings is null)
+    {
+        @if (failed)
+        {
+            <p class="av-inline-alert av-tone-danger" role="alert">تنظیمات ورود با پیامک خوانده نشد.
+                <RadzenButton Text="تلاش دوباره" Variant="Variant.Text" Size="ButtonSize.Small" Click="@LoadAsync" />
+            </p>
+        }
+        else
+        {
+            <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" aria-label="در حال بارگذاری" />
+        }
+    }
+    else
+    {
+        <p class="av-muted av-small rz-mt-0">
+            روی صفحه ورود همه اپلیکیشن‌ها و در API ورود درگاه کار می‌کند. کد در Keycloak ساخته و بررسی می‌شود و فقط با سرویس پیامک بالا فرستاده می‌شود.
+            شماره موبایل هر کاربر را در صفحه همان کاربر ثبت کنید.
+        </p>
+
+        @if (!settings.FlowsReady)
+        {
+            <p class="av-inline-alert av-tone-warning" role="note">
+                افزونه ورود پیامکی روی Keycloak نصب نیست. <span class="ltr">scripts/build-keycloak-extensions.sh</span> را اجرا و Keycloak را دوباره راه‌اندازی کنید.
+            </p>
+        }
+        else if (!SmsEnabled && mode != SmsLoginModes.Off)
+        {
+            <p class="av-inline-alert av-tone-warning" role="note">برای روشن کردن ورود با پیامک، اول ارسال پیامک را فعال و ذخیره کنید.</p>
+        }
+
+        <fieldset class="av-modes" disabled="@(!CanManage)">
+            <legend class="av-sr-only">حالت ورود با پیامک</legend>
+            @foreach (var option in Options)
+            {
+                <label class="av-mode @(mode == option.Mode ? "av-mode--selected" : "")">
+                    <input type="radio" name="sms-login-mode" value="@option.Mode" checked="@(mode == option.Mode)" @onchange="@(() => mode = option.Mode)" />
+                    <span class="av-mode__icon rzi" aria-hidden="true">@option.Icon</span>
+                    <span class="av-mode__title">@option.Title</span>
+                    <span class="av-mode__text">@option.Text</span>
+                </label>
+            }
+        </fieldset>
+
+        @if (mode != SmsLoginModes.Off)
+        {
+            <RadzenRow Gap="1rem" class="rz-mt-4">
+                <RadzenColumn Size="6" SizeMD="3">
+                    <RadzenFormField Text="تعداد رقم کد" Style="width: 100%;">
+                        <RadzenNumeric TValue="int" @bind-Value="codeLength" Min="4" Max="8" Name="sms-login-length" Disabled="@(!CanManage)" />
+                    </RadzenFormField>
+                </RadzenColumn>
+                <RadzenColumn Size="6" SizeMD="3">
+                    <RadzenFormField Text="اعتبار کد (ثانیه)" Style="width: 100%;">
+                        <RadzenNumeric TValue="int" @bind-Value="lifetime" Min="60" Max="600" Step="30" Name="sms-login-lifetime" Disabled="@(!CanManage)" />
+                    </RadzenFormField>
+                </RadzenColumn>
+                <RadzenColumn Size="6" SizeMD="3">
+                    <RadzenFormField Text="فاصله ارسال دوباره (ثانیه)" Style="width: 100%;">
+                        <RadzenNumeric TValue="int" @bind-Value="resend" Min="30" Max="300" Step="10" Name="sms-login-resend" Disabled="@(!CanManage)" />
+                    </RadzenFormField>
+                </RadzenColumn>
+                <RadzenColumn Size="6" SizeMD="3">
+                    <RadzenFormField Text="تلاش مجاز برای هر کد" Style="width: 100%;">
+                        <RadzenNumeric TValue="int" @bind-Value="attempts" Min="1" Max="10" Name="sms-login-attempts" Disabled="@(!CanManage)" />
+                    </RadzenFormField>
+                </RadzenColumn>
+            </RadzenRow>
+            @if (mode == SmsLoginModes.SecondFactor)
+            {
+                <p class="av-inline-alert av-tone-warning rz-mt-4" role="note">
+                    در این حالت کاربری که شماره موبایل ندارد نمی‌تواند وارد شود؛ پیش از روشن کردن، شماره همه کاربران (از جمله مدیران) را ثبت کنید.
+                </p>
+            }
+        }
+
+        @if (CanManage)
+        {
+            <div class="rz-mt-4"><RadzenButton Icon="save" Text="ذخیره ورود با پیامک" IsBusy="@Busy" Click="@SaveAsync" Name="sms-login-save" /></div>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>Whether SMS sending is enabled and saved (the panel warns before the gateway refuses).</summary>
+    [Parameter] public bool SmsEnabled { get; set; }
+
+    private SmsLoginSettingsDto? settings;
+    private string mode = SmsLoginModes.Off;
+    private int codeLength = 6, lifetime = 120, resend = 60, attempts = 5;
+    private bool failed;
+
+    private sealed record Option(string Mode, string Icon, string Title, string Text);
+
+    private static readonly Option[] Options =
+    [
+        new(SmsLoginModes.Off, "block", "خاموش", "فقط ورود با نام کاربری و رمز عبور."),
+        new(SmsLoginModes.Passwordless, "smartphone", "ورود بدون رمز", "کاربر شماره موبایل را می‌زند و با کد پیامکی وارد می‌شود. ورود با رمز هم در دسترس می‌ماند."),
+        new(SmsLoginModes.SecondFactor, "verified_user", "عامل دوم", "پس از رمز عبور، کدی به موبایل کاربر فرستاده می‌شود و ورود فقط با آن کامل می‌شود."),
+    ];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        failed = !await RunAsync(async () => Apply(await Api.GetAsync<SmsLoginSettingsDto>("api/identity/settings/sms/login")));
+    }
+
+    private void Apply(SmsLoginSettingsDto value)
+    {
+        settings = value;
+        mode = value.Mode;
+        codeLength = value.CodeLength;
+        lifetime = value.CodeLifetimeSeconds;
+        resend = value.ResendSeconds;
+        attempts = value.MaxAttempts;
+    }
+
+    private async Task SaveAsync()
+    {
+        var body = new SmsLoginSettingsDto(mode, codeLength, lifetime, resend, attempts);
+        await RunAsync(async () => Apply(await Api.SendAsync<SmsLoginSettingsDto>(HttpMethod.Put, "api/identity/settings/sms/login", body)),
+            "تنظیمات ورود با پیامک ذخیره شد");
+    }
+}

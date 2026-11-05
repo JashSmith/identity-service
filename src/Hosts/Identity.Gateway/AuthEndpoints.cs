@@ -20,7 +20,7 @@ public static class AuthEndpoints
             .Produces<AccessTokenResponse>(200).ProducesProblem(400)
             .WithOpenApi(o =>
             {
-                o.Summary = "Login via Keycloak (password grant)";
+                o.Summary = "Login via Keycloak (password grant, or phone_number + sms_code when SMS sign-in is on)";
                 return o;
             });
         g.MapPost("/refresh", Refresh).WithName("AuthRefresh").AllowAnonymous()
@@ -53,9 +53,13 @@ public static class AuthEndpoints
         var isClientCredentials =
             form.TryGetValue("grant_type", out var gt) &&
             gt.Equals("client_credentials", StringComparison.OrdinalIgnoreCase);
-        if (!isClientCredentials &&
+        // SMS sign-in (passwordless): phone_number, then phone_number + sms_code; Keycloak's Avash authenticator
+        // answers the first call with 401 error=sms_code_sent. A second factor adds sms_code to username/password.
+        var isSmsSignIn = form.TryGetValue("phone_number", out var phone) && !string.IsNullOrWhiteSpace(phone);
+        if (isSmsSignIn) form["grant_type"] = "password";
+        if (!isClientCredentials && !isSmsSignIn &&
             (!form.ContainsKey("username") || !form.ContainsKey("password")))
-            return Error.Validation("request.invalid", "username and password required").ToProblem();
+            return Error.Validation("request.invalid", "username and password (or phone_number) required").ToProblem();
 
         var rejected = ApplyClientCredentials(form, cfg, ctx);
         if (rejected is not null) return rejected;

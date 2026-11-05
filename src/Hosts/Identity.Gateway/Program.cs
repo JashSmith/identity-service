@@ -127,6 +127,15 @@ builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakSmsSetti
 builder.Services.AddSingleton<Identity.Application.Sms.ISmsSettingsStore>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakSmsSettingsStore>());
 builder.Services.AddSingleton<Identity.Application.Sms.SmsService>();
+// SMS sign-in: Keycloak's Avash authenticators make and check the codes; the gateway delivers them (SmsLoginEndpoints).
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakSmsLoginSettingsStore>();
+builder.Services.AddSingleton<Identity.Application.Sms.ISmsLoginSettingsStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakSmsLoginSettingsStore>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakSmsLoginFlowSetup>();
+builder.Services.AddSingleton<Identity.Application.Sms.ISmsLoginFlows>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakSmsLoginFlowSetup>());
+builder.Services.AddSingleton<Identity.Application.Sms.SmsLoginService>();
+builder.Services.Configure<Identity.Gateway.SmsLoginHookOptions>(builder.Configuration.GetSection("Identity:SmsLogin"));
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuditAdapter>();
 builder.Services.AddSingleton<Identity.Application.Audit.IAuditEventReader>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuditAdapter>());
@@ -259,6 +268,7 @@ app.MapSchedules();
 app.MapSettings();
 app.MapAudit();
 app.MapSms();
+app.MapSmsLogin();
 app.MapGet("/api/identity/tenants", (Identity.Gateway.Tenancy.TenantRegistry tenants) =>
         Results.Ok(tenants.All.Select(tenants.ToDto).ToArray()))
     .RequireAuthorization(IamPermissions.SystemRead).WithTags("Tenants").WithName("ListTenants")

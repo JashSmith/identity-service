@@ -108,7 +108,7 @@
 | ‏`/settings/ldap` | ‏LDAP و Active Directory؛ ‏`POST /settings/ldap/test` و `POST /settings/ldap/{id}/sync` |
 | ‏`GET` و `PUT /settings/events` | روشن یا خاموش کردن ثبت رویدادهای ورود و مدیریتی و مدت نگهداری (۱ تا ۳۶۵ روز) |
 
-مسیرهای پیامک (`/settings/sms`، ‏`/settings/sms/providers`، ‏`/settings/sms/test`، ‏`/settings/sms/outbox`) در [پیامک](sms.md#api) آمده است.
+مسیرهای پیامک (`/settings/sms`، ‏`/settings/sms/providers`، ‏`/settings/sms/test`، ‏`/settings/sms/outbox`) در [پیامک](sms.md#api) و مسیرهای ورود با پیامک (`/settings/sms/login` و پارامترهای `phone_number` و `sms_code` در `POST /auth/login`) در [ورود با پیامک](sms-login.md) آمده است.
 
 ## رویدادها و ممیزی
 

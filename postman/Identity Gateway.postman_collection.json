@@ -3047,6 +3047,72 @@
           }
         },
         {
+          "name": "GetSmsLoginSettings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/sms/login",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "sms",
+                "login"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetSmsLoginSettings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/sms/login",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "sms",
+                "login"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"\",\n  \"codeLength\": 0,\n  \"codeLifetimeSeconds\": 0,\n  \"resendSeconds\": 0,\n  \"maxAttempts\": 0,\n  \"flowsReady\": false\n}"
+            }
+          }
+        },
+        {
           "name": "SmsDevelopmentOutbox",
           "request": {
             "method": "GET",
@@ -3424,7 +3490,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"\",\n  \"email\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"enabled\": false,\n  \"credentials\": {\n    \"password\": null,\n    \"temporary\": null\n  },\n  \"assignments\": [\n    {\n      \"role\": null,\n      \"scopes\": null\n    }\n  ]\n}"
+              "raw": "{\n  \"username\": \"\",\n  \"email\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"enabled\": false,\n  \"credentials\": {\n    \"password\": null,\n    \"temporary\": null\n  },\n  \"assignments\": [\n    {\n      \"role\": null,\n      \"scopes\": null\n    }\n  ],\n  \"phoneNumber\": \"\"\n}"
             }
           }
         },
@@ -3498,7 +3564,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"enabled\": false,\n  \"username\": \"\",\n  \"emailVerified\": false,\n  \"attributes\": {}\n}"
+              "raw": "{\n  \"email\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"enabled\": false,\n  \"username\": \"\",\n  \"emailVerified\": false,\n  \"attributes\": {},\n  \"phoneNumber\": \"\"\n}"
             }
           }
         },

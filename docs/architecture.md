@@ -184,6 +184,8 @@ sequenceDiagram
 
 پیامک یک رابط مشترک دارد (`ISmsProvider` در Application) و سرویس‌ها (کاوه‌نگار و حالت آزمایشی) در پروژه `Identity.Infrastructure.Sms` هستند. تنظیمات هر سازمان در ویژگی‌های `iam.sms.*` همان Realm ذخیره می‌شود؛ جزئیات در [پیامک](sms.md).
 
+ورود با پیامک در خود Keycloak انجام می‌شود: Authenticatorهای افزونه `keycloak/extensions` کد را می‌سازند و بررسی می‌کنند و برای ارسال، درگاه را با درخواست امضاشده (HMAC) صدا می‌زنند تا پیام با سرویس پیامک همان سازمان برود. تنظیمات در `iam.smslogin.*` و شماره کاربر در ویژگی `phone_number` است؛ جزئیات در [ورود با پیامک](sms-login.md).
+
 داشبورد و ممیزی رویدادهای خود Keycloak را می‌خوانند (`GET events` و `GET admin-events` با نقش view-events). روشن و خاموش کردن ثبت رویدادها با به‌روزرسانی جزئی Realm انجام می‌شود، چون `PUT events/config` نقش manage-events می‌خواهد که حساب سرویس درگاه ندارد.
 
 ## مدل خطا

@@ -10,6 +10,7 @@ namespace Identity.Contracts;
 /// <param name="Enabled">Specifies whether the user should be initially enabled.</param>
 /// <param name="Credentials">The initial password configuration for the user.</param>
 /// <param name="Assignments">The initial business roles and runtime scope assignments.</param>
+/// <param name="PhoneNumber">Optional Iranian mobile number (any common spelling) for SMS sign-in; unique in the tenant.</param>
 public sealed record CreateUserRequest(
     string Username,
     string? Email,
@@ -17,4 +18,5 @@ public sealed record CreateUserRequest(
     string? LastName,
     bool Enabled,
     CredentialRequest? Credentials,
-    IReadOnlyCollection<ScopedRoleAssignmentDto>? Assignments);
+    IReadOnlyCollection<ScopedRoleAssignmentDto>? Assignments,
+    string? PhoneNumber = null);

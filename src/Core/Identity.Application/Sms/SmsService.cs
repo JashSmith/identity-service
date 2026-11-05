@@ -8,7 +8,8 @@ namespace Identity.Application.Sms;
 /// and sends through the selected provider. Errors: sms.* or a Keycloak availability error.
 /// Future features (SMS login, OTP, notifications) call <see cref="SendAsync"/>; they never talk to a provider directly.
 /// </summary>
-public sealed class SmsService(IEnumerable<ISmsProvider> providers, ISmsSettingsStore store, ITenantContext tenant, ISmsOutbox? outbox = null)
+public sealed class SmsService(IEnumerable<ISmsProvider> providers, ISmsSettingsStore store, ITenantContext tenant, ISmsOutbox? outbox = null,
+    ISmsLoginSettingsStore? loginSettings = null)
 {
     public const string Mask = "**********";
     public const string TestText = "پیام آزمایشی درگاه هویت آواش: تنظیمات پیامک درست است.";
@@ -64,6 +65,14 @@ public sealed class SmsService(IEnumerable<ISmsProvider> providers, ISmsSettings
                 fieldErrors[$"Settings.{request.Provider}.{field.Key}"] = [$"{field.Label} is required to enable SMS."];
         }
         if (fieldErrors.Count > 0) return Error.Validation("request.invalid", "One or more SMS settings are invalid.", fieldErrors);
+        if (!request.Enabled && stored.Value.Enabled && loginSettings is not null)
+        {
+            // Users who sign in with SMS codes would be locked out.
+            var login = await loginSettings.GetAsync(ct);
+            if (!login.IsSuccess) return login.Error!;
+            if (login.Value.Mode != SmsLoginModes.Off)
+                return Error.Validation("sms.login_enabled", "Turn off SMS sign-in before disabling SMS sending.");
+        }
 
         var saved = new StoredSmsSettings(request.Enabled, request.Provider, merged);
         var written = await store.SaveAsync(saved, ct);
