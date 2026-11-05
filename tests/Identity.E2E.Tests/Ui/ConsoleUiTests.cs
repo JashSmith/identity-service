@@ -110,11 +110,16 @@ public sealed class ConsoleUiTests(IdentityStack stack, BrowserSession browser)
         await Assertions.Expect(ui.Page.Locator(".rz-notification")).ToContainTextAsync("صفحه ورود ذخیره شد");
         await Assertions.Expect(ui.Page.Locator(".av-preview__title")).ToHaveTextAsync($"سامانه {Run}");
 
-        var real = await ui.Context.NewPageAsync();
-        await real.GotoAsync(await ui.Page.Locator("a[target=_blank]").GetAttributeAsync("href") ?? "");
+        // A fresh profile: in the console's profile the administrator's SSO session would sign straight in to the
+        // application and leave for its (absent) callback instead of showing the login page.
+        var testLink = await ui.Page.Locator("a[target=_blank]").GetAttributeAsync("href") ?? "";
+        await using var visitor = await browser.NewContextAsync();
+        var real = visitor.Page;
+        await real.GotoAsync(testLink);
         await Assertions.Expect(real.Locator(".avash-brand__title")).ToHaveTextAsync($"سامانه {Run}");
         Assert.Contains("--avash-brand: #26428B", await real.ContentAsync());
         await ui.AssertNoProblemsAsync("login-page");
+        await visitor.AssertNoProblemsAsync("login-page-visitor");
     }
 
     [E2EFact]
@@ -126,7 +131,7 @@ public sealed class ConsoleUiTests(IdentityStack stack, BrowserSession browser)
         await ui.Page.GotoAsync($"{BrowserSession.Console}/settings?tab=sms");
         await ui.Page.Locator("label.av-mode", new() { HasText = "حالت آزمایشی" }).ClickAsync();
         await Assertions.Expect(ui.Page.Locator("[role=note]")).ToContainTextAsync("هیچ پیامکی ارسال نمی‌شود");
-        var enabled = ui.Page.Locator(".rz-switch").First;
+        var enabled = ui.Page.Locator(".rz-switch").Filter(new() { Has = ui.Page.Locator("input[name='sms-enabled']") });
         if (!(await enabled.GetAttributeAsync("class") ?? "").Contains("rz-switch-checked")) await enabled.ClickAsync();
         await ui.Page.Locator("button", new() { HasText = "ذخیره" }).First.ClickAsync();
         await Assertions.Expect(ui.Page.Locator(".rz-notification")).ToContainTextAsync("تنظیمات پیامک ذخیره شد");
