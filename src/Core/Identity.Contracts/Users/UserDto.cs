@@ -10,6 +10,7 @@ namespace Identity.Contracts;
 /// <param name="Attributes">Custom user attributes managed in Keycloak.</param>
 /// <param name="IsOnline">Indicates whether the user currently has at least one active Keycloak session.</param>
 /// <param name="ActiveSessionsCount">The number of active sessions currently opened for this user.</param>
+/// <param name="PhoneNumber">The registered mobile number (+989...), used for SMS sign-in.</param>
 public sealed record UserDto(
     string Id,
     string Username,
@@ -17,4 +18,5 @@ public sealed record UserDto(
     bool Enabled,
     IReadOnlyDictionary<string, string[]> Attributes,
     bool? IsOnline = null,
-    int? ActiveSessionsCount = null);
+    int? ActiveSessionsCount = null,
+    string? PhoneNumber = null);

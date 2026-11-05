@@ -41,6 +41,12 @@ public sealed class KeycloakUserProvisioner(
         if (!string.IsNullOrWhiteSpace(request.Email)) body["email"] = request.Email.Trim();
         if (!string.IsNullOrWhiteSpace(request.FirstName)) body["firstName"] = request.FirstName.Trim();
         if (!string.IsNullOrWhiteSpace(request.LastName)) body["lastName"] = request.LastName.Trim();
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+        {
+            var phone = await AvailablePhoneAsync(request.PhoneNumber, null, ct);
+            if (!phone.IsSuccess) return phone.Error!;
+            body["attributes"] = new Dictionary<string, string[]> { [ProtectedUserAttributes.PhoneNumber] = [phone.Value] };
+        }
         if (request.Credentials is not null)
         {
             body["credentials"] = new[]
@@ -81,12 +87,20 @@ public sealed class KeycloakUserProvisioner(
         if (request.Enabled.HasValue) user["enabled"] = request.Enabled.Value;
         if (!string.IsNullOrWhiteSpace(request.Username)) user["username"] = request.Username.Trim();
         if (request.EmailVerified.HasValue) user["emailVerified"] = request.EmailVerified.Value;
-        if (request.Attributes is not null)
+        if (request.Attributes is not null || request.PhoneNumber is not null)
         {
             var attributes = user.TryGetValue("attributes", out var existing) && existing is JsonElement { ValueKind: JsonValueKind.Object } json
                 ? JsonSerializer.Deserialize<Dictionary<string, object?>>(json.GetRawText()) ?? new()
                 : new Dictionary<string, object?>();
-            foreach (var (key, values) in request.Attributes) attributes[key] = values;
+            foreach (var (key, values) in request.Attributes ?? new Dictionary<string, string[]>()) attributes[key] = values;
+            if (request.PhoneNumber is { Length: 0 } || (request.PhoneNumber is not null && string.IsNullOrWhiteSpace(request.PhoneNumber)))
+                attributes.Remove(ProtectedUserAttributes.PhoneNumber);
+            else if (request.PhoneNumber is not null)
+            {
+                var phone = await AvailablePhoneAsync(request.PhoneNumber, userId, ct);
+                if (!phone.IsSuccess) return phone.Error!;
+                attributes[ProtectedUserAttributes.PhoneNumber] = new[] { phone.Value };
+            }
             user["attributes"] = attributes;
         }
 
@@ -108,6 +122,26 @@ public sealed class KeycloakUserProvisioner(
         var reset = await _api.SendWithoutResultAsync(HttpMethod.Put, $"users/{Uri.EscapeDataString(userId)}/reset-password",
             body, Resource, ct, includeKeycloakMessage: true);
         return reset.IsSuccess ? reset : Renamed(reset.Error!, userId);
+    }
+
+    /// <summary>
+    /// The normalised number (+989...) when no other user of the realm has it. Keycloak finds the user signing in with
+    /// an SMS code by this number, so it must be unique. Errors: user.invalid_phone_number, user.phone_number_taken (409).
+    /// </summary>
+    private async Task<Result<string>> AvailablePhoneAsync(string typed, string? userId, CancellationToken ct)
+    {
+        var phone = Identity.Application.Sms.PhoneNumbers.NormalizeIranMobile(typed);
+        if (phone is null)
+            return Error.Validation("user.invalid_phone_number", "PhoneNumber is not an Iranian mobile number (e.g. 09121234567).");
+        var found = await _api.GetAsync(
+            $"users?q={Uri.EscapeDataString($"{ProtectedUserAttributes.PhoneNumber}:{phone}")}&briefRepresentation=false&max=5", Resource, ct);
+        if (!found.IsSuccess) return found.Error!;
+        var taken = found.Value.EnumerateArray().Any(u => KeycloakAdminApi.GetString(u, "id") != userId &&
+            u.TryGetProperty("attributes", out var a) && a.TryGetProperty(ProtectedUserAttributes.PhoneNumber, out var values) &&
+            values.EnumerateArray().Any(v => v.GetString() == phone));
+        return taken
+            ? Error.Conflict("user.phone_number_taken", "Another user already has this mobile number.")
+            : Result<string>.Success(phone);
     }
 
     /// <summary>Keycloak's generic 404 becomes a user.not_found that names the user.</summary>
@@ -134,6 +168,7 @@ public sealed class KeycloakUserProvisioner(
             attrs["emailVerified"] = [ev.GetBoolean() ? "true" : "false"];
         if (firstName is not null) attrs["firstName"] = [firstName];
         if (lastName is not null) attrs["lastName"] = [lastName];
-        return new UserDto(id, username, displayName.Length == 0 ? null : displayName, enabled, attrs);
+        var phone = attrs.TryGetValue(ProtectedUserAttributes.PhoneNumber, out var phones) ? phones.FirstOrDefault() : null;
+        return new UserDto(id, username, displayName.Length == 0 ? null : displayName, enabled, attrs, PhoneNumber: phone);
     }
 }

@@ -9,6 +9,9 @@
             <RadzenFormField Text="ایمیل" Style="width: 100%;"><RadzenTextBox @bind-Value="email" Style="direction: ltr;" /></RadzenFormField>
         </RadzenColumn>
         <RadzenColumn Size="12" SizeMD="6">
+            <RadzenFormField Text="شماره موبایل (اختیاری)" Style="width: 100%;"><RadzenTextBox @bind-Value="phone" Name="new-user-phone" Style="direction: ltr;" MaxLength="20" /></RadzenFormField>
+        </RadzenColumn>
+        <RadzenColumn Size="12" SizeMD="6">
             <RadzenFormField Text="نام" Style="width: 100%;"><RadzenTextBox @bind-Value="firstName" /></RadzenFormField>
         </RadzenColumn>
         <RadzenColumn Size="12" SizeMD="6">
@@ -35,7 +38,7 @@
 </RadzenStack>
 
 @code {
-    private string? username, email, firstName, lastName, password;
+    private string? username, email, phone, firstName, lastName, password;
     private bool temporary = true;
     private readonly List<AssignmentsEditor.Row> rows = [];
     private AccessLookups lookups = AccessLookups.Empty;
@@ -47,7 +50,8 @@
         UserDto? created = null;
         var request = new CreateUserRequest(username ?? "", email, firstName, lastName, true,
             string.IsNullOrEmpty(password) ? null : new CredentialRequest(password, temporary),
-            rows.Where(r => !string.IsNullOrEmpty(r.Role)).Select(r => r.ToDto()).ToArray());
+            rows.Where(r => !string.IsNullOrEmpty(r.Role)).Select(r => r.ToDto()).ToArray(),
+            string.IsNullOrWhiteSpace(phone) ? null : phone.Trim());
         if (await RunAsync(async () => created = await Api.SendAsync<UserDto>(HttpMethod.Post, "api/identity/users", request), "کاربر ایجاد شد"))
             Dialogs.Close(created);
     }

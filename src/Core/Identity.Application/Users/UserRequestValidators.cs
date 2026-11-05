@@ -10,6 +10,10 @@ internal static class UserRules
     public static IRuleBuilderOptions<T, string?> ValidUsername<T>(this IRuleBuilder<T, string?> rule) =>
         rule.MaximumLength(MaxLength)
             .Must(u => u is null || !u.Any(char.IsWhiteSpace)).WithMessage("Username must not contain spaces.");
+
+    public static IRuleBuilderOptions<T, string?> ValidMobile<T>(this IRuleBuilder<T, string?> rule) =>
+        rule.Must(p => Sms.PhoneNumbers.NormalizeIranMobile(p) is not null)
+            .WithMessage("PhoneNumber is not an Iranian mobile number (e.g. 09121234567).");
 }
 
 public sealed class CreateUserRequestValidator : AbstractValidator<CreateUserRequest>
@@ -25,6 +29,7 @@ public sealed class CreateUserRequestValidator : AbstractValidator<CreateUserReq
             .When(r => r.Credentials is not null);
         RuleForEach(r => r.Assignments).ChildRules(a =>
             a.RuleFor(x => x.Role).NotEmpty().WithMessage("Role is required."));
+        RuleFor(r => r.PhoneNumber).ValidMobile().When(r => !string.IsNullOrWhiteSpace(r.PhoneNumber));
     }
 }
 
@@ -39,7 +44,8 @@ public sealed class UpdateUserRequestValidator : AbstractValidator<UpdateUserReq
         RuleFor(r => r.Attributes)
             .Must(a => ProtectedUserAttributes.FindIn(a).Count == 0)
             .WithMessage(r =>
-                $"Attributes {string.Join(", ", ProtectedUserAttributes.FindIn(r.Attributes))} are managed by the gateway; use the scoped-access APIs instead.");
+                $"Attributes {string.Join(", ", ProtectedUserAttributes.FindIn(r.Attributes))} are managed by the gateway; use the scoped-access APIs (or PhoneNumber) instead.");
+        RuleFor(r => r.PhoneNumber).ValidMobile().When(r => !string.IsNullOrWhiteSpace(r.PhoneNumber));
     }
 }
 

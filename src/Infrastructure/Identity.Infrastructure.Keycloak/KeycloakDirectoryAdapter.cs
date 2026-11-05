@@ -264,7 +264,8 @@ public sealed class KeycloakDirectoryAdapter(
         if (lastName is not null) attrs["lastName"] = [lastName];
 
         return new UserDto(id, KeycloakAdminApi.GetString(e, "username") ?? id, displayName.Length == 0 ? null : displayName,
-            e.TryGetProperty("enabled", out var en) && en.ValueKind == JsonValueKind.True, attrs);
+            e.TryGetProperty("enabled", out var en) && en.ValueKind == JsonValueKind.True, attrs,
+            PhoneNumber: attrs.TryGetValue(ProtectedUserAttributes.PhoneNumber, out var phones) ? phones.FirstOrDefault() : null);
     }
 
     private static RoleDto MapRole(JsonElement e) => new(

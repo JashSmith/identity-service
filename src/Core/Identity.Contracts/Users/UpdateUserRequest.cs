@@ -10,6 +10,7 @@ namespace Identity.Contracts;
 /// <param name="Username">The new username, or null to keep unchanged.</param>
 /// <param name="EmailVerified">The email verified status, or null to keep unchanged.</param>
 /// <param name="Attributes">Custom user attributes, or null to keep unchanged.</param>
+/// <param name="PhoneNumber">Mobile number for SMS sign-in: null keeps it, an empty string removes it.</param>
 public sealed record UpdateUserRequest(
     string? Email,
     string? FirstName,
@@ -17,4 +18,5 @@ public sealed record UpdateUserRequest(
     bool? Enabled,
     string? Username = null,
     bool? EmailVerified = null,
-    IReadOnlyDictionary<string, string[]>? Attributes = null);
+    IReadOnlyDictionary<string, string[]>? Attributes = null,
+    string? PhoneNumber = null);
