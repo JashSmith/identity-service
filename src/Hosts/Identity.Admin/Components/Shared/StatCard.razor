@@ -1,0 +1,39 @@
+@* One key figure. Value null = not loaded yet (skeleton); Failed = could not be read (partial dashboard). *@
+<article class="av-stat av-tone-@Tone" aria-busy="@(Value is null && !Failed ? "true" : "false")">
+    <div class="av-stat__icon" aria-hidden="true"><RadzenIcon Icon="@Icon" /></div>
+    <div class="av-stat__body">
+        <span class="av-stat__label">@Label</span>
+        @if (Failed)
+        {
+            <span class="av-stat__value av-stat__value--muted" title="خواندن این مقدار ممکن نشد">—</span>
+        }
+        else if (Value is null)
+        {
+            <span class="av-stat__value av-skeleton" aria-label="در حال بارگذاری">&nbsp;</span>
+        }
+        else
+        {
+            <span class="av-stat__value">@PersianFormat.Number(Value)</span>
+        }
+        @if (Hint is not null)
+        {
+            <span class="av-stat__hint">@Hint</span>
+        }
+    </div>
+    @if (Path is not null)
+    {
+        <a class="av-stat__link" href="@Path" aria-label="@($"مشاهده {Label}")"></a>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter] public long? Value { get; set; }
+    [Parameter] public bool Failed { get; set; }
+    [Parameter] public RenderFragment? Hint { get; set; }
+    [Parameter] public string? Path { get; set; }
+
+    /// <summary>primary, secondary, info, success, warning or danger.</summary>
+    [Parameter] public string Tone { get; set; } = "primary";
+}

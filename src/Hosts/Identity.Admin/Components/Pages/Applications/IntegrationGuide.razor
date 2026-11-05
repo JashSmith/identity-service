@@ -1,0 +1,198 @@
+@page "/applications/{ClientId}/integration"
+@inherits ConsolePage
+
+<PageTitle>راهنمای اتصال @ClientId | کنسول مدیریت هویت</PageTitle>
+
+<PageHeader Title="@($"راهنمای اتصال {ClientId}")" Icon="integration_instructions">
+    <Breadcrumb><a href="/applications">اپلیکیشن‌ها</a> / <span class="ltr">@ClientId</span> / راهنمای اتصال</Breadcrumb>
+    <Description>هر پروژه‌ای (هر زبان و فریم‌ورکی) با این مشخصات به ورود یکپارچه سازمان وصل می‌شود. آدرس Keycloak هیچ‌جا لازم نیست؛ همه‌چیز از درگاه خوانده می‌شود.</Description>
+</PageHeader>
+
+@if (!canRead)
+{
+    <EmptyState Icon="lock" Title="به این بخش دسترسی ندارید">
+        راهنمای اتصال اپلیکیشن‌ها دسترسی «خواندن اپلیکیشن‌ها» می‌خواهد. از مدیر سامانه بخواهید آن را به نقش شما بدهد.
+    </EmptyState>
+    return;
+}
+
+@if (info is null)
+{
+    @if (failed)
+    {
+        <EmptyState Icon="cloud_off" Title="مشخصات اتصال خوانده نشد">
+            <Action><RadzenButton Icon="arrow_forward" Text="بازگشت به اپلیکیشن‌ها" Variant="Variant.Outlined" Click="@(() => Navigation.NavigateTo("/applications"))" /></Action>
+        </EmptyState>
+    }
+    else
+    {
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" aria-label="در حال بارگذاری" />
+    }
+    return;
+}
+
+<div class="av-dash-grid">
+    <section class="av-panel" aria-labelledby="conn-title">
+        <h2 id="conn-title" class="av-panel__title">مشخصات اتصال</h2>
+        <dl class="av-kv">
+            @foreach (var (label, value) in Facts)
+            {
+                <dt>@label</dt>
+                <dd>
+                    <span class="ltr">@value</span>
+                    <button type="button" class="av-copy" title="کپی" aria-label="@($"کپی {label}")" data-copy="@value"
+                            onclick="navigator.clipboard.writeText(this.dataset.copy)"><span class="rzi" aria-hidden="true">content_copy</span></button>
+                </dd>
+            }
+            <dt>کلید محرمانه (Client secret)</dt>
+            <dd class="av-muted">فقط هنگام ساخت یا «کلید جدید» نمایش داده می‌شود؛ در تنظیمات پروژه (نه در کد) نگه دارید.</dd>
+        </dl>
+        @if (info.Kind == "web" && info.RedirectUris.Count == 0)
+        {
+            <p class="av-inline-alert av-tone-warning" role="note">این اپلیکیشن وب هنوز «آدرس بازگشت» ندارد؛ در ویرایش اپلیکیشن آدرس <span class="ltr">https://your-app/signin-oidc</span> را اضافه کنید.</p>
+        }
+    </section>
+
+    <section class="av-panel" aria-labelledby="logout-title">
+        <h2 id="logout-title" class="av-panel__title">خروج یکپارچه</h2>
+        <RadzenStack Gap="1rem">
+            <RadzenFormField Text="آدرس خروج سمت سرور (Back-channel logout)" Style="width: 100%;">
+                <RadzenTextBox @bind-Value="backchannel" Style="direction: ltr;" Placeholder="https://your-app/auth/backchannel-logout" Disabled="@(!canManage)" />
+            </RadzenFormField>
+            <RadzenFormField Text="آدرس‌های مجاز پس از خروج (هر خط یک آدرس)" Style="width: 100%;">
+                <RadzenTextArea @bind-Value="postLogout" Rows="3" Style="direction: ltr;" Disabled="@(!canManage)" />
+            </RadzenFormField>
+            <p class="av-muted av-small">وقتی کاربر از یکی از اپلیکیشن‌ها خارج شود، Keycloak به آدرس خروج سمت سرور همه اپلیکیشن‌هایی که در همان نشست وارد شده‌اند خبر می‌دهد و نشست آن‌ها هم بسته می‌شود. بسته <span class="ltr">Avash.Identity</span> این آدرس را خودش می‌سازد.</p>
+            @if (canManage)
+            {
+                <div><RadzenButton Icon="save" Text="ذخیره" IsBusy="@Busy" Click="@SaveLogoutAsync" /></div>
+            }
+        </RadzenStack>
+    </section>
+</div>
+
+<section class="av-panel av-guide" aria-labelledby="code-title">
+    <h2 id="code-title" class="av-panel__title">نمونه کد</h2>
+    <RadzenTabs RenderMode="TabRenderMode.Client">
+        <Tabs>
+            <RadzenTabsItem Text=".NET وب (ورود یکپارچه)">
+                <p>برای MVC، ‏Razor Pages و Blazor Server؛ همچنین به‌عنوان BFF برای یک SPA.</p>
+                <pre class="av-code ltr">@WebSnippet</pre>
+            </RadzenTabsItem>
+            <RadzenTabsItem Text=".NET API (توکن Bearer)">
+                <p>سرویسی که توکن کاربر یا سرویس دیگر را می‌پذیرد و دسترسی‌ها را بررسی می‌کند.</p>
+                <pre class="av-code ltr">@ApiSnippet</pre>
+            </RadzenTabsItem>
+            <RadzenTabsItem Text="جاوااسکریپت / SPA">
+                <p>اپلیکیشن تک‌صفحه‌ای بهتر است توکن را در مرورگر نگه ندارد: یک بک‌اند کوچک (BFF) با بسته .NET وب بسازید و SPA فقط با کوکی آن کار کند. اگر SPA مستقیم وصل می‌شود، از کتابخانه استاندارد <span class="ltr">oidc-client-ts</span> با PKCE استفاده کنید:</p>
+                <pre class="av-code ltr">@SpaSnippet</pre>
+            </RadzenTabsItem>
+            <RadzenTabsItem Text="هر زبان دیگر (OIDC)">
+                <p>Java/Spring، ‏Python، ‏Go، ‏PHP و ... : هر کتابخانه استاندارد OpenID Connect با این تنظیمات کار می‌کند.</p>
+                <pre class="av-code ltr">@GenericSnippet</pre>
+            </RadzenTabsItem>
+        </Tabs>
+    </RadzenTabs>
+</section>
+
+@code {
+    [Parameter] public string ClientId { get; set; } = "";
+
+    private ApplicationIntegrationDto? info;
+    private bool canRead = true, canManage, failed;
+    private string? backchannel, postLogout;
+
+    private IEnumerable<(string Label, string Value)> Facts
+    {
+        get
+        {
+            yield return ("Authority (درگاه)", info!.Authority);
+            yield return ("Discovery", info.DiscoveryUrl);
+            yield return ("Client id", info.ClientId);
+            if (info.Tenant is not null) yield return ("سازمان (X-Tenant-Id)", info.Tenant);
+            foreach (var uri in info.RedirectUris) yield return ("آدرس بازگشت", uri);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.ApplicationsManage);
+        canRead = await Can(Permissions.ApplicationsRead);
+        if (!canRead) return;
+        failed = !await RunAsync(async () =>
+        {
+            info = await Api.GetAsync<ApplicationIntegrationDto>($"api/identity/applications/{Uri.EscapeDataString(ClientId)}/integration");
+            backchannel = info.Logout.BackchannelLogoutUrl;
+            postLogout = string.Join('\n', info.Logout.PostLogoutRedirectUris);
+        });
+    }
+
+    private Task SaveLogoutAsync() => RunAsync(async () =>
+    {
+        var body = new ApplicationLogoutDto(
+            (postLogout ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            string.IsNullOrWhiteSpace(backchannel) ? null : backchannel.Trim());
+        var saved = await Api.SendAsync<ApplicationLogoutDto>(HttpMethod.Put, $"api/identity/applications/{Uri.EscapeDataString(ClientId)}/logout", body);
+        info = info! with { Logout = saved };
+    }, "تنظیمات خروج ذخیره شد");
+
+    private string TenantLine => info?.Tenant is null ? "" : $"\n    o.Tenant = \"{info.Tenant}\";";
+
+    private string WebSnippet => $$"""
+        // dotnet add package Avash.Identity.Authentication.AspNetCore
+        // dotnet add package Avash.Identity.Authorization.AspNetCore
+        builder.Services.AddAvashWebSso(o =>
+        {
+            o.Authority = "{{info!.Authority}}";{{TenantLine}}
+            o.ClientId = "{{info.ClientId}}";
+            o.ClientSecret = builder.Configuration["Identity:ClientSecret"]!;
+        });
+        builder.Services.AddAvashAuthorization(o => o.ApplicationId = "{{info.ClientId}}");
+
+        var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapAvashSso();   // /auth/login, /auth/logout, /auth/backchannel-logout
+
+        app.MapGet("/orders", () => "...").RequireAuthorization("Orders:Order:View");
+        """;
+
+    private string ApiSnippet => $$"""
+        builder.Services.AddAvashAuthentication(o =>
+        {
+            o.Authority = "{{info!.Authority}}";
+            o.AcceptIssuerFromDiscovery = true;
+        });
+        builder.Services.AddAvashAuthorization(o => o.ApplicationId = "{{info.ClientId}}");
+        builder.Services.AddAvashAccessSchedules(o => o.GatewayBaseUrl = "{{info.Authority}}");
+
+        app.MapGet("/api/orders", ListOrders).RequireAuthorization("Orders:Order:View");
+        """;
+
+    private string SpaSnippet => $$"""
+        import { UserManager } from "oidc-client-ts";
+
+        const users = new UserManager({
+          authority: "{{info!.Authority}}",
+          metadataUrl: "{{info.DiscoveryUrl}}",
+          client_id: "{{info.ClientId}}",      // a public client (no secret) for browser-only apps
+          redirect_uri: window.location.origin + "/callback",
+          response_type: "code",              // PKCE is used automatically
+          scope: "openid",
+          ui_locales: "fa",
+        });
+        await users.signinRedirect();
+        """;
+
+    private string GenericSnippet => $"""
+        discovery / issuer metadata : {info!.DiscoveryUrl}
+        client_id                   : {info.ClientId}
+        client_secret               : (from the console; keep it in configuration)
+        flow                        : authorization code + PKCE (S256)
+        scope                       : openid
+        redirect_uri                : {string.Join(", ", info.RedirectUris.DefaultIfEmpty("https://your-app/signin-oidc"))}
+        permissions                 : access token claim "permissions" = {info.ClientId}:Module:Resource:Action
+        user scopes                 : access token claims authz.scope.<key>
+        direct login (embedded)     : POST {info.Authority}/api/identity/auth/login (form, grant_type=password)
+        """;
+}

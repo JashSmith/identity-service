@@ -24,7 +24,7 @@
 ```bash
 bash scripts/build-keycloak-extensions.sh      # یک بار و پس از هر تغییر در keycloak/extensions (فقط Docker لازم است)
 dotnet build IdentityService.slnx
-dotnet run --project src/Identity.AppHost --launch-profile http
+dotnet run --project src/Hosts/Identity.AppHost --launch-profile http
 ```
 
 بدون ساخت افزونه هم سامانه کار می‌کند، ولی برنامه زمانی روی صفحه ورود خود Keycloak اعمال نمی‌شود و درگاه در لاگ هشدار می‌دهد.
@@ -80,7 +80,7 @@ IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests    # Stack را خودش ب�
 docker ps --format '{{.Names}}' | grep -E '^(keycloak|redis)-' | xargs -r docker rm -f
 ```
 
-ظرف `postgres-*` عمداً ماندگار است.
+ظرف `identity-postgres` (با volume به نام `identity-postgres-data`) عمداً ماندگار است.
 
 ## افزودن سازمان جدید
 

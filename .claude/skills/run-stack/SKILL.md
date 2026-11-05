@@ -11,7 +11,7 @@ description: Start, verify and stop the Identity Gateway stack (Aspire AppHost w
 2. Build first so the run can use `--no-build`: `dotnet build IdentityService.slnx`. After changes in
    `keycloak/extensions`, run `bash scripts/build-keycloak-extensions.sh` (Docker only) before starting.
 3. Start the AppHost **in the background**, logging to the scratchpad:
-   `dotnet run --project src/Identity.AppHost --launch-profile http --no-build > <scratchpad>/apphost.log 2>&1`
+   `dotnet run --project src/Hosts/Identity.AppHost --launch-profile http --no-build > <scratchpad>/apphost.log 2>&1`
 4. Wait (background `until` loop, 1 s polling, ~5 min cap, `curl -m 3`) until:
    - gateway `http://localhost:5080/health` answers `Healthy` (Keycloak bootstrap done for every tenant)
    - console `http://localhost:5090/alive` answers 200
@@ -39,11 +39,12 @@ startup exception; a stale static-web-assets manifest is fixed with `dotnet buil
 2. Killing the process orphans the session containers and the project processes. Remove them:
    `docker ps --format '{{.Names}}' | grep -E '^(keycloak|redis)-' | xargs -r docker rm -f`
    `powershell -NoProfile -Command "Get-Process Identity.Gateway,Identity.Admin,Identity.AppHost -ErrorAction SilentlyContinue | Stop-Process -Force"`
-3. Leave `postgres-*` running; it is a persistent container holding the Keycloak database.
+3. Leave `identity-postgres` running; it is a persistent container holding the Keycloak database
+   (volume `identity-postgres-data`).
    Smoke-test data (roles `smoke-accountant-*`, applications `smoke-app-*`, users `smoke-user-*`) stays in that database.
 
 ## Troubleshooting
 - `SSL connection could not be established` / Apache 404 on a Keycloak URL: something else owns
   the port. Port 8080 is a local Apache on the owner's machine, which is why Keycloak uses 18080.
 - Admin password: generated Aspire parameter `keycloak-admin-password`, stored in the AppHost
-  user secrets (`dotnet user-secrets list --project src/Identity.AppHost`).
+  user secrets (`dotnet user-secrets list --project src/Hosts/Identity.AppHost`).

@@ -1,0 +1,20 @@
+@* Shown instead of an empty list or a missing permission: says why and offers the next step. *@
+<div class="av-empty" role="status">
+    <RadzenIcon Icon="@Icon" class="av-empty__icon" aria-hidden="true" />
+    <p class="av-empty__title">@Title</p>
+    @if (ChildContent is not null)
+    {
+        <p class="av-empty__text">@ChildContent</p>
+    }
+    @if (Action is not null)
+    {
+        <div class="av-empty__action">@Action</div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Icon { get; set; } = "inbox";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Action { get; set; }
+}

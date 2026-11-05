@@ -37,7 +37,11 @@
 | چرخه کاربر | ایجاد، ویرایش، رمز عبور، رفع قفل، حذف رمز یک‌بارمصرف، اقدامات الزامی، نشست‌ها. |
 | تنظیمات احراز هویت | عمر توکن و نشست، سیاست رمز عبور، قفل حساب، ورود دومرحله‌ای، صفحه ورود فارسی، سرویس‌های ورود خارجی، LDAP و Active Directory. |
 | چندسازمانی | هر سازمان یک Realm جدا در Keycloak است. توکن هر سازمان فقط برای همان سازمان معتبر است. |
-| کنسول مدیریت | کنسول فارسی و راست‌به‌چپ با Radzen Blazor که منوها را بر اساس دسترسی‌های مدیر نشان می‌دهد. |
+| ورود یکپارچه برای همه پروژه‌ها | بسته `AddAvashWebSso` برای وب‌اپلیکیشن‌های .NET، توکن Bearer برای APIها و تنظیمات استاندارد OIDC برای هر زبان دیگر؛ با خروج یکپارچه. |
+| صفحه ورود هر اپلیکیشن | ورود مرکزی، ورود مرکزی با لوگو و رنگ خود اپلیکیشن، قالب کاملاً اختصاصی، یا فرم ورود داخل اپلیکیشن. |
+| پیامک | لایه مشترک ارسال پیامک با کاوه‌نگار و حالت آزمایشی؛ انتخاب سرویس و تنظیم آن برای هر سازمان در کنسول؛ افزودن سرویس تازه با یک کلاس. |
+| داشبورد و ممیزی | روند ورود موفق و ناموفق، پرکاربردترین اپلیکیشن‌ها و آخرین تغییرات مدیریتی، از رویدادهای خود Keycloak. |
+| کنسول مدیریت | کنسول فارسی و راست‌به‌چپ با رنگ‌های ایرانی، فونت وزیرمتن، حالت روشن، تیره و سیستمی؛ منوها بر اساس دسترسی مدیر. |
 
 ## معماری در یک نگاه
 
@@ -46,6 +50,8 @@ flowchart LR
     Admin[مدیر] -->|OIDC + PKCE| Console[کنسول مدیریت<br/>Identity.Admin]
     Console -->|REST + Bearer| Gateway[درگاه هویت<br/>Identity.Gateway]
     Service[سرویس‌های سازمان<br/>Avash.Identity.*] -->|ثبت دسترسی، برنامه زمانی| Gateway
+    Web[وب‌اپلیکیشن‌ها<br/>AddAvashWebSso] -->|discovery| Gateway
+    Web -->|ورود یکپارچه| Keycloak
     User[کاربر] -->|ورود| Gateway
     Gateway -->|Admin REST API| Keycloak[(Keycloak<br/>یک Realm برای هر سازمان)]
     Gateway -.->|Cache| Redis[(Redis)]
@@ -60,7 +66,7 @@ flowchart LR
 
 ```bash
 dotnet build IdentityService.slnx
-dotnet run --project src/Identity.AppHost --launch-profile http
+dotnet run --project src/Hosts/Identity.AppHost --launch-profile http
 ```
 
 | سرویس | آدرس |
@@ -74,17 +80,27 @@ dotnet run --project src/Identity.AppHost --launch-profile http
 
 ## کنسول مدیریت
 
-‏`http://localhost:5090` را باز کنید، سازمان را انتخاب کنید و در صفحه ورود فارسی Keycloak وارد شوید. بخش‌های کنسول:
+‏`http://localhost:5090` را باز کنید، سازمان را انتخاب کنید و در صفحه ورود فارسی Keycloak وارد شوید. هر بخش فقط برای مدیری نمایش داده می‌شود که دسترسی خواندن آن را دارد. راهنمای کامل در [راهنمای کنسول مدیریت](docs/console.md) است.
 
-- داشبورد، کاربران، نقش‌ها، اپلیکیشن‌ها و دسترسی‌ها؛
-- محدوده‌ها و مقادیر مجاز، برنامه زمانی پیش‌فرض سازمان؛
-- تنظیمات احراز هویت و فهرست سازمان‌ها.
-
-هر بخش فقط برای مدیری نمایش داده می‌شود که دسترسی خواندن آن را دارد.
+![داشبورد کنسول](docs/images/console-dashboard-light.png)
 
 ## اتصال یک سرویس
 
-یک سرویس با بسته‌های `Avash.Identity.*` به درگاه وصل می‌شود:
+یک وب‌اپلیکیشن با یک خط به ورود یکپارچه سازمان وصل می‌شود:
+
+```csharp
+builder.Services.AddAvashWebSso(o =>
+{
+    o.Authority = "http://localhost:5080";          // درگاه، نه Keycloak
+    o.ClientId = "crm";
+    o.ClientSecret = builder.Configuration["Identity:ClientSecret"]!;
+});
+builder.Services.AddAvashAuthorization(o => o.ApplicationId = "crm");
+// ...
+app.MapAvashSso();
+```
+
+یک API با توکن Bearer:
 
 ```csharp
 builder.Services.AddAvashAuthentication(o =>
@@ -105,7 +121,7 @@ builder.Services.AddPermissionRegistration(o =>
 app.MapGet("/api/orders", ListOrders).RequireAuthorization("Orders:Order:View");
 ```
 
-در این مثال `order-service` شناسه اپلیکیشنی است که پیش‌تر در کنسول یا با `POST /api/identity/applications` ثبت شده است. فهرست درخواست‌های API در [`Identity.Gateway.http`](src/Identity.Gateway/Identity.Gateway.http) و [خلاصه API](docs/api.md) آمده است.
+در این مثال‌ها `crm` و `order-service` شناسه اپلیکیشن‌هایی است که پیش‌تر در کنسول یا با `POST /api/identity/applications` ثبت شده‌اند. روش‌های دیگر (SPA، ‏Java، ‏Python، ورود از داخل اپلیکیشن، سرویس به سرویس) در [راهنمای اتصال پروژه‌ها](docs/integration.md) آمده است. فهرست درخواست‌های API در [`Identity.Gateway.http`](src/Hosts/Identity.Gateway/Identity.Gateway.http) و [خلاصه API](docs/api.md) آمده است.
 
 ## تست‌ها
 
@@ -123,15 +139,20 @@ bash scripts/smoke-test.sh                                # سناریوی کس�
 
 ## مستندات بیشتر
 
+- [فهرست مستندات](docs/README.md)
+- [راهنمای اتصال پروژه‌ها](docs/integration.md)
+- [صفحه ورود اپلیکیشن‌ها](docs/login-pages.md)
+- [راهنمای کنسول مدیریت](docs/console.md)
+- [پیامک](docs/sms.md)
 - [معماری و مدل داده در Keycloak](docs/architecture.md)
 - [راهنمای اجرا و عیب‌یابی](docs/running.md)
 - [خلاصه API](docs/api.md)
 - ‏[CLAUDE.md](CLAUDE.md): راهنمای توسعه و تصمیم‌های الزام‌آور معماری
 
-مجموعه Postman در پوشه `postman` قدیمی است و نام دسترسی‌های قبلی را دارد؛ مرجع به‌روز فایل `Identity.Gateway.http` است.
+مجموعه Postman در پوشه `postman` از سند OpenAPI خود درگاه ساخته می‌شود (`python scripts/generate-postman.py`) و با API هماهنگ است. اول درخواست «Sign in» را اجرا کنید.
 
 ## محدودیت‌های شناخته‌شده
 
-- ورود با پیامک هنوز پیاده‌سازی نشده است و هر وقت لازم شد اضافه می‌شود.
+- زیرساخت پیامک (کاوه‌نگار، حالت آزمایشی و امکان افزودن سرویس تازه) آماده است ([پیامک](docs/sms.md))؛ خود «ورود با کد پیامکی» هنوز ساخته نشده است.
 - برای اعمال برنامه زمانی روی صفحه ورود خود Keycloak باید افزونه `keycloak/extensions` ساخته شود (`bash scripts/build-keycloak-extensions.sh`، فقط با Docker). نشست SSO که از قبل باز است، تا پایان زمان بیکاری دوباره بررسی نمی‌شود.
 - کنسول توکن‌ها را در حافظه سرور نگه می‌دارد؛ با راه‌اندازی دوباره کنسول، مدیران باید دوباره وارد شوند.

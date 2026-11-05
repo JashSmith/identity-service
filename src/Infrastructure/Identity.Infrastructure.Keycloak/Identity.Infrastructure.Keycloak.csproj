@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Identity.Infrastructure.Keycloak</RootNamespace>
+        <AssemblyName>Identity.Infrastructure.Keycloak</AssemblyName>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../Core/Identity.Application/Identity.Application.csproj"/>
+        <ProjectReference Include="../../Core/Identity.Domain/Identity.Domain.csproj"/>
+        <ProjectReference Include="../../Packages/Avash.Identity.Abstractions/Avash.Identity.Abstractions.csproj"/>
+        <ProjectReference Include="../../Core/Identity.Contracts/Identity.Contracts.csproj"/>
+        <PackageReference Include="Polly.Core"/>
+        <PackageReference Include="Polly.Extensions"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory"/>
+    </ItemGroup>
+</Project>
