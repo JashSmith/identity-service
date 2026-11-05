@@ -39,6 +39,8 @@ var acmeGatewayClientSecret = ClientSecret("acme-gateway-client-secret");
 var acmeGatewayAdminClientSecret = ClientSecret("acme-gateway-admin-client-secret");
 // The admin console's OIDC client; the gateway creates it in every tenant realm with this secret.
 var adminConsoleClientSecret = ClientSecret("admin-console-client-secret");
+// Shared by Keycloak's Avash SMS authenticators and the gateway: signs the "send this SMS code" calls.
+var smsHookSecret = ClientSecret("sms-hook-secret");
 const string AdminConsoleUrl = "http://localhost:5090";
 
 var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin, keycloakAdminPassword)
@@ -57,6 +59,7 @@ var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin
     .WithEnvironment("GATEWAY_ADMIN_CLIENT_SECRET", gatewayAdminClientSecret)
     .WithEnvironment("ACME_GATEWAY_CLIENT_SECRET", acmeGatewayClientSecret)
     .WithEnvironment("ACME_GATEWAY_ADMIN_CLIENT_SECRET", acmeGatewayAdminClientSecret)
+    .WithEnvironment("AVASH_SMS_HOOK_SECRET", smsHookSecret)
     .WaitFor(keycloakDb);
 
 var keycloakHttp = keycloak.GetEndpoint("http");
@@ -79,11 +82,14 @@ var gateway = builder.AddProject<Projects.Identity_Gateway>("identity-gateway")
     .WithEnvironment("Identity__AdminConsole__BaseUrl", AdminConsoleUrl)
     .WithEnvironment("Identity__AdminConsole__ClientSecret", adminConsoleClientSecret)
     .WithEnvironment("Identity__Redis__Configuration", redis.Resource.ConnectionStringExpression)
+    .WithEnvironment("Identity__SmsLogin__HookSecret", smsHookSecret)
     .WithHttpHealthCheck("/health/live")
     .WaitFor(keycloak)
     .WaitFor(redis);
 
 var gatewayHttp = gateway.GetEndpoint("http");
+// Keycloak (a container) calls the gateway to deliver SMS sign-in codes; Aspire resolves the host address for it.
+keycloak.WithEnvironment("AVASH_GATEWAY_URL", gatewayHttp);
 gateway.WithEnvironment("Identity__PublicBaseUrl", gatewayHttp);
 
 // Persian (RTL) admin console: signs in through Keycloak (Avash login theme) and calls the gateway API.

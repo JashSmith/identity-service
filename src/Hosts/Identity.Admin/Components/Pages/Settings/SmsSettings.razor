@@ -82,7 +82,7 @@
 
     @if (CanManage)
     {
-        <div><RadzenButton Icon="save" Text="ذخیره" IsBusy="@Busy" Click="@SaveAsync" /></div>
+        <div><RadzenButton Icon="save" Text="ذخیره" IsBusy="@Busy" Click="@SaveAsync" Name="sms-save" /></div>
 
         <section class="av-panel" aria-labelledby="sms-test-title">
             <h3 id="sms-test-title" class="av-panel__title">ارسال پیامک آزمایشی</h3>
@@ -123,6 +123,8 @@
             </section>
         }
     }
+
+    <SmsLoginPanel CanManage="@CanManage" SmsEnabled="@savedEnabled" />
 </RadzenStack>
 
 @code {
