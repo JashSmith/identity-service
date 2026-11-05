@@ -1,1 +1,5 @@
 com.avash.identity.keycloak.schedule.AccessScheduleAuthenticatorFactory
+com.avash.identity.keycloak.sms.SmsAuthenticatorFactories$Login
+com.avash.identity.keycloak.sms.SmsAuthenticatorFactories$Otp
+com.avash.identity.keycloak.sms.SmsAuthenticatorFactories$DirectLogin
+com.avash.identity.keycloak.sms.SmsAuthenticatorFactories$DirectOtp
