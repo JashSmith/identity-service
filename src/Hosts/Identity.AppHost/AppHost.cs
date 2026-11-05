@@ -106,6 +106,10 @@ builder.AddProject<Projects.Identity_Admin>("identity-admin")
     .WithHttpHealthCheck("/alive")
     .WaitFor(gateway);
 
+// Fail at once (not after Aspire's two-minute orchestrator timeout) when another stack holds the fixed ports.
+if (builder.ExecutionContext.IsRunMode)
+    PortPreflight.EnsureFree((5080, "identity-gateway"), (5090, "identity-admin"), (KeycloakPort, "keycloak"));
+
 builder.Build().Run();
 
 // Realms, themes and providers live in the repository's keycloak/ folder (next to the Java extensions).

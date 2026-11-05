@@ -115,6 +115,8 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - Docker Desktop on the owner's machine can leak thousands of half-closed connections (port 8888, `gost-proxy`),
   exhausting Windows ephemeral ports: `WSAENOBUFS`, `ERR_NO_BUFFER_SPACE`, `ERR_ADDRESS_IN_USE`. Check with
   `netstat -ano`; the owner decides on restarting Docker Desktop.
+- The AppHost refuses to start when ports 5080/5090/18080 are taken (`PortPreflight`): never run the dev stack and the
+  E2E tests at the same time; without the check Aspire's DCP only failed after a 2-minute `TimeoutRejectedException`.
 - Stopping the AppHost by killing its process orphans session containers (`keycloak-*`, `redis-*`);
   remove them. The `identity-postgres` container (volume `identity-postgres-data`) is persistent on purpose;
   its name is pinned in the AppHost because Aspire's default names hash the AppHost path.
