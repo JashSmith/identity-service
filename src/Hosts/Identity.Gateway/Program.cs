@@ -121,6 +121,12 @@ builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakSchedule
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>();
 builder.Services.AddSingleton<Identity.Application.Settings.IAuthSettingsService>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>());
+// SMS: providers (Kavenegar, development) behind Identity.Application.Sms; settings in realm attributes.
+Identity.Infrastructure.Sms.SmsServiceCollectionExtensions.AddBuiltInSmsProviders(builder.Services);
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakSmsSettingsStore>();
+builder.Services.AddSingleton<Identity.Application.Sms.ISmsSettingsStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakSmsSettingsStore>());
+builder.Services.AddSingleton<Identity.Application.Sms.SmsService>();
 builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuditAdapter>();
 builder.Services.AddSingleton<Identity.Application.Audit.IAuditEventReader>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuditAdapter>());
@@ -247,6 +253,7 @@ app.MapUserLifecycle();
 app.MapSchedules();
 app.MapSettings();
 app.MapAudit();
+app.MapSms();
 app.MapGet("/api/identity/tenants", (Identity.Gateway.Tenancy.TenantRegistry tenants) =>
         Results.Ok(tenants.All.Select(tenants.ToDto).ToArray()))
     .RequireAuthorization(IamPermissions.SystemRead).WithTags("Tenants").WithName("ListTenants")

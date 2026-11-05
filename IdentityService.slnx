@@ -24,6 +24,7 @@
         <Project Path="src/Infrastructure/Identity.Infrastructure/Identity.Infrastructure.csproj"/>
         <Project Path="src/Infrastructure/Identity.Infrastructure.Keycloak/Identity.Infrastructure.Keycloak.csproj"/>
         <Project Path="src/Infrastructure/Identity.Infrastructure.Redis/Identity.Infrastructure.Redis.csproj"/>
+        <Project Path="src/Infrastructure/Identity.Infrastructure.Sms/Identity.Infrastructure.Sms.csproj"/>
     </Folder>
     <Folder Name="/src/Packages/">
         <Project Path="src/Packages/Avash.Identity.Abstractions/Avash.Identity.Abstractions.csproj"/>

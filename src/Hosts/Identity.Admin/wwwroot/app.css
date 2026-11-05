@@ -705,3 +705,4 @@ fieldset[disabled] .av-mode { cursor: default; }
 .av-copy .rzi { font-size: 1rem; }
 .av-guide { margin-top: 1rem; }
 .av-guide p { line-height: 1.8; }
+.av-field-hint { display: block; margin-top: 0.25rem; line-height: 1.7; }
