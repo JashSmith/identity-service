@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../Core/Identity.Contracts/Identity.Contracts.csproj" />
+    <ProjectReference Include="../../Packages/Avash.Identity.Authentication.AspNetCore/Avash.Identity.Authentication.AspNetCore.csproj" />
     <ProjectReference Include="../Identity.ServiceDefaults/Identity.ServiceDefaults.csproj" />
     <PackageReference Include="Radzen.Blazor" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />

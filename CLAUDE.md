@@ -64,7 +64,7 @@ Delegated admins may only manage users inside their own scope and grant only wha
 | `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |
 | `tests/Identity.Admin.Tests` | bUnit tests of the console (design-system components, menu permissions, Persian formatting) |
 | `tests/Identity.Packages.Tests` | Consumer-package tests (permission discovery, manifests, scope filters) against a test-only fixture |
-| `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`); `ConsumerHost` is an in-process consumer service |
+| `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` on the fixed dev ports (only with `IDENTITY_E2E=1`); `ConsumerHost` is an in-process consumer service; `Ui/` drives the console in the installed Chrome with Playwright and fails on any HTTP >= 400 or browser console error |
 | `docs/` | Persian docs: index (`docs/README.md`), integration guide, per-app login pages, console guide, architecture, run guide, API summary; screenshots in `docs/images`. Check/fix the RTL rules with `python scripts/check-docs.py --fix` |
 
 ## Commands
@@ -74,6 +74,7 @@ dotnet test IdentityService.slnx
 dotnet run --project src/Hosts/Identity.AppHost --launch-profile http   # whole stack + Aspire dashboard
 bash scripts/smoke-test.sh                   # needs the stack running
 IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests   # starts its own stack; dev stack must be stopped
+IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests --filter "FullyQualifiedName~Ui"   # browser tests only (PLAYWRIGHT_HEADED=1 shows the browser)
 ```
 Use the `run-stack` skill to start, verify and stop the stack correctly.
 
@@ -103,6 +104,11 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 ## Environment gotchas
 - Port 8080 is taken by a local Apache on the owner's machine; Keycloak runs on **18080**,
   and Aspire serves it over HTTPS with the dev certificate.
+- Browsers send a host's cookies to every port of it: on `localhost` the console's and apps' cookies reach Keycloak too.
+  Keep auth cookies small (server-side ticket store, `DistributedCacheTicketStore`); Keycloak answers 431 past ~8 KB.
+- Docker Desktop on the owner's machine can leak thousands of half-closed connections (port 8888, `gost-proxy`),
+  exhausting Windows ephemeral ports: `WSAENOBUFS`, `ERR_NO_BUFFER_SPACE`, `ERR_ADDRESS_IN_USE`. Check with
+  `netstat -ano`; the owner decides on restarting Docker Desktop.
 - Stopping the AppHost by killing its process orphans session containers (`keycloak-*`, `redis-*`);
   remove them. The `identity-postgres` container (volume `identity-postgres-data`) is persistent on purpose;
   its name is pinned in the AppHost because Aspire's default names hash the AppHost path.
@@ -123,7 +129,7 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - An SSO session opened inside the schedule is not re-checked when it signs in to another application
   (cookie path); it ends with the SSO idle timeout.
 - `super-admins` members follow the realm's default schedule; give them an `unrestricted` user override.
-- The console keeps tokens in server memory: a console restart signs administrators out.
+- The console keeps tokens and the auth ticket in server memory: a console restart signs administrators out.
 
 ## Roadmap
 1. Foundation: cleanup, rename, Aspire, agent knowledge (done)
