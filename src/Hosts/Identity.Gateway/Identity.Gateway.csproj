@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>Identity.Gateway</RootNamespace>
+        <AssemblyName>Identity.Gateway</AssemblyName>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../Core/Identity.Application/Identity.Application.csproj"/>
+        <ProjectReference Include="../../Infrastructure/Identity.Infrastructure/Identity.Infrastructure.csproj"/>
+        <ProjectReference Include="../../Infrastructure/Identity.Infrastructure.Keycloak/Identity.Infrastructure.Keycloak.csproj"/>
+        <ProjectReference Include="../../Infrastructure/Identity.Infrastructure.Redis/Identity.Infrastructure.Redis.csproj"/>
+        <ProjectReference Include="../../Core/Identity.Contracts/Identity.Contracts.csproj"/>
+        <ProjectReference Include="../Identity.ServiceDefaults/Identity.ServiceDefaults.csproj"/>
+        <ProjectReference Include="../../Packages/Avash.Identity.Authentication.AspNetCore/Avash.Identity.Authentication.AspNetCore.csproj"/>
+        <ProjectReference Include="../../Packages/Avash.Identity.Authorization.AspNetCore/Avash.Identity.Authorization.AspNetCore.csproj"/>
+        <ProjectReference Include="../../Packages/Avash.Identity.Grpc/Avash.Identity.Grpc.csproj"/>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi"/>
+        <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis"/>
+        <PackageReference Include="Grpc.AspNetCore"/>
+        <PackageReference Include="Scalar.AspNetCore"/>
+        <PackageReference Include="Microsoft.OpenApi"/>
+    </ItemGroup>
+</Project>

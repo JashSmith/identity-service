@@ -9,6 +9,6 @@
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="../Avash.Identity.Abstractions/Avash.Identity.Abstractions.csproj"/>
-        <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj"/>
+        <ProjectReference Include="../../Core/Identity.Contracts/Identity.Contracts.csproj"/>
     </ItemGroup>
 </Project>

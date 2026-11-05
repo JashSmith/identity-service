@@ -20,7 +20,7 @@ access context, permission discovery/registration).
   Redis is a cache only. Do not add EF Core, SQLite or any gateway-owned DB.
 - Signing keys are managed inside Keycloak. There is no key-management module and no Vault.
 - Keycloak's database is **PostgreSQL**.
-- Local orchestration is **.NET Aspire** (`src/Identity.AppHost`). There is no docker-compose.
+- Local orchestration is **.NET Aspire** (`src/Hosts/Identity.AppHost`). There is no docker-compose.
 - Admin UI: **Radzen Blazor**, Persian RTL. Build each feature's page in the same phase as its API.
 - Multi-tenant enterprise target: **one Keycloak realm per tenant (organization)**; very large
   tenants may get a dedicated Keycloak cluster. Design every Keycloak call to be tenant (realm) aware.
@@ -47,15 +47,17 @@ Delegated admins may only manage users inside their own scope and grant only wha
 ## Layout
 | Path | Purpose |
 |---|---|
-| `src/Identity.AppHost` | Aspire AppHost: PostgreSQL, Keycloak (realms `company` + demo tenant `acme` from `Keycloak/Realms`, Persian `avash` login theme from `Keycloak/Themes`), Redis, gateway, console |
-| `src/Identity.ServiceDefaults` | OpenTelemetry, health, service discovery, resilience (no retries for unsafe methods) |
-| `src/Identity.Gateway` | Host: minimal API endpoints, error model, tenancy (`Tenancy/`), Keycloak bootstrap (`Bootstrap/`) |
-| `src/Identity.Admin` | Persian RTL admin console (Radzen Blazor, interactive server, OIDC code + PKCE per tenant) |
-| `src/Identity.Application` / `Identity.Domain` / `Identity.Contracts` | Use cases, domain, DTOs |
-| `src/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
-| `src/Avash.Identity.*` | Consumer packages |
+| `src/Hosts/Identity.AppHost` | Aspire AppHost: PostgreSQL, Keycloak (realms, themes and providers from `keycloak/`), Redis, gateway, console |
+| `src/Hosts/Identity.ServiceDefaults` | OpenTelemetry, health, service discovery, resilience (no retries for unsafe methods) |
+| `src/Hosts/Identity.Gateway` | Host: minimal API endpoints, error model, tenancy (`Tenancy/`), Keycloak bootstrap (`Bootstrap/`) |
+| `src/Hosts/Identity.Admin` | Persian RTL admin console (Radzen Blazor, interactive server, OIDC code + PKCE per tenant) |
+| `src/Core/Identity.Application` / `Identity.Domain` / `Identity.Contracts` | Use cases, domain, DTOs |
+| `src/Infrastructure/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
+| `src/Packages/Avash.Identity.*` | Consumer packages |
 | `tools/Identity.TenantProvisioning` | Operator tool: creates a new tenant realm with master credentials (the gateway never gets them) |
-| `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator), built in Docker by `scripts/build-keycloak-extensions.sh` into `Keycloak/Providers` |
+| `keycloak/realms` | Realm imports: `company` and the demo tenant `acme` (imported only when the realm does not exist) |
+| `keycloak/themes` | Keycloak themes mounted into the container (Persian `avash` login theme) |
+| `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator), built in Docker by `scripts/build-keycloak-extensions.sh` into `keycloak/providers` |
 | `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |
 | `tests/Identity.Packages.Tests` | Consumer-package tests (permission discovery, manifests, scope filters) against a test-only fixture |
 | `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`); `ConsumerHost` is an in-process consumer service |
@@ -65,7 +67,7 @@ Delegated admins may only manage users inside their own scope and grant only wha
 ```bash
 dotnet build IdentityService.slnx            # TreatWarningsAsErrors is on
 dotnet test IdentityService.slnx
-dotnet run --project src/Identity.AppHost --launch-profile http   # whole stack + Aspire dashboard
+dotnet run --project src/Hosts/Identity.AppHost --launch-profile http   # whole stack + Aspire dashboard
 bash scripts/smoke-test.sh                   # needs the stack running
 IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests   # starts its own stack; dev stack must be stopped
 ```
@@ -93,7 +95,8 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - Port 8080 is taken by a local Apache on the owner's machine; Keycloak runs on **18080**,
   and Aspire serves it over HTTPS with the dev certificate.
 - Stopping the AppHost by killing its process orphans session containers (`keycloak-*`, `redis-*`);
-  remove them. The `postgres-*` container is persistent on purpose.
+  remove them. The `identity-postgres` container (volume `identity-postgres-data`) is persistent on purpose;
+  its name is pinned in the AppHost because Aspire's default names hash the AppHost path.
 - VS Code's C# language server locks `bin/obj`; move tracked files with per-file `git mv`
   instead of renaming whole directories.
 - Remote is GitHub (`origin`, SSH). `gh` may be unauthenticated: push the branch and give the

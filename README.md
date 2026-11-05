@@ -60,7 +60,7 @@ flowchart LR
 
 ```bash
 dotnet build IdentityService.slnx
-dotnet run --project src/Identity.AppHost --launch-profile http
+dotnet run --project src/Hosts/Identity.AppHost --launch-profile http
 ```
 
 | سرویس | آدرس |
@@ -105,7 +105,7 @@ builder.Services.AddPermissionRegistration(o =>
 app.MapGet("/api/orders", ListOrders).RequireAuthorization("Orders:Order:View");
 ```
 
-در این مثال `order-service` شناسه اپلیکیشنی است که پیش‌تر در کنسول یا با `POST /api/identity/applications` ثبت شده است. فهرست درخواست‌های API در [`Identity.Gateway.http`](src/Identity.Gateway/Identity.Gateway.http) و [خلاصه API](docs/api.md) آمده است.
+در این مثال `order-service` شناسه اپلیکیشنی است که پیش‌تر در کنسول یا با `POST /api/identity/applications` ثبت شده است. فهرست درخواست‌های API در [`Identity.Gateway.http`](src/Hosts/Identity.Gateway/Identity.Gateway.http) و [خلاصه API](docs/api.md) آمده است.
 
 ## تست‌ها
 

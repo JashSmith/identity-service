@@ -10,13 +10,16 @@ const int KeycloakPort = 18080;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Explicit names: Aspire's defaults hash the AppHost's path, so moving the project would silently start
+// Keycloak on an empty database.
 var postgres = builder.AddPostgres("postgres")
-    .WithDataVolume()
+    .WithContainerName("identity-postgres")
+    .WithDataVolume("identity-postgres-data")
     .WithLifetime(ContainerLifetime.Persistent);
 var keycloakDb = postgres.AddDatabase("keycloak-db", databaseName: "keycloak");
 
 var redis = builder.AddRedis("redis")
-    .WithDataVolume();
+    .WithDataVolume("identity-redis-data");
 
 // Bootstrap admin of the master realm. The password is generated once and persisted
 // in the AppHost user secrets; it is never hardcoded.
@@ -40,11 +43,11 @@ const string AdminConsoleUrl = "http://localhost:5090";
 
 var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin, keycloakAdminPassword)
     .WithImageTag(KeycloakImageTag)
-    .WithRealmImport("./Keycloak/Realms")
+    .WithRealmImport(KeycloakAssets("realms"))
     // Custom themes (e.g. "avash": Persian RTL login); Keycloak's built-in themes live in its jars, not in this folder.
-    .WithBindMount("./Keycloak/Themes", "/opt/keycloak/themes", isReadOnly: true)
+    .WithBindMount(KeycloakAssets("themes"), "/opt/keycloak/themes", isReadOnly: true)
     // Extensions built by scripts/build-keycloak-extensions.sh (e.g. the weekly-schedule authenticator).
-    .WithBindMount("./Keycloak/Providers", "/opt/keycloak/providers", isReadOnly: true)
+    .WithBindMount(KeycloakAssets("providers"), "/opt/keycloak/providers", isReadOnly: true)
     .WithEnvironment("KC_DB", "postgres")
     .WithEnvironment("KC_DB_URL", ReferenceExpression.Create(
         $"jdbc:postgresql://{postgres.Resource.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}/{keycloakDb.Resource.DatabaseName}"))
@@ -98,6 +101,9 @@ builder.AddProject<Projects.Identity_Admin>("identity-admin")
     .WaitFor(gateway);
 
 builder.Build().Run();
+
+// Realms, themes and providers live in the repository's keycloak/ folder (next to the Java extensions).
+string KeycloakAssets(string folder) => Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "..", "..", "keycloak", folder));
 
 IResourceBuilder<ParameterResource> ClientSecret(string name) => builder.AddParameter(
     name, new GenerateParameterDefault { MinLength = 32, Special = false }, secret: true, persist: true);

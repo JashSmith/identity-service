@@ -1,6 +1,6 @@
 # خلاصه API درگاه هویت
 
-همه مسیرها زیر `/api/identity` هستند. درخواست‌ها با `Authorization: Bearer <token>` و برای سازمان غیرپیش‌فرض با `X-Tenant-Id` ارسال می‌شوند. خطاها قالب ProblemDetails با `code` دارند. نمونه درخواست‌ها در `src/Identity.Gateway/Identity.Gateway.http` است و مستند OpenAPI در محیط توسعه از `/scalar` در دسترس است.
+همه مسیرها زیر `/api/identity` هستند. درخواست‌ها با `Authorization: Bearer <token>` و برای سازمان غیرپیش‌فرض با `X-Tenant-Id` ارسال می‌شوند. خطاها قالب ProblemDetails با `code` دارند. نمونه درخواست‌ها در `src/Hosts/Identity.Gateway/Identity.Gateway.http` است و مستند OpenAPI در محیط توسعه از `/scalar` در دسترس است.
 
 - [ورود و توکن](#ورود-و-توکن)
 - [کاربران](#کاربران)

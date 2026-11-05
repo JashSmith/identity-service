@@ -7,10 +7,10 @@
         <AssemblyName>Identity.Infrastructure.Keycloak</AssemblyName>
     </PropertyGroup>
     <ItemGroup>
-        <ProjectReference Include="../Identity.Application/Identity.Application.csproj"/>
-        <ProjectReference Include="../Identity.Domain/Identity.Domain.csproj"/>
-        <ProjectReference Include="../Avash.Identity.Abstractions/Avash.Identity.Abstractions.csproj"/>
-        <ProjectReference Include="../Identity.Contracts/Identity.Contracts.csproj"/>
+        <ProjectReference Include="../../Core/Identity.Application/Identity.Application.csproj"/>
+        <ProjectReference Include="../../Core/Identity.Domain/Identity.Domain.csproj"/>
+        <ProjectReference Include="../../Packages/Avash.Identity.Abstractions/Avash.Identity.Abstractions.csproj"/>
+        <ProjectReference Include="../../Core/Identity.Contracts/Identity.Contracts.csproj"/>
         <PackageReference Include="Polly.Core"/>
         <PackageReference Include="Polly.Extensions"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>

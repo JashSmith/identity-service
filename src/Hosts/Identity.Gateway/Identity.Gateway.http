@@ -1,5 +1,5 @@
 # Identity Gateway API walkthrough (VS Code REST Client / Visual Studio / Rider).
-# Start the stack first: dotnet run --project src/Identity.AppHost --launch-profile http
+# Start the stack first: dotnet run --project src/Hosts/Identity.AppHost --launch-profile http
 # Run the login request, then the others reuse its token. Dev credentials only (admin/admin from the realm import).
 
 @gateway = http://localhost:5080
