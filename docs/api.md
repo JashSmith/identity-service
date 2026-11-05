@@ -108,6 +108,8 @@
 | ‏`/settings/ldap` | ‏LDAP و Active Directory؛ ‏`POST /settings/ldap/test` و `POST /settings/ldap/{id}/sync` |
 | ‏`GET` و `PUT /settings/events` | روشن یا خاموش کردن ثبت رویدادهای ورود و مدیریتی و مدت نگهداری (۱ تا ۳۶۵ روز) |
 
+مسیرهای پیامک (`/settings/sms`، ‏`/settings/sms/providers`، ‏`/settings/sms/test`، ‏`/settings/sms/outbox`) در [پیامک](sms.md#api) آمده است.
+
 ## رویدادها و ممیزی
 
 رویدادها در خود Keycloak ثبت و نگه داشته می‌شوند؛ درگاه فقط آن‌ها را می‌خواند. همه مسیرها دسترسی `identity-gateway:System:Audit:Read` می‌خواهند.

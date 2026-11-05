@@ -27,7 +27,8 @@ access context, permission discovery/registration).
   tenants may get a dedicated Keycloak cluster. Design every Keycloak call to be tenant (realm) aware.
 - Auth types to support: direct login via gateway APIs, SSO with a per-application login page
   (`login_theme` client attribute), LDAP/Active Directory (user federation), OTP/MFA.
-  SMS login is **deferred** until the owner asks for it.
+  SMS infrastructure exists (provider abstraction, Kavenegar, development provider, console settings); the SMS
+  *login* flow itself is still deferred until the owner asks for it.
 
 ## Keycloak storage model (target)
 | Concept | Keycloak entity |
@@ -41,6 +42,7 @@ access context, permission discovery/registration).
 | Weekly schedule | `access.schedule` attribute on realm (default), group (role), client role (permission) or user (override, e.g. `unrestricted` for remote workers). Precedence: user > permission > role > realm |
 | Audit | Keycloak admin events + login events |
 | Auth settings | Realm settings, authentication flows, OTP/password policies, identity providers, LDAP components |
+| SMS settings | Realm attributes `iam.sms.enabled`, `iam.sms.provider`, `iam.sms.<provider>.<field>`. Keycloak replaces the whole attribute map on a realm PUT: always read, merge, write the full map |
 
 The super-admin group `super-admins` must always exist and hold every permission.
 Delegated admins may only manage users inside their own scope and grant only what they hold.
@@ -53,7 +55,7 @@ Delegated admins may only manage users inside their own scope and grant only wha
 | `src/Hosts/Identity.Gateway` | Host: minimal API endpoints, error model, tenancy (`Tenancy/`), Keycloak bootstrap (`Bootstrap/`) |
 | `src/Hosts/Identity.Admin` | Persian RTL admin console (Radzen Blazor, interactive server, OIDC code + PKCE per tenant) |
 | `src/Core/Identity.Application` / `Identity.Domain` / `Identity.Contracts` | Use cases, domain, DTOs |
-| `src/Infrastructure/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
+| `src/Infrastructure/Identity.Infrastructure.Keycloak` / `.Redis` / `.Sms` / `Identity.Infrastructure` | Adapters (`.Sms`: SMS providers; add one with `AddSmsProvider<T>()`) |
 | `src/Packages/Avash.Identity.*` | Consumer packages |
 | `tools/Identity.TenantProvisioning` | Operator tool: creates a new tenant realm with master credentials (the gateway never gets them) |
 | `keycloak/realms` | Realm imports: `company` and the demo tenant `acme` (imported only when the realm does not exist) |
@@ -135,4 +137,5 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 9. Multi-tenancy: realm per tenant, tenant header, per-issuer token validation, provisioning tool (done)
 10. Radzen admin console and E2E tests with `Aspire.Hosting.Testing` (done)
 11. Documentation in Persian (done)
-12. Next: SMS login (when the owner asks)
+12. Console redesign, dashboard and audit, per-app login pages, web SSO package, SMS provider infrastructure (done)
+13. Next: SMS login flow (when the owner asks)
