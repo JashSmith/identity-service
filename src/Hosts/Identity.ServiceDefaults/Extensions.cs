@@ -17,6 +17,9 @@ namespace Microsoft.Extensions.Hosting;
 public static class Extensions
 {
     private const string HealthEndpointPath = "/health";
+
+    /// <summary>Request option that keeps an outgoing HTTP call out of traces (its URL carries a secret).</summary>
+    public static readonly HttpRequestOptionsKey<bool> SuppressTelemetry = new("Avash.SuppressTelemetry");
     private const string AlivenessEndpointPath = "/alive";
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
@@ -58,7 +61,10 @@ public static class Extensions
                         o.Filter = context =>
                             !context.Request.Path.StartsWithSegments(HealthEndpointPath)
                             && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath))
-                    .AddHttpClientInstrumentation();
+                    // Requests whose URL carries a secret (e.g. an SMS provider API key) are marked by the caller
+                    // and never become spans, so the key cannot reach the dashboard or an OTLP backend.
+                    .AddHttpClientInstrumentation(o => o.FilterHttpRequestMessage = request =>
+                        !request.Options.TryGetValue(SuppressTelemetry, out var suppress) || !suppress);
             });
 
         if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))

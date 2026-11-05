@@ -4,7 +4,7 @@
 <PageTitle>تنظیمات احراز هویت | کنسول مدیریت هویت</PageTitle>
 
 <PageHeader Title="تنظیمات احراز هویت" Icon="shield_lock">
-    <Description>توکن و نشست، سیاست رمز، مقابله با حدس رمز، ورود دومرحله‌ای، صفحه ورود، ورود با سرویس‌های بیرونی و LDAP.</Description>
+    <Description>توکن و نشست، سیاست رمز، مقابله با حدس رمز، ورود دومرحله‌ای، صفحه ورود، ورود با سرویس‌های بیرونی، LDAP، پیامک و رویدادها.</Description>
 </PageHeader>
 
 <RadzenTabs RenderMode="TabRenderMode.Client" @bind-SelectedIndex="selectedTab">
@@ -117,6 +117,10 @@
             <LdapProviders CanManage="@canManage" />
         </RadzenTabsItem>
 
+        <RadzenTabsItem Text="پیامک">
+            <SmsSettings CanManage="@canManage" />
+        </RadzenTabsItem>
+
         <RadzenTabsItem Text="رویدادها و ممیزی">
             @if (events is not null)
             {
@@ -159,7 +163,7 @@
     protected override async Task OnInitializedAsync()
     {
         canManage = await Can(Permissions.SettingsManage);
-        if (Tab == "events") selectedTab = 7;
+        selectedTab = Tab switch { "sms" => 7, "events" => 8, _ => 0 };
         await RunAsync(async () =>
         {
             var t = await Api.GetAsync<TokenSettingsDto>("api/identity/settings/tokens");
