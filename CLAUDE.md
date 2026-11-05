@@ -63,7 +63,7 @@ Delegated admins may only manage users inside their own scope and grant only wha
 | `tests/Identity.Admin.Tests` | bUnit tests of the console (design-system components, menu permissions, Persian formatting) |
 | `tests/Identity.Packages.Tests` | Consumer-package tests (permission discovery, manifests, scope filters) against a test-only fixture |
 | `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`); `ConsumerHost` is an in-process consumer service |
-| `docs/` | Persian docs: architecture + Keycloak ERD, run guide, API summary |
+| `docs/` | Persian docs: index (`docs/README.md`), integration guide, per-app login pages, console guide, architecture, run guide, API summary; screenshots in `docs/images`. Check/fix the RTL rules with `python scripts/check-docs.py --fix` |
 
 ## Commands
 ```bash

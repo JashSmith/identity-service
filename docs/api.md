@@ -70,6 +70,8 @@
 | ‏`GET /applications/{clientId}/login-page` | حالت فعلی: `inherit`، ‏`branded`، ‏`theme` یا `embedded`، قالب، برند و اینکه ورود مستقیم مجاز است یا نه |
 | ‏`PUT /applications/{clientId}/login-page` | تغییر حالت؛ بدنه: `mode`، ‏`theme` (برای حالت `theme`) و `branding` (عنوان، متن، لوگوی https، رنگ `#RRGGBB` با کنتراست دست‌کم ۳ به ۱ با متن سفید، پس‌زمینه `pattern`، ‏`plain` یا `gradient`) |
 | ‏`GET /settings/login-themes` | قالب‌های ورود نصب‌شده روی Keycloak |
+| ‏`GET /applications/{clientId}/integration` | مشخصات اتصال: Authority، ‏discovery، سازمان، آدرس‌های بازگشت و خروج |
+| ‏`PUT /applications/{clientId}/logout` | آدرس‌های مجاز پس از خروج و آدرس back-channel logout |
 
 فقط حالت `embedded` ورود مستقیم (`grant_type=password` با شناسه و کلید خود اپلیکیشن) را روشن می‌کند و خروج از آن، دوباره خاموشش می‌کند. کلاینت‌های خود درگاه قابل تغییر نیستند.
 
