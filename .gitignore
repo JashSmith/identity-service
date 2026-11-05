@@ -501,4 +501,4 @@ identity-signing-keys.json
 
 # Keycloak extensions: Maven output and the built jar
 keycloak/extensions/target/
-src/Identity.AppHost/Keycloak/Providers/*.jar
+keycloak/providers/*.jar

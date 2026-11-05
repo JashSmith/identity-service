@@ -50,7 +50,7 @@ public sealed class RealmTemplateTests
         // Guards drift: the template and the realm imported for the demo tenant must define the same building blocks.
         var root = AppContext.BaseDirectory;
         while (!File.Exists(Path.Combine(root, "IdentityService.slnx"))) root = Path.GetDirectoryName(root)!;
-        var demo = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "src/Identity.AppHost/Keycloak/Realms/realm-acme.json")))!;
+        var demo = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "keycloak/realms/realm-acme.json")))!;
         var template = RealmTemplate.Load();
 
         foreach (var (collection, key) in new[] { ("clients", "clientId"), ("groups", "name"), ("clientScopes", "name"), ("users", "username") })

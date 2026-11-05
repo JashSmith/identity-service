@@ -1,0 +1,26 @@
+﻿@page "/Error"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@using System.Diagnostics
+
+<PageTitle>خطا | کنسول مدیریت هویت</PageTitle>
+
+<div class="av-center-page">
+    <EmptyState Icon="error" Title="خطای غیرمنتظره رخ داد">
+        درخواست شما انجام نشد. صفحه را دوباره بارگذاری کنید و اگر خطا تکرار شد، شناسه پیگیری را به پشتیبانی بدهید.
+        @if (!string.IsNullOrEmpty(RequestId))
+        {
+            <br /><span>شناسه پیگیری: <span class="ltr">@RequestId</span></span>
+        }
+    </EmptyState>
+    <a class="rz-button rz-button-md rz-variant-filled rz-primary rz-shade-default" href="/">بازگشت به داشبورد</a>
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

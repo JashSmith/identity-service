@@ -71,10 +71,11 @@ GET_ROLE=$(curl -fsS "$GATEWAY/api/identity/business-roles/$ROLE_NAME" -H "Autho
 [ "$(json_field "$GET_ROLE" "d['name']")" = "$ROLE_NAME" ] || fail "get role" "role not readable back: $GET_ROLE"
 pass "business role created and readable"
 
-step "4/7 — Assign a registered permission to the role"
-PERM=$(curl -fsS "$GATEWAY/api/identity/permissions?application=order-service" -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | pyj "import sys,json; d=json.load(sys.stdin); print(d[0]['name'] if d else '')")
-[ -n "$PERM" ] || PERM="identity-gateway:Users:User:Read"
+step "4/7 — Register an application with one permission and assign it to the role"
+APP_ID="smoke-app-$TS"
+curl -fsS -X POST "$GATEWAY/api/identity/applications"   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json"   -d "{\"clientId\":\"$APP_ID\",\"displayName\":\"Smoke application\",\"kind\":\"service\"}" >/dev/null   || fail "create application" "$APP_ID"
+curl -fsS -X POST "$GATEWAY/api/identity/applications/$APP_ID/permissions"   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json"   -d '{"name":"Smoke:Item:View","displayName":"View smoke items"}' >/dev/null   || fail "create permission" "$APP_ID:Smoke:Item:View"
+PERM="$APP_ID:Smoke:Item:View"
 ASSIGN=$(curl -fsS -X POST "$GATEWAY/api/identity/business-roles/$ROLE_NAME/permissions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"permissions\":[\"$PERM\"]}")

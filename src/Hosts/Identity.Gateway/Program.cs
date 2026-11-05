@@ -1,0 +1,271 @@
+using Avash.Identity.Authentication.AspNetCore;
+using Avash.Identity.Authorization.AspNetCore;
+using Identity.Gateway;
+using Identity.Application;
+using Identity.Contracts;
+using FluentValidation;
+using Identity.Gateway.Errors;
+using Scalar.AspNetCore;
+using Identity.Gateway.Bootstrap;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
+var authority = builder.Configuration["Identity:Authority"] ??
+                throw new InvalidOperationException("Identity:Authority is required.");
+var audience = builder.Configuration["Identity:Audience"] ?? string.Empty;
+var requireHttpsMetadata = builder.Configuration["Identity:RequireHttpsMetadata"] ?? "false";
+
+if (builder.Environment.IsDevelopment())
+{
+    Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII = true;
+}
+
+builder.Services.AddSingleton(TimeProvider.System);
+// One error contract: RFC 9457 problem details with a stable "code" (see Errors/ErrorResults).
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<Identity.Gateway.Errors.GlobalExceptionHandler>();
+builder.Services.AddValidatorsFromAssemblyContaining<ProvisioningOrchestrator>(includeInternalTypes: true);
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
+// One Keycloak realm per tenant (see Tenancy/Tenancy.cs); tokens of every tenant realm are accepted.
+var tenantRegistry = new Identity.Gateway.Tenancy.TenantRegistry(builder.Configuration);
+builder.Services.AddSingleton(tenantRegistry);
+builder.Services.AddSingleton<ITenantContext, Identity.Gateway.Tenancy.HttpTenantContext>();
+builder.Services.AddAvashAuthentication(options =>
+{
+    options.Authority = authority;
+    options.AdditionalAuthorities = tenantRegistry.All.Where(t => !ReferenceEquals(t, tenantRegistry.Default))
+        .Select(tenantRegistry.Issuer).ToArray();
+    options.Audience = audience;
+    options.RequireHttpsMetadata = bool.TryParse(requireHttpsMetadata, out var result) && result;
+});
+builder.Services.AddAvashAuthorization();
+builder.Services.AddGrpc();
+
+builder.Services.Configure<Identity.Infrastructure.Keycloak.KeycloakOptions>(
+    builder.Configuration.GetSection("Identity:KeycloakAdmin"));
+builder.Services.AddSingleton<IAuditSink>(sp => new Identity.Infrastructure.NoopAuditSink());
+builder.Services.AddSingleton<ICacheInvalidationService, Identity.Infrastructure.Redis.RedisCacheInvalidator>();
+
+// Directory, user sessions, roles & permissions — Keycloak is source of truth
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>();
+builder.Services.AddSingleton<IUserDirectory>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
+builder.Services.AddSingleton<IUserSessionService>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
+builder.Services.AddSingleton<IRoleDirectory>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakDirectoryAdapter>());
+// Registered permissions are mirrored into Keycloak client roles per owning service client
+// so they reach token claims through the per-client oidc-usermodel-client-role-mapper.
+// Legacy realm-role path kept as fallback for tests / not-yet-migrated callers.
+// Mirroring is best-effort and never blocks registration or startup.
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakClientRoleProvisioner>();
+builder.Services.AddTransient<IKeycloakClientRoleProvisioner>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakClientRoleProvisioner>());
+// Applications and their permission catalog (clients and client roles in Keycloak).
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>();
+builder.Services.AddTransient<Identity.Application.Permissions.IApplicationCatalog>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>());
+builder.Services.AddTransient<Identity.Application.Permissions.IPermissionCatalog>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>());
+builder.Services.AddTransient<Identity.Application.Permissions.IApplicationLoginPages>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>());
+builder.Services.AddTransient<Identity.Application.Permissions.IApplicationLogoutSettings>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>());
+
+// Dynamic roles/scope infrastructure
+builder.Services.AddMemoryCache();
+// Shared L2 cache (Redis) so multiple gateway replicas invalidate each other's registry copies.
+var redisConfig = builder.Configuration["Identity:Redis:Configuration"];
+if (!string.IsNullOrWhiteSpace(redisConfig))
+    builder.Services.AddStackExchangeRedisCache(o => o.Configuration = redisConfig);
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new ScopeDictionaryConverter()));
+builder.Services.Configure<ScopedAccessOptions>(
+    builder.Configuration.GetSection("Identity:ScopedAccess"));
+builder.Services.AddSingleton<IScopedAccessSerializer, ScopedAccessSerializer>();
+builder.Services
+    .AddSingleton<Identity.Application.Scope.IScopeValueValidator,
+        Identity.Application.Scope.DefaultScopeValueValidator>();
+builder.Services.AddSingleton<Identity.Application.Scope.IScopeValueValidatorRegistry,
+    Identity.Application.Scope.ScopeValueValidatorRegistry>();
+builder.Services.AddSingleton<Identity.Application.Scope.ScopeAssignmentValidator>();
+// Scope registry backed by the reserved group iam-scope-registry.
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>();
+builder.Services.AddSingleton<Identity.Application.Scope.IScopeDefinitionLookup>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IResourceScopeResolver>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IScopeCacheInvalidator>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddScoped<Identity.Application.Scope.IScopeRegistryAdmin>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeRegistryStore>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>();
+builder.Services.AddScoped<Identity.Application.Scope.IUserScopeReader>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
+builder.Services.AddSingleton<Identity.Infrastructure.Keycloak.KeycloakAdminTokenCache>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>();
+builder.Services.AddSingleton<IBusinessRoleStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakGroupBusinessRoleStore>());
+// One scope store: IScopedAccessStore (the user's own assignments) and IUserScopeReader (merged view).
+builder.Services.AddSingleton<IScopedAccessStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.Scope.KeycloakScopeAttributeStore>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>();
+builder.Services.AddSingleton<IUserProvisioningService>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProvisioner>());
+builder.Services.Configure<Identity.Infrastructure.Keycloak.AdminConsoleClientOptions>(
+    builder.Configuration.GetSection("Identity:AdminConsole"));
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAdminConsoleClient>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScheduleAuthenticatorSetup>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>();
+builder.Services.AddSingleton<Identity.Application.Settings.IAuthSettingsService>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuthSettingsAdapter>());
+// SMS: providers (Kavenegar, development) behind Identity.Application.Sms; settings in realm attributes.
+Identity.Infrastructure.Sms.SmsServiceCollectionExtensions.AddBuiltInSmsProviders(builder.Services);
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakSmsSettingsStore>();
+builder.Services.AddSingleton<Identity.Application.Sms.ISmsSettingsStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakSmsSettingsStore>());
+builder.Services.AddSingleton<Identity.Application.Sms.SmsService>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAuditAdapter>();
+builder.Services.AddSingleton<Identity.Application.Audit.IAuditEventReader>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAuditAdapter>());
+builder.Services.AddSingleton<Identity.Application.Audit.AuditService>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>();
+builder.Services.AddSingleton<Identity.Application.Schedules.IAccessScheduleStore>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAccessScheduleStore>());
+builder.Services.AddSingleton(builder.Configuration.GetSection("Identity:Schedules").Get<Identity.Application.Schedules.AccessScheduleOptions>()
+    ?? new Identity.Application.Schedules.AccessScheduleOptions());
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<Identity.Application.Schedules.AccessScheduleService>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserLifecycleAdapter>();
+builder.Services.AddSingleton<IUserLifecycleService>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserLifecycleAdapter>());
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>();
+builder.Services.AddSingleton<IUserRoleMapping>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserGroupMembership>());
+builder.Services.AddScoped<ProvisioningOrchestrator>(sp =>
+    new ProvisioningOrchestrator(
+        sp.GetRequiredService<IUserProvisioningService>(),
+        sp.GetRequiredService<IScopedAccessStore>(),
+        sp.GetRequiredService<IBusinessRoleStore>(),
+        sp.GetRequiredService<IUserRoleMapping>(),
+        sp.GetRequiredService<Identity.Application.Scope.ScopeAssignmentValidator>(),
+        sp.GetRequiredService<IUserProfileRequirements>(),
+        sp.GetRequiredService<DelegationGuard>(),
+        sp.GetRequiredService<Identity.Application.Scope.IScopeDefinitionLookup>()));
+builder.Services.AddScoped<ICurrentAdministrator, HttpCurrentAdministrator>();
+builder.Services.AddScoped<DelegationGuard>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakIamAccessClaimMapper>();
+builder.Services.AddHttpClient<Identity.Infrastructure.Keycloak.KeycloakScopeClaimMapper>();
+builder.Services.AddTransient<Identity.Infrastructure.Keycloak.Scope.IScopeAttributeProvisioner,
+    Identity.Infrastructure.Keycloak.Scope.ScopeAttributeProvisioner>();
+// Singleton so the cached required-profile attributes are shared by every endpoint and the
+// orchestrator; AddHttpClient alone would register it transient and defeat the cache.
+builder.Services.AddSingleton<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>(sp =>
+    new Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening(
+        sp.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(nameof(Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening)),
+        Microsoft.Extensions.Options.Options.Create(
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<Identity.Infrastructure.Keycloak.KeycloakOptions>>().Value),
+        sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakAdminTokenProvider>(),
+        sp.GetRequiredService<ILogger<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>>()));
+builder.Services.AddSingleton<IUserProfileRequirements>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakUserProfileHardening>());
+builder.Services.AddTransient<Identity.Infrastructure.Keycloak.GatewayPermissionRegistrar>();
+
+
+builder.Services.AddHealthChecks();
+// Prepares Keycloak (scope registry, claim mappers, gateway permissions, super-admins) with retries;
+// the gateway reports unhealthy until that has succeeded.
+builder.Services.AddKeycloakBootstrap();
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddOpenApi("v1", o =>
+{
+    o.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Info.Title = "Identity Gateway";
+        document.Info.Description =
+            "Keycloak-centric gateway — auth proxy, directory, permissions, key lifecycle. " +
+            "Present a Keycloak-issued JWT via the Bearer scheme below; privileged groups need the " +
+            "matching Identity.* permission claims (e.g. identity.users.manage, identity.roles.manage).";
+        var bearer = new Microsoft.OpenApi.OpenApiSecurityScheme
+        {
+            Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            Description = "Keycloak-issued JWT"
+        };
+        var components = document.Components ?? new Microsoft.OpenApi.OpenApiComponents();
+        document.Components = components;
+        components.SecuritySchemes ??= new Dictionary<string, Microsoft.OpenApi.IOpenApiSecurityScheme>();
+        components.SecuritySchemes["Bearer"] = bearer;
+        document.Security =
+        [
+            new Microsoft.OpenApi.OpenApiSecurityRequirement
+            {
+                [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer", document)] = []
+            }
+        ];
+        return Task.CompletedTask;
+    });
+});
+
+var app = builder.Build();
+// Registered before everything else so no exception reaches the developer page, which would
+// echo request headers (including bearer tokens) back to the caller.
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+app.MapDefaultEndpoints();
+if (app.Environment.IsDevelopment())
+{
+    // Scalar reads the Microsoft.OpenApi document at /openapi/v1.json — full interactive UI
+    // with "Try it" requests against every REST group.
+    app.MapScalarApiReference(options => options
+        .WithTitle("Identity Gateway")
+        .WithOpenApiRoutePattern("/openapi/v1.json")
+        .AddPreferredSecuritySchemes(["Bearer"]));
+}
+
+app.MapOpenApi();
+// No HTTPS endpoint exists in Development/compose (plain HTTP on 5080), so a redirect here would 307 every request.
+if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
+app.UseMiddleware<Identity.Gateway.Tenancy.TenantResolutionMiddleware>();
+app.UseAuthentication();
+app.UseMiddleware<Identity.Gateway.Tenancy.TenantIssuerMiddleware>();
+app.UseAuthorization();
+app.MapHealthChecks("/health/live");
+app.MapOidcProxy();
+app.MapGet("/api/identity/me", (ICurrentUserContext current) =>
+        current.UserId is null
+            ? Results.Unauthorized()
+            : Results.Ok(
+                new { current.UserId, current.Username, current.Roles, current.Permissions, current.SessionId }))
+    .RequireAuthorization()
+    .WithTags("Users")
+    .WithName("Me")
+    .Produces<object>(200);
+app.MapAuth();
+app.MapUsers();
+app.MapUserManagement();
+app.MapUserLifecycle();
+app.MapSchedules();
+app.MapSettings();
+app.MapAudit();
+app.MapSms();
+app.MapGet("/api/identity/tenants", (Identity.Gateway.Tenancy.TenantRegistry tenants) =>
+        Results.Ok(tenants.All.Select(tenants.ToDto).ToArray()))
+    .RequireAuthorization(IamPermissions.SystemRead).WithTags("Tenants").WithName("ListTenants")
+    .Produces<Identity.Gateway.Tenancy.TenantDto[]>(200);
+app.MapBusinessRoles();
+app.MapScopeAdmin();
+app.MapAccessContext();
+app.MapPermissions();
+app.MapGrpcService<Avash.Identity.Grpc.IdentityGrpcService>();
+// Unknown API routes answer with a 404 problem.
+app.MapFallback("/api/{**path}", () =>
+    Error.NotFound("route.not_found", "No API endpoint matches this path.").ToProblem());
+app.Run();
+
+public partial class Program;

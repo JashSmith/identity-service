@@ -1,0 +1,193 @@
+@inherits ConsolePage
+@* SMS settings: switch, provider choice, a form built from the provider's own fields, a test message and the
+   development outbox. Secrets come back as a mask; leaving the mask keeps the stored secret. *@
+
+@if (providers is null || settings is null)
+{
+    @if (failed)
+    {
+        <EmptyState Icon="sms_failed" Title="تنظیمات پیامک خوانده نشد">
+            <Action><RadzenButton Icon="refresh" Text="تلاش دوباره" Variant="Variant.Outlined" Click="@LoadAsync" /></Action>
+        </EmptyState>
+    }
+    else
+    {
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" aria-label="در حال بارگذاری" />
+    }
+    return;
+}
+
+<RadzenStack Gap="1rem">
+    <RadzenText TextStyle="TextStyle.Body2" class="rz-m-0">
+        سرویس پیامک برای ارسال کد ورود، کد بازیابی و اعلان‌ها استفاده می‌شود. هر سازمان سرویس و حساب خودش را دارد و کلیدهای محرمانه هیچ‌گاه نمایش داده نمی‌شوند.
+    </RadzenText>
+
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+        <RadzenSwitch @bind-Value="enabled" Disabled="@(!CanManage)" Name="sms-enabled" />
+        <RadzenLabel Text="ارسال پیامک فعال است" Component="sms-enabled" class="rz-m-0" />
+    </RadzenStack>
+
+    <fieldset class="av-modes" disabled="@(!CanManage)">
+        <legend class="av-sr-only">سرویس پیامک</legend>
+        @foreach (var p in providers)
+        {
+            <label class="av-mode @(provider == p.Id ? "av-mode--selected" : "")">
+                <input type="radio" name="sms-provider" value="@p.Id" checked="@(provider == p.Id)" @onchange="@(() => provider = p.Id)" />
+                <span class="av-mode__icon rzi" aria-hidden="true">@(p.SendsMessages ? "sms" : "science")</span>
+                <span class="av-mode__title">@p.DisplayName</span>
+                <span class="av-mode__text">@p.Description</span>
+                <span class="av-mode__sso @(p.SendsMessages ? "av-tone-success" : "av-tone-warning")">@(p.SendsMessages ? "ارسال واقعی" : "بدون ارسال")</span>
+            </label>
+        }
+    </fieldset>
+
+    @if (Selected is { } selected)
+    {
+        @if (!selected.SendsMessages)
+        {
+            <p class="av-inline-alert av-tone-warning" role="note">در این حالت هیچ پیامکی ارسال نمی‌شود و متن پیام‌ها پایین همین صفحه نمایش داده می‌شود. برای محیط عملیاتی یک سرویس واقعی انتخاب کنید.</p>
+        }
+        @if (selected.Fields.Count > 0)
+        {
+            <RadzenRow Gap="1rem">
+                @foreach (var field in selected.Fields)
+                {
+                    <RadzenColumn Size="12" SizeMD="6">
+                        <RadzenFormField Text="@(field.Required ? field.Label + " *" : field.Label)" Style="width: 100%;">
+                            @if (field.Kind == "secret")
+                            {
+                                <RadzenPassword Value="@Value(selected.Id, field.Key)" Change="@(v => SetValue(selected.Id, field.Key, v))"
+                                                Name="@($"sms-{field.Key}")" Style="direction: ltr;" Disabled="@(!CanManage)" autocomplete="new-password" />
+                            }
+                            else
+                            {
+                                <RadzenTextBox Value="@Value(selected.Id, field.Key)" Change="@(v => SetValue(selected.Id, field.Key, v))"
+                                               Name="@($"sms-{field.Key}")" Style="direction: ltr;" Disabled="@(!CanManage)" />
+                            }
+                        </RadzenFormField>
+                        @* Radzen's floating labels hide placeholders, so stored secrets and examples are shown as hints. *@
+                        @if (field.Kind == "secret" && HasStored(selected.Id, field.Key))
+                        {
+                            <span class="av-muted av-small av-field-hint">کلید ذخیره شده است و نمایش داده نمی‌شود؛ برای تغییر، مقدار تازه بنویسید.</span>
+                        }
+                        @if (field.Hint is not null || field.Placeholder is not null)
+                        {
+                            <span class="av-muted av-small av-field-hint">@field.Hint@(field.Placeholder is null ? "" : $" (نمونه: {field.Placeholder})")</span>
+                        }
+                    </RadzenColumn>
+                }
+            </RadzenRow>
+        }
+    }
+
+    @if (CanManage)
+    {
+        <div><RadzenButton Icon="save" Text="ذخیره" IsBusy="@Busy" Click="@SaveAsync" /></div>
+
+        <section class="av-panel" aria-labelledby="sms-test-title">
+            <h3 id="sms-test-title" class="av-panel__title">ارسال پیامک آزمایشی</h3>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Wrap="FlexWrap.Wrap" AlignItems="AlignItems.End">
+                <RadzenFormField Text="شماره همراه (مثل 09121234567)" Style="width: min(280px, 100%);">
+                    <RadzenTextBox @bind-Value="testNumber" Name="sms-test-number" Style="direction: ltr;" />
+                </RadzenFormField>
+                <RadzenButton Icon="send" Text="ارسال آزمایشی" ButtonStyle="ButtonStyle.Secondary" Click="@TestAsync"
+                              Disabled="@(string.IsNullOrWhiteSpace(testNumber) || !savedEnabled)" />
+            </RadzenStack>
+            @if (!savedEnabled)
+            {
+                <p class="av-muted av-small">برای ارسال آزمایشی، پیامک را فعال و ذخیره کنید.</p>
+            }
+            @if (lastResult is not null)
+            {
+                <p class="av-inline-alert av-tone-success" role="status">
+                    @(lastResult.Delivered ? "سرویس پیامک پیام را پذیرفت" : "پیام در حالت آزمایشی ثبت شد") برای <span class="ltr">@lastResult.PhoneNumber</span>
+                    @if (lastResult.MessageId is not null) { <span>(شناسه <span class="ltr">@lastResult.MessageId</span>)</span> }
+                </p>
+            }
+        </section>
+
+        @if (outbox.Count > 0)
+        {
+            <section class="av-panel" aria-labelledby="sms-outbox-title">
+                <h3 id="sms-outbox-title" class="av-panel__title">پیام‌های ثبت‌شده در حالت آزمایشی</h3>
+                <ul class="av-feed">
+                    @foreach (var item in outbox)
+                    {
+                        <li class="av-feed__item">
+                            <span class="ltr">@item.PhoneNumber</span>
+                            <span class="av-feed__what">@item.Text</span>
+                            <time class="av-feed__time av-muted">@PersianFormat.DateAndTime(item.Time)</time>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    }
+</RadzenStack>
+
+@code {
+    private const string Mask = "**********";
+
+    [Parameter] public bool CanManage { get; set; }
+
+    private List<SmsProviderDto>? providers;
+    private SmsSettingsDto? settings;
+    private readonly Dictionary<string, Dictionary<string, string>> values = new(StringComparer.Ordinal);
+    private List<SmsOutboxItemDto> outbox = [];
+    private SmsTestResultDto? lastResult;
+    private bool enabled, savedEnabled, failed;
+    private string? provider, testNumber;
+
+    private SmsProviderDto? Selected => providers?.FirstOrDefault(p => p.Id == provider);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        failed = !await RunAsync(async () =>
+        {
+            providers = await Api.GetAsync<List<SmsProviderDto>>("api/identity/settings/sms/providers");
+            Apply(await Api.GetAsync<SmsSettingsDto>("api/identity/settings/sms"));
+            if (CanManage) outbox = await Api.GetAsync<List<SmsOutboxItemDto>>("api/identity/settings/sms/outbox");
+        });
+    }
+
+    private void Apply(SmsSettingsDto value)
+    {
+        settings = value;
+        enabled = savedEnabled = value.Enabled;
+        provider = value.Provider ?? providers?.FirstOrDefault()?.Id;
+        values.Clear();
+        foreach (var (id, fields) in value.Settings) values[id] = new Dictionary<string, string>(fields, StringComparer.Ordinal);
+    }
+
+    private bool HasStored(string providerId, string key) =>
+        settings?.Settings.GetValueOrDefault(providerId)?.ContainsKey(key) == true;
+
+    // Secrets show empty (with a "stored" placeholder) while they still hold the mask.
+    private string Value(string providerId, string key) =>
+        values.GetValueOrDefault(providerId)?.GetValueOrDefault(key) is { } v && v != Mask ? v : "";
+
+    private void SetValue(string providerId, string key, string value)
+    {
+        if (!values.TryGetValue(providerId, out var fields)) values[providerId] = fields = new(StringComparer.Ordinal);
+        fields[key] = value;
+    }
+
+    private async Task SaveAsync()
+    {
+        var body = new SmsSettingsDto(enabled, provider, values.ToDictionary(kv => kv.Key,
+            kv => (IReadOnlyDictionary<string, string>)kv.Value.Where(f => f.Value.Length > 0).ToDictionary(f => f.Key, f => f.Value)));
+        await RunAsync(async () => Apply(await Api.SendAsync<SmsSettingsDto>(HttpMethod.Put, "api/identity/settings/sms", body)), "تنظیمات پیامک ذخیره شد");
+    }
+
+    private async Task TestAsync()
+    {
+        lastResult = null;
+        await RunAsync(async () =>
+        {
+            lastResult = await Api.SendAsync<SmsTestResultDto>(HttpMethod.Post, "api/identity/settings/sms/test", new SmsTestRequest(testNumber!.Trim()));
+            outbox = await Api.GetAsync<List<SmsOutboxItemDto>>("api/identity/settings/sms/outbox");
+        });
+    }
+}

@@ -19,8 +19,8 @@
   </ItemGroup>
 
 <ItemGroup>
-    <ProjectReference Include="../../src/Identity.Domain/Identity.Domain.csproj" />
-    <ProjectReference Include="../../src/Identity.Application/Identity.Application.csproj" />
-    <ProjectReference Include="../../src/Avash.Identity.Authentication/Avash.Identity.Authentication.csproj" />
+    <ProjectReference Include="../../src/Core/Identity.Domain/Identity.Domain.csproj" />
+    <ProjectReference Include="../../src/Core/Identity.Application/Identity.Application.csproj" />
+    <ProjectReference Include="../../src/Packages/Avash.Identity.Authentication/Avash.Identity.Authentication.csproj" />
   </ItemGroup>
 </Project>

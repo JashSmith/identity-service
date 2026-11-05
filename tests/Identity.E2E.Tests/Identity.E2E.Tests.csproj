@@ -13,7 +13,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/Identity.AppHost/Identity.AppHost.csproj" />
+    <ProjectReference Include="../../src/Hosts/Identity.AppHost/Identity.AppHost.csproj" />
+    <ProjectReference Include="../../src/Packages/Avash.Identity.Authentication.AspNetCore/Avash.Identity.Authentication.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/Packages/Avash.Identity.Authorization.AspNetCore/Avash.Identity.Authorization.AspNetCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The in-process consumer service (ConsumerHost) is a minimal ASP.NET Core app. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>

@@ -15,7 +15,7 @@
 
 - ‏.NET 10 SDK
 - ‏Docker Desktop در حال اجرا
-- آزاد بودن پورت‌های `18080` (Keycloak)، ‏`5080` (درگاه)، ‏`5081` (سرویس نمونه) و `5090` (کنسول)
+- آزاد بودن پورت‌های `18080` (Keycloak)، ‏`5080` (درگاه) و `5090` (کنسول)
 
 پورت 8080 روی سیستم مالک پروژه در اختیار Apache است؛ به همین دلیل Keycloak روی 18080 و با گواهی توسعه HTTPS اجرا می‌شود.
 
@@ -24,7 +24,7 @@
 ```bash
 bash scripts/build-keycloak-extensions.sh      # یک بار و پس از هر تغییر در keycloak/extensions (فقط Docker لازم است)
 dotnet build IdentityService.slnx
-dotnet run --project src/Identity.AppHost --launch-profile http
+dotnet run --project src/Hosts/Identity.AppHost --launch-profile http
 ```
 
 بدون ساخت افزونه هم سامانه کار می‌کند، ولی برنامه زمانی روی صفحه ورود خود Keycloak اعمال نمی‌شود و درگاه در لاگ هشدار می‌دهد.
@@ -38,7 +38,6 @@ dotnet run --project src/Identity.AppHost --launch-profile http
 | ‏`redis` | ‏Cache |
 | ‏`identity-gateway` | درگاه هویت |
 | ‏`identity-admin` | کنسول مدیریت |
-| ‏`order-service` | سرویس نمونه که دسترسی‌هایش را ثبت می‌کند |
 
 رمزهای Clientها و رمز مدیر Keycloak به‌صورت پارامتر Aspire ساخته و در User Secrets پروژه AppHost نگه داشته می‌شوند و در مخزن ذخیره نمی‌شوند.
 
@@ -81,7 +80,7 @@ IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests    # Stack را خودش ب�
 docker ps --format '{{.Names}}' | grep -E '^(keycloak|redis)-' | xargs -r docker rm -f
 ```
 
-ظرف `postgres-*` عمداً ماندگار است.
+ظرف `identity-postgres` (با volume به نام `identity-postgres-data`) عمداً ماندگار است.
 
 ## افزودن سازمان جدید
 

@@ -246,5 +246,9 @@
     "en"
   ],
   "defaultLocale": "fa",
-  "loginTheme": "avash"
+  "loginTheme": "avash",
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false
 }

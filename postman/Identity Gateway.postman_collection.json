@@ -1,0 +1,4232 @@
+{
+  "info": {
+    "name": "Identity Gateway",
+    "description": "Generated from the gateway's OpenAPI document by scripts/generate-postman.py. Run \"Sign in\" first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Start here",
+      "item": [
+        {
+          "name": "Sign in (stores the token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.access_token) pm.environment.set('token', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "username",
+                  "value": "{{username}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{gateway}}/api/identity/auth/login",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Access",
+      "item": [
+        {
+          "name": "GetAccessContext",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/access-context",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "access-context"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetAccessSchedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/access-schedule",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "access-schedule"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Applications",
+      "item": [
+        {
+          "name": "ListApplications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "CreateApplication",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientId\": \"\",\n  \"displayName\": \"\",\n  \"description\": \"\",\n  \"kind\": \"\",\n  \"redirectUris\": [\n    \"\"\n  ],\n  \"loginTheme\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GetApplication",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "UpdateApplication",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"\",\n  \"description\": \"\",\n  \"enabled\": false,\n  \"redirectUris\": [\n    \"\"\n  ],\n  \"loginTheme\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "DeleteApplication",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetApplicationIntegration",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId/integration",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId",
+                "integration"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetApplicationLoginPage",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId/login-page",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId",
+                "login-page"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetApplicationLoginPage",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId/login-page",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId",
+                "login-page"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"\",\n  \"theme\": \"\",\n  \"branding\": {\n    \"title\": null,\n    \"subtitle\": null,\n    \"logoUrl\": null,\n    \"primaryColor\": null,\n    \"background\": null\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "SetApplicationLogout",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId/logout",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId",
+                "logout"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"postLogoutRedirectUris\": [\n    \"\"\n  ],\n  \"backchannelLogoutUrl\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "ListApplicationPermissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId/permissions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "includeDeprecated",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CreatePermission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId/permissions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"displayName\": \"\",\n  \"description\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "UpdatePermission",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId/permissions/:name",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId",
+                "permissions",
+                ":name"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                },
+                {
+                  "key": "name",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"\",\n  \"description\": \"\",\n  \"deprecated\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "DeletePermission",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId/permissions/:name",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId",
+                "permissions",
+                ":name"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                },
+                {
+                  "key": "name",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "RotateApplicationSecret",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/applications/:clientId/secret",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "applications",
+                ":clientId",
+                "secret"
+              ],
+              "variable": [
+                {
+                  "key": "clientId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit",
+      "item": [
+        {
+          "name": "ListAdminEvents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/audit/admin-events",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "audit",
+                "admin-events"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "resourceType",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "operation",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "first",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "max",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "ListLoginEvents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/audit/login-events",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "audit",
+                "login-events"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "type",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "client",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "user",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "first",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "max",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "AuditSummary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/audit/summary",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "audit",
+                "summary"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "OidcDiscovery",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/.well-known/openid-configuration",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                ".well-known",
+                "openid-configuration"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "AuthIntrospect",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/auth/introspect",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "auth",
+                "introspect"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "AuthLogin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/auth/login",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "auth",
+                "login"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "AuthLogout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/auth/logout",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "auth",
+                "logout"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "AuthRefresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/auth/refresh",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "auth",
+                "refresh"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "OidcJwks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/oidc/jwks",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "oidc",
+                "jwks"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Business Roles",
+      "item": [
+        {
+          "name": "ListBusinessRoles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/business-roles",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "business-roles"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "CreateBusinessRole",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/business-roles",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "business-roles"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ],\n  \"requiredScopes\": [\n    \"\"\n  ],\n  \"allowedScopes\": [\n    \"\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "GetBusinessRole",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/business-roles/:name",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "business-roles",
+                ":name"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "UpdateBusinessRole",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/business-roles/:name",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "business-roles",
+                ":name"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"\",\n  \"permissions\": [\n    \"\"\n  ],\n  \"requiredScopes\": [\n    \"\"\n  ],\n  \"allowedScopes\": [\n    \"\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "DeleteBusinessRole",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/business-roles/:name",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "business-roles",
+                ":name"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetEffectivePermissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/business-roles/:name/effective-permissions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "business-roles",
+                ":name",
+                "effective-permissions"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "AddPermissionsToBusinessRole",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/business-roles/:name/permissions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "business-roles",
+                ":name",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    \"\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "RemovePermissionFromBusinessRole",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/business-roles/:name/permissions/:permission",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "business-roles",
+                ":name",
+                "permissions",
+                ":permission"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": ""
+                },
+                {
+                  "key": "permission",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "ListPermissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/permissions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "permissions"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "application",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "includeDeprecated",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "ReconcileAdminPermissions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/permissions/reconcile-admin",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "permissions",
+                "reconcile-admin"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "RegisterPermissions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/permissions/register",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "permissions",
+                "register"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"\",\n  \"serviceVersion\": \"\",\n  \"manifestVersion\": \"\",\n  \"permissions\": [\n    {\n      \"name\": null,\n      \"description\": null\n    }\n  ],\n  \"manifestHash\": \"\",\n  \"idempotencyKey\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GetPermissionTree",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/permissions/tree",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "permissions",
+                "tree"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "includeDeprecated",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Schedules",
+      "item": [
+        {
+          "name": "GetPermissionSchedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/permissions/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "permissions",
+                ":id"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetPermissionSchedule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/permissions/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "permissions",
+                ":id"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unrestricted\": false,\n  \"days\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "ClearPermissionSchedule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/permissions/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "permissions",
+                ":id"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetRealmSchedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/realm",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "realm"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetRealmSchedule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/realm",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "realm"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unrestricted\": false,\n  \"days\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "ClearRealmSchedule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/realm",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "realm"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetRoleSchedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/roles/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "roles",
+                ":id"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetRoleSchedule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/roles/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "roles",
+                ":id"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unrestricted\": false,\n  \"days\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "ClearRoleSchedule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/roles/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "roles",
+                ":id"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetUserSchedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/users/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "users",
+                ":id"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetUserSchedule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/users/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "users",
+                ":id"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unrestricted\": false,\n  \"days\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "ClearUserSchedule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/users/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "users",
+                ":id"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetEffectiveUserSchedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/schedules/users/:id/effective",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "schedules",
+                "users",
+                ":id",
+                "effective"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Scopes",
+      "item": [
+        {
+          "name": "ListScopes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "CreateScope",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"\",\n  \"displayName\": \"\",\n  \"description\": \"\",\n  \"targetResources\": [\n    \"\"\n  ],\n  \"parent\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "ListResources",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes/resources/list",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes",
+                "resources",
+                "list"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetScope",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes/:key",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes",
+                ":key"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "UpdateScope",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes/:key",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes",
+                ":key"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"\",\n  \"description\": \"\",\n  \"isActive\": false,\n  \"targetResources\": [\n    \"\"\n  ],\n  \"parent\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "DeleteScope",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes/:key",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes",
+                ":key"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetScopeResources",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes/:key/resources",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes",
+                ":key",
+                "resources"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetScopeResources",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes/:key/resources",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes",
+                ":key",
+                "resources"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resources\": [\n    \"\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "GetScopeValues",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes/:key/values",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes",
+                ":key",
+                "values"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetScopeValues",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/scopes/:key/values",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "scopes",
+                ":key",
+                "values"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": [\n    {\n      \"value\": null,\n      \"label\": null,\n      \"parent\": null\n    }\n  ]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "item": [
+        {
+          "name": "GetBruteForceSettings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/brute-force",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "brute-force"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetBruteForceSettings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/brute-force",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "brute-force"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false,\n  \"permanentLockout\": false,\n  \"failureFactor\": 0,\n  \"waitIncrementSeconds\": 0,\n  \"maxFailureWaitSeconds\": 0,\n  \"maxDeltaTimeSeconds\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "GetEventSettings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/events",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "events"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetEventSettings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/events",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "events"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loginEventsEnabled\": false,\n  \"adminEventsEnabled\": false,\n  \"adminEventDetails\": false,\n  \"retentionDays\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "ListIdentityProviders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/identity-providers",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "identity-providers"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "CreateIdentityProvider",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/identity-providers",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "identity-providers"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alias\": \"\",\n  \"providerId\": \"\",\n  \"displayName\": \"\",\n  \"enabled\": false,\n  \"trustEmail\": false,\n  \"config\": {}\n}"
+            }
+          }
+        },
+        {
+          "name": "GetIdentityProvider",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/identity-providers/:alias",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "identity-providers",
+                ":alias"
+              ],
+              "variable": [
+                {
+                  "key": "alias",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "UpdateIdentityProvider",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/identity-providers/:alias",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "identity-providers",
+                ":alias"
+              ],
+              "variable": [
+                {
+                  "key": "alias",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"alias\": \"\",\n  \"providerId\": \"\",\n  \"displayName\": \"\",\n  \"enabled\": false,\n  \"trustEmail\": false,\n  \"config\": {}\n}"
+            }
+          }
+        },
+        {
+          "name": "DeleteIdentityProvider",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/identity-providers/:alias",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "identity-providers",
+                ":alias"
+              ],
+              "variable": [
+                {
+                  "key": "alias",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "ListLdapProviders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/ldap",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "ldap"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "CreateLdapProvider",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/ldap",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "ldap"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"\",\n  \"name\": \"\",\n  \"enabled\": false,\n  \"vendor\": \"\",\n  \"connectionUrl\": \"\",\n  \"bindDn\": \"\",\n  \"bindCredential\": \"\",\n  \"usersDn\": \"\",\n  \"usernameAttribute\": \"\",\n  \"rdnAttribute\": \"\",\n  \"uuidAttribute\": \"\",\n  \"userObjectClasses\": \"\",\n  \"editMode\": \"\",\n  \"importEnabled\": false,\n  \"syncRegistrations\": false,\n  \"startTls\": false,\n  \"fullSyncPeriodSeconds\": 0,\n  \"changedSyncPeriodSeconds\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "TestLdapConnection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/ldap/test",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "ldap",
+                "test"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"\",\n  \"connectionUrl\": \"\",\n  \"bindDn\": \"\",\n  \"bindCredential\": \"\",\n  \"startTls\": false,\n  \"providerId\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GetLdapProvider",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/ldap/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "ldap",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "UpdateLdapProvider",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/ldap/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "ldap",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"\",\n  \"name\": \"\",\n  \"enabled\": false,\n  \"vendor\": \"\",\n  \"connectionUrl\": \"\",\n  \"bindDn\": \"\",\n  \"bindCredential\": \"\",\n  \"usersDn\": \"\",\n  \"usernameAttribute\": \"\",\n  \"rdnAttribute\": \"\",\n  \"uuidAttribute\": \"\",\n  \"userObjectClasses\": \"\",\n  \"editMode\": \"\",\n  \"importEnabled\": false,\n  \"syncRegistrations\": false,\n  \"startTls\": false,\n  \"fullSyncPeriodSeconds\": 0,\n  \"changedSyncPeriodSeconds\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "DeleteLdapProvider",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/ldap/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "ldap",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "confirm",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "SyncLdapProvider",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/ldap/:id/sync",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "ldap",
+                ":id",
+                "sync"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": [
+                {
+                  "key": "mode",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GetLoginSettings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/login",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "login"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetLoginSettings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/login",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "login"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"registrationAllowed\": false,\n  \"resetPasswordAllowed\": false,\n  \"rememberMe\": false,\n  \"verifyEmail\": false,\n  \"loginWithEmailAllowed\": false,\n  \"loginTheme\": \"\",\n  \"defaultLocale\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "ListLoginThemes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/login-themes",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "login-themes"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetOtpSettings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/otp",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "otp"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetOtpSettings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/otp",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "otp"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"\",\n  \"algorithm\": \"\",\n  \"digits\": 0,\n  \"period\": 0,\n  \"lookAheadWindow\": 0,\n  \"requiredForNewUsers\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "GetPasswordPolicy",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/password-policy",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "password-policy"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetPasswordPolicy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/password-policy",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "password-policy"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minLength\": 0,\n  \"digits\": 0,\n  \"upperCase\": 0,\n  \"lowerCase\": 0,\n  \"specialChars\": 0,\n  \"notUsername\": false,\n  \"notEmail\": false,\n  \"history\": 0,\n  \"expireDays\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "GetSmsSettings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/sms",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "sms"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetSmsSettings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/sms",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "sms"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false,\n  \"provider\": \"\",\n  \"settings\": {}\n}"
+            }
+          }
+        },
+        {
+          "name": "SmsDevelopmentOutbox",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/sms/outbox",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "sms",
+                "outbox"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "max",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "ListSmsProviders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/sms/providers",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "sms",
+                "providers"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SendTestSms",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/sms/test",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "sms",
+                "test"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GetTokenSettings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/tokens",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "tokens"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetTokenSettings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/settings/tokens",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "settings",
+                "tokens"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessTokenLifespan\": 0,\n  \"ssoSessionIdleTimeout\": 0,\n  \"ssoSessionMaxLifespan\": 0,\n  \"offlineSessionIdleTimeout\": 0,\n  \"revokeRefreshToken\": false,\n  \"refreshTokenMaxReuse\": 0\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tenants",
+      "item": [
+        {
+          "name": "ListTenants",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/tenants",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "tenants"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/me",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "me"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "ListRequiredActions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/required-actions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "required-actions"
+              ],
+              "variable": [],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "ListRoles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/roles",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "roles"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "clientId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "ListUsers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users"
+              ],
+              "variable": [],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "pageSize",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "includeSessions",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "CreateUserWithAccess",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"\",\n  \"email\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"enabled\": false,\n  \"credentials\": {\n    \"password\": null,\n    \"temporary\": null\n  },\n  \"assignments\": [\n    {\n      \"role\": null,\n      \"scopes\": null\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "GetUser",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "UpdateUserWithAccess",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"\",\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"enabled\": false,\n  \"username\": \"\",\n  \"emailVerified\": false,\n  \"attributes\": {}\n}"
+            }
+          }
+        },
+        {
+          "name": "DeleteUser",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetUserCredentials",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/credentials",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "credentials"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "DeleteUserCredential",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/credentials/:credentialId",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "credentials",
+                ":credentialId"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                },
+                {
+                  "key": "credentialId",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SendUserActionsEmail",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/execute-actions-email",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "execute-actions-email"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actions\": [\n    \"\"\n  ],\n  \"lifespanSeconds\": 0,\n  \"clientId\": \"\",\n  \"redirectUri\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GetUserLockout",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/lockout",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "lockout"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "UnlockUser",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/lockout",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "lockout"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetUserPermissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/permissions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "permissions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetUserRequiredActions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/required-actions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "required-actions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetUserRequiredActions",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/required-actions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "required-actions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actions\": [\n    \"\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "ResetUserPassword",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/reset-password",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "reset-password"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"\",\n  \"temporary\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "ResetUserPasswordPost",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/reset-password",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "reset-password"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"\",\n  \"temporary\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "RevokeUserTokens",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/revoke",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "revoke"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "GetUserRoles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/roles",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "roles"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetScopedAccess",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/scoped-access",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "scoped-access"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "SetScopedAccess",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/scoped-access",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "scoped-access"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignments\": [\n    {\n      \"role\": null,\n      \"scopes\": null\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "AddScopedAssignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/scoped-assignments",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "scoped-assignments"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"\",\n  \"scopes\": null\n}"
+            }
+          }
+        },
+        {
+          "name": "UpdateScopedAssignment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/scoped-assignments/:role",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "scoped-assignments",
+                ":role"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                },
+                {
+                  "key": "role",
+                  "value": ""
+                }
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "RemoveScopedAssignment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/scoped-assignments/:role",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "scoped-assignments",
+                ":role"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                },
+                {
+                  "key": "role",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        },
+        {
+          "name": "GetUserSessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant}}",
+                "disabled": true,
+                "description": "Only for a non-default tenant (organisation)."
+              }
+            ],
+            "url": {
+              "raw": "{{gateway}}/api/identity/users/:id/sessions",
+              "host": [
+                "{{gateway}}"
+              ],
+              "path": [
+                "api",
+                "identity",
+                "users",
+                ":id",
+                "sessions"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": ""
+                }
+              ],
+              "query": []
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the Keycloak extensions (keycloak/extensions) in a Maven container, runs their tests and copies the jar
-# to src/Identity.AppHost/Keycloak/Providers, which the AppHost mounts into Keycloak's providers folder.
+# to keycloak/providers, which the AppHost mounts into Keycloak's providers folder.
 # Needs only Docker. Restart the stack afterwards so Keycloak loads the new jar.
 set -euo pipefail
 
@@ -15,6 +15,6 @@ MSYS_NO_PATHCONV=1 docker run --rm \
   maven:3.9-eclipse-temurin-21 \
   mvn -B -q package
 
-mkdir -p "$root/src/Identity.AppHost/Keycloak/Providers"
-cp "$root/keycloak/extensions/target/avash-keycloak-extensions.jar" "$root/src/Identity.AppHost/Keycloak/Providers/"
-echo "Built src/Identity.AppHost/Keycloak/Providers/avash-keycloak-extensions.jar"
+mkdir -p "$root/keycloak/providers"
+cp "$root/keycloak/extensions/target/avash-keycloak-extensions.jar" "$root/keycloak/providers/"
+echo "Built keycloak/providers/avash-keycloak-extensions.jar"
