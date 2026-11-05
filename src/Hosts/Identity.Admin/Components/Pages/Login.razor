@@ -12,6 +12,10 @@
         <div class="av-login__card">
             <h1 class="av-login__title">ورود به کنسول مدیریت</h1>
             <p class="av-login__hint">سازمان خود را انتخاب کنید تا به صفحه ورود آن هدایت شوید.</p>
+            @if (!string.IsNullOrEmpty(Error))
+            {
+                <p class="av-inline-alert av-tone-danger" role="alert">@ErrorText</p>
+            }
             @if (Options.Value.Tenants.Count == 0)
             {
                 <EmptyState Icon="domain_disabled" Title="هیچ سازمانی پیکربندی نشده است">
@@ -44,4 +48,14 @@
 
 @code {
     [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    /// <summary>Set by the sign-in handler when Keycloak refused or the user cancelled (OAuth error code).</summary>
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+
+    private string ErrorText => Error switch
+    {
+        "access_denied" => "ورود لغو یا رد شد. اگر خارج از ساعت کاری مجاز هستید، با مدیر سامانه تماس بگیرید.",
+        "temporarily_unavailable" => "سامانه ورود موقتاً در دسترس نیست. کمی بعد دوباره تلاش کنید.",
+        _ => "ورود انجام نشد. دوباره تلاش کنید.",
+    };
 }

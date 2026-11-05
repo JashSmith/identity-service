@@ -111,6 +111,17 @@ public static class ConsoleAuthentication
                 o.Scope.Clear();
                 o.Scope.Add("openid");
                 o.Events.OnTokenValidated = ctx => StartSession(ctx, tenant.Id);
+                o.Events.OnRemoteFailure = ctx =>
+                {
+                    // A refused or cancelled sign-in (e.g. outside the weekly schedule) returns to the login page with a
+                    // Persian message instead of an unhandled 500.
+                    ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Identity.Admin.Auth")
+                        .LogWarning("Console sign-in for tenant {Tenant} failed: {Reason}", tenant.Id, ctx.Failure?.Message);
+                    var error = ctx.Request.Query["error"].ToString();
+                    ctx.Response.Redirect($"/login?error={Uri.EscapeDataString(string.IsNullOrEmpty(error) ? "sign_in_failed" : error)}");
+                    ctx.HandleResponse();
+                    return Task.CompletedTask;
+                };
                 o.Events.OnRedirectToIdentityProvider = ctx =>
                 {
                     // The console is Persian: open Keycloak's sign-in page in Persian whatever the browser language.

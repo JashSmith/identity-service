@@ -3,6 +3,7 @@ using Identity.Application;
 using Identity.Application.Permissions;
 using Identity.Contracts;
 using Identity.Gateway.Errors;
+using Identity.Gateway.Tenancy;
 
 namespace Identity.Gateway;
 
@@ -56,6 +57,32 @@ public static class PermissionEndpoints
             .WithValidation<UpdateLoginPageRequest>()
             .RequireAuthorization(IamPermissions.ApplicationsManage).WithName("SetApplicationLoginPage")
             .Produces<ApplicationLoginPageDto>(200).ProducesProblem(400).ProducesProblem(404);
+
+        // Connection details for developers: authority, discovery, tenant, redirect and sign-out URLs.
+        apps.MapGet("/{clientId}/integration", async (string clientId, HttpContext http, IConfiguration cfg,
+                IApplicationCatalog catalog, IApplicationLogoutSettings logout, CancellationToken ct) =>
+            {
+                var application = await catalog.GetAsync(clientId, ct);
+                if (!application.IsSuccess) return application.Error!.ToProblem();
+                var settings = await logout.GetLogoutAsync(clientId, ct);
+                if (!settings.IsSuccess) return settings.Error!.ToProblem();
+                var authority = (cfg["Identity:PublicBaseUrl"] is { Length: > 0 } configured
+                    ? configured : $"{http.Request.Scheme}://{http.Request.Host}").TrimEnd('/');
+                var tenant = http.GetTenant();
+                var tenantId = ReferenceEquals(tenant, http.RequestServices.GetRequiredService<TenantRegistry>().Default)
+                    ? null : tenant.Id;
+                var discovery = authority + "/.well-known/openid-configuration" + (tenantId is null ? "" : "?tenant=" + Uri.EscapeDataString(tenantId));
+                return Results.Ok(new ApplicationIntegrationDto(clientId, application.Value.Kind, authority, discovery, tenantId,
+                    application.Value.RedirectUris, settings.Value));
+            })
+            .RequireAuthorization(IamPermissions.ApplicationsRead).WithName("GetApplicationIntegration")
+            .Produces<ApplicationIntegrationDto>(200).ProducesProblem(404);
+
+        apps.MapPut("/{clientId}/logout", async (string clientId, ApplicationLogoutDto req, IApplicationLogoutSettings logout, CancellationToken ct) =>
+                (await logout.SetLogoutAsync(clientId, req, ct)).ToHttpResult(s => Results.Ok(s)))
+            .WithValidation<ApplicationLogoutDto>()
+            .RequireAuthorization(IamPermissions.ApplicationsManage).WithName("SetApplicationLogout")
+            .Produces<ApplicationLogoutDto>(200).ProducesProblem(400).ProducesProblem(404);
 
         app.MapGet("/api/identity/settings/login-themes", async (IApplicationLoginPages pages, CancellationToken ct) =>
                 (await pages.ListLoginThemesAsync(ct)).ToHttpResult(t => Results.Ok(t)))

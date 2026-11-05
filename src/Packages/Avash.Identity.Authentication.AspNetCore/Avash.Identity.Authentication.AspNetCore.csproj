@@ -10,5 +10,6 @@
     <ItemGroup>
         <ProjectReference Include="../Avash.Identity.Authentication/Avash.Identity.Authentication.csproj"/>
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer"/>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect"/>
     </ItemGroup>
 </Project>

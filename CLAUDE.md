@@ -11,7 +11,8 @@ admins while exposing most of its features: authentication on behalf of users an
 applications/modules, permissions, business roles, users, runtime scopes, weekly access schedules
 and auth settings, plus a Persian (RTL) admin console.
 
-Consumer services use the `Avash.Identity.*` packages (authentication, authorization,
+Consumer services use the `Avash.Identity.*` packages (bearer authentication for APIs, `AddAvashWebSso` +
+`MapAvashSso` for server-rendered web apps/BFFs with single sign-on and back-channel logout, authorization,
 access context, permission discovery/registration).
 
 ## Binding architecture decisions (owner, 2026-10-30)

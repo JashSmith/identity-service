@@ -98,6 +98,26 @@ public sealed partial class KeycloakApplicationCatalog(
                 [LoginThemeAttribute] = request.LoginTheme ?? "",
             },
         };
+        // Applications users sign in to need the user's id and name in their tokens. Tenant realms have no built-in
+        // profile/basic scopes, so the client carries the mappers itself (like the gateway and console clients).
+        if (signIn)
+            body["protocolMappers"] = new[] { ("subject-sub", "id", "sub"), ("username", "username", "preferred_username") }
+                .Select(m => new Dictionary<string, object>
+                {
+                    ["name"] = m.Item1,
+                    ["protocol"] = "openid-connect",
+                    ["protocolMapper"] = "oidc-usermodel-property-mapper",
+                    ["config"] = new Dictionary<string, string>
+                    {
+                        ["user.attribute"] = m.Item2,
+                        ["claim.name"] = m.Item3,
+                        ["jsonType.label"] = "String",
+                        ["id.token.claim"] = "true",
+                        ["access.token.claim"] = "true",
+                        ["userinfo.token.claim"] = "true",
+                    },
+                })
+                .ToArray();
         var created = await _api.CreateAsync("clients", body, "application", ct, includeKeycloakMessage: true);
         if (!created.IsSuccess) return created.Error!;
 

@@ -31,6 +31,8 @@
                               Click="@(() => Navigation.NavigateTo($"/applications/{Uri.EscapeDataString(app.ClientId)}"))" />
                 <RadzenButton Icon="login" Text="صفحه ورود" Size="ButtonSize.Small" Variant="Variant.Text"
                               Click="@(() => Navigation.NavigateTo($"/applications/{Uri.EscapeDataString(app.ClientId)}/login-page"))" />
+                <RadzenButton Icon="integration_instructions" Size="ButtonSize.Small" Variant="Variant.Text" title="راهنمای اتصال" aria-label="راهنمای اتصال"
+                              Click="@(() => Navigation.NavigateTo($"/applications/{Uri.EscapeDataString(app.ClientId)}/integration"))" />
                 @if (canManage)
                 {
                     <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => EditAsync(app))" title="ویرایش" />

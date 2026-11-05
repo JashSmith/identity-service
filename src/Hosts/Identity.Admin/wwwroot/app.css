@@ -682,3 +682,26 @@ fieldset[disabled] .av-mode { cursor: default; }
 }
 .av-preview__button { padding: 0.55rem; border-radius: 6px; background: var(--preview-brand); color: var(--av-on-art); font-weight: 700; }
 .av-preview__link { font-size: 0.78rem; color: var(--preview-brand); }
+
+/* ---------- Integration guide ---------- */
+.av-kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.5rem 1rem; margin: 0; font-size: 0.9rem; }
+.av-kv dt { color: var(--av-text-muted); }
+.av-kv dd { margin: 0; display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
+.av-kv dd .ltr { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 560px) { .av-kv { grid-template-columns: minmax(0, 1fr); } .av-kv dd { margin-bottom: 0.4rem; } }
+.av-copy {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border: 1px solid var(--av-border);
+    border-radius: 6px;
+    background: var(--av-surface-muted);
+    color: var(--av-text-muted);
+    cursor: pointer;
+}
+.av-copy:hover { color: var(--av-primary); border-color: var(--av-primary); }
+.av-copy .rzi { font-size: 1rem; }
+.av-guide { margin-top: 1rem; }
+.av-guide p { line-height: 1.8; }
