@@ -21,6 +21,16 @@
         sync();
     };
 
+    // Skip link: move keyboard focus (not only the scroll position) into the main region.
+    document.addEventListener("click", (event) => {
+        const skip = event.target.closest("a.av-skip-link");
+        if (!skip) return;
+        const target = document.getElementById(skip.getAttribute("href").slice(1));
+        if (!target) return;
+        event.preventDefault();
+        target.focus();
+    });
+
     document.addEventListener("click", (event) => {
         const option = event.target.closest("[data-theme-option]");
         if (!option) return;

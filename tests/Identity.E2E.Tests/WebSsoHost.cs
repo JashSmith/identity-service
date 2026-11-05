@@ -33,11 +33,12 @@ public sealed class WebSsoHost : IAsyncDisposable
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
-    public static async Task<WebSsoHost> StartAsync(int port, Uri gateway, string clientId, string clientSecret)
+    /// <param name="listenOnAllInterfaces">Needed when Keycloak (a container) must call the app, e.g. back-channel logout.</param>
+    public static async Task<WebSsoHost> StartAsync(int port, Uri gateway, string clientId, string clientSecret, bool listenOnAllInterfaces = false)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
-        builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
+        builder.WebHost.UseUrls(listenOnAllInterfaces ? $"http://0.0.0.0:{port}" : $"http://127.0.0.1:{port}");
         builder.Services.AddAvashWebSso(o =>
         {
             o.Authority = gateway.ToString().TrimEnd('/');
