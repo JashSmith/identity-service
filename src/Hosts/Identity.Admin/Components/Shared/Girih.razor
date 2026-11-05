@@ -1,0 +1,21 @@
+@* Khatam (eight-point star) girih pattern, drawn inline so it follows the theme colours. Decorative only. *@
+<svg class="av-girih @Class" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <pattern id="@_id" width="@Size" height="@Size" patternUnits="userSpaceOnUse">
+            <g transform="@($"scale({Size / 40.0:0.###})")" fill="none" stroke-width="1.4">
+                <path d="M20 6 L24.1 15.9 L34 20 L24.1 24.1 L20 34 L15.9 24.1 L6 20 L15.9 15.9 Z" class="av-girih__star" />
+                <rect x="12" y="12" width="16" height="16" class="av-girih__square" />
+                <rect x="12" y="12" width="16" height="16" transform="rotate(45 20 20)" class="av-girih__square" />
+                <path d="M0 0 L6 6 M40 0 L34 6 M0 40 L6 34 M40 40 L34 34" class="av-girih__link" />
+            </g>
+        </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#@_id)" />
+</svg>
+
+@code {
+    [Parameter] public int Size { get; set; } = 40;
+    [Parameter] public string? Class { get; set; }
+
+    private readonly string _id = "girih-" + Guid.NewGuid().ToString("N")[..8];
+}

@@ -3,16 +3,15 @@
 
 <PageTitle>محدوده‌ها | کنسول مدیریت هویت</PageTitle>
 
-<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-2">
-    <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">محدوده‌های دسترسی</RadzenText>
-    @if (canManage)
-    {
-        <RadzenButton Icon="add" Text="محدوده جدید" Click="@(() => EditAsync(null))" />
-    }
-</RadzenStack>
-<RadzenText TextStyle="TextStyle.Body2" class="rz-mb-4">
-    محدوده‌ها (مثل استان، شهر یا شعبه) تعیین می‌کنند کاربر به داده‌های کدام بخش دسترسی دارد. هر محدوده می‌تواند والد داشته باشد (شهر ← استان) و فهرست مقادیر مجاز.
-</RadzenText>
+<PageHeader Title="محدوده‌های دسترسی" Icon="account_tree">
+    <Description>محدوده‌ها (مثل استان، شهر یا شعبه) تعیین می‌کنند کاربر به داده‌های کدام بخش دسترسی دارد. هر محدوده می‌تواند والد داشته باشد (شهر ← استان) و فهرست مقادیر مجاز.</Description>
+    <Actions>
+        @if (canManage)
+        {
+            <RadzenButton Icon="add" Text="محدوده جدید" Click="@(() => EditAsync(null))" />
+        }
+    </Actions>
+</PageHeader>
 
 <RadzenDataGrid TItem="ScopeDefinitionView" Data="@scopes" IsLoading="@Busy" AllowSorting="true" EmptyText="محدوده‌ای تعریف نشده است">
     <Columns>

@@ -3,15 +3,17 @@
 
 <PageTitle>کاربران | کنسول مدیریت هویت</PageTitle>
 
-<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
-    <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">کاربران</RadzenText>
-    @if (canManage)
-    {
-        <RadzenButton Icon="person_add" Text="کاربر جدید" Click="@CreateAsync" />
-    }
-</RadzenStack>
+<PageHeader Title="کاربران" Icon="group">
+    <Description>کاربران این سازمان، نقش‌ها و محدوده‌هایشان. مدیران تفویضی فقط کاربران محدوده خود را می‌بینند.</Description>
+    <Actions>
+        @if (canManage)
+        {
+            <RadzenButton Icon="person_add" Text="کاربر جدید" Click="@CreateAsync" />
+        }
+    </Actions>
+</PageHeader>
 
-<RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" class="rz-mb-2">
+<RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Wrap="FlexWrap.Wrap" class="av-toolbar">
     <RadzenTextBox @bind-Value="search" Placeholder="جستجو در نام کاربری، نام یا ایمیل" Style="width: 320px;" />
     <RadzenButton Icon="search" Text="جستجو" ButtonStyle="ButtonStyle.Secondary" Click="@(() => grid.FirstPage(true))" />
 </RadzenStack>

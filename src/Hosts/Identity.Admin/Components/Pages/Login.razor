@@ -6,20 +6,40 @@
 
 <PageTitle>ورود | کنسول مدیریت هویت</PageTitle>
 
-<div class="login-page">
-    <RadzenCard class="login-card">
-        <RadzenStack Gap="1rem">
-            <RadzenText TextStyle="TextStyle.H5" TagName="TagName.H1">کنسول مدیریت هویت</RadzenText>
-            <RadzenText TextStyle="TextStyle.Body2">سازمان خود را انتخاب کنید تا به صفحه ورود آن هدایت شوید.</RadzenText>
-            @foreach (var tenant in Options.Value.Tenants)
+<div class="av-login">
+    <section class="av-login__panel">
+        <div class="av-login__top"><ThemeSwitch /></div>
+        <div class="av-login__card">
+            <h1 class="av-login__title">ورود به کنسول مدیریت</h1>
+            <p class="av-login__hint">سازمان خود را انتخاب کنید تا به صفحه ورود آن هدایت شوید.</p>
+            @if (Options.Value.Tenants.Count == 0)
             {
-                <a class="rz-button rz-button-md rz-variant-filled rz-primary rz-shade-default login-tenant"
-                   href="@($"/auth/login/{Uri.EscapeDataString(tenant.Id)}?returnUrl={Uri.EscapeDataString(ReturnUrl ?? "/")}")">
-                    @tenant.DisplayName
-                </a>
+                <EmptyState Icon="domain_disabled" Title="هیچ سازمانی پیکربندی نشده است">
+                    بخش <span class="ltr">Console:Tenants</span> را در تنظیمات کنسول کامل کنید.
+                </EmptyState>
             }
-        </RadzenStack>
-    </RadzenCard>
+            <ul class="av-login__tenants">
+                @foreach (var tenant in Options.Value.Tenants)
+                {
+                    <li>
+                        <a class="av-login__tenant" href="@($"/auth/login/{Uri.EscapeDataString(tenant.Id)}?returnUrl={Uri.EscapeDataString(ReturnUrl ?? "/")}")">
+                            <span class="rzi" aria-hidden="true">domain</span>
+                            <span class="av-login__tenant-name">@tenant.DisplayName</span>
+                            <span class="ltr av-login__tenant-id">@tenant.Id</span>
+                            <span class="rzi av-login__tenant-go" aria-hidden="true">arrow_back</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </div>
+    </section>
+    <section class="av-login__art" aria-hidden="true">
+        <Girih Class="av-login__pattern" Size="56" />
+        <div class="av-login__art-text">
+            <span class="av-login__art-title">هویت آواش</span>
+            <span class="av-login__art-caption">یک ورود برای همه سامانه‌های سازمان</span>
+        </div>
+    </section>
 </div>
 
 @code {

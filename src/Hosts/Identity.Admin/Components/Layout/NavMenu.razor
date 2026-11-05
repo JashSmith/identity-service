@@ -1,27 +1,54 @@
+@* Sections grouped by task. Each link shows only for administrators who may read it (identity-gateway:* permissions). *@
 <AuthorizeView>
     <Authorized>
-        <RadzenPanelMenu>
-            <RadzenPanelMenuItem Text="داشبورد" Icon="dashboard" Path="/" />
-            @foreach (var item in Items.Where(i => context.User.Has(i.Permission)))
+        <nav class="av-nav" aria-label="منوی اصلی">
+            @foreach (var group in Groups)
             {
-                <RadzenPanelMenuItem Text="@item.Text" Icon="@item.Icon" Path="@item.Path" />
+                var items = group.Items.Where(i => i.Permission is null || context.User.Has(i.Permission)).ToArray();
+                if (items.Length == 0) continue;
+                <div class="av-nav__group">
+                    @if (group.Title is not null)
+                    {
+                        <span class="av-nav__title">@group.Title</span>
+                    }
+                    @foreach (var item in items)
+                    {
+                        <NavLink class="av-nav__link" href="@item.Path" Match="@(item.Path == "/" ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                            <RadzenIcon Icon="@item.Icon" aria-hidden="true" />
+                            <span>@item.Text</span>
+                        </NavLink>
+                    }
+                </div>
             }
-        </RadzenPanelMenu>
+        </nav>
     </Authorized>
 </AuthorizeView>
 
 @code {
-    private sealed record MenuItem(string Text, string Icon, string Path, string Permission);
+    private sealed record MenuItem(string Text, string Icon, string Path, string? Permission);
+    private sealed record MenuGroup(string? Title, MenuItem[] Items);
 
-    // Each section shows only for administrators who may read it (identity-gateway:* permissions).
-    private static readonly MenuItem[] Items =
+    private static readonly MenuGroup[] Groups =
     [
-        new("کاربران", "people", "/users", Permissions.UsersRead),
-        new("نقش‌ها", "badge", "/roles", Permissions.RolesRead),
-        new("اپلیکیشن‌ها و دسترسی‌ها", "apps", "/applications", Permissions.ApplicationsRead),
-        new("محدوده‌ها", "account_tree", "/scopes", Permissions.ScopesRead),
-        new("برنامه زمانی", "schedule", "/schedules", Permissions.SchedulesRead),
-        new("تنظیمات احراز هویت", "settings", "/settings", Permissions.SettingsRead),
-        new("سازمان‌ها", "domain", "/tenants", Permissions.SystemRead),
+        new(null, [new("داشبورد", "space_dashboard", "/", null)]),
+        new("هویت و دسترسی",
+        [
+            new("کاربران", "group", "/users", Permissions.UsersRead),
+            new("نقش‌ها", "badge", "/roles", Permissions.RolesRead),
+            new("محدوده‌ها", "account_tree", "/scopes", Permissions.ScopesRead),
+        ]),
+        new("اپلیکیشن‌ها",
+        [
+            new("اپلیکیشن‌ها و دسترسی‌ها", "apps", "/applications", Permissions.ApplicationsRead),
+        ]),
+        new("سیاست‌ها",
+        [
+            new("برنامه زمانی", "schedule", "/schedules", Permissions.SchedulesRead),
+            new("تنظیمات احراز هویت", "shield_lock", "/settings", Permissions.SettingsRead),
+        ]),
+        new("سامانه",
+        [
+            new("سازمان‌ها", "domain", "/tenants", Permissions.SystemRead),
+        ]),
     ];
 }

@@ -4,10 +4,9 @@
 
 <PageTitle>@(IsNew ? "نقش جدید" : $"نقش {Name}") | کنسول مدیریت هویت</PageTitle>
 
-<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
-    <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">@(IsNew ? "نقش جدید" : Name)</RadzenText>
-    <RadzenButton Icon="arrow_forward" Text="بازگشت" ButtonStyle="ButtonStyle.Light" Click="@(() => Navigation.NavigateTo("/roles"))" />
-</RadzenStack>
+<PageHeader Title="@(IsNew ? "نقش جدید" : Name ?? "")" Icon="badge">
+    <Breadcrumb><a href="/roles">نقش‌ها</a> / @(IsNew ? "جدید" : Name)</Breadcrumb>
+</PageHeader>
 
 <RadzenRow Gap="1rem">
     <RadzenColumn Size="12" SizeLG="5">

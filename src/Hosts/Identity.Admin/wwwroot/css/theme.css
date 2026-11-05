@@ -1,0 +1,332 @@
+/*
+ * Avash design tokens: Persian typefaces and a palette drawn from Iranian tilework.
+ *   فیروزه‌ای (turquoise) primary · لاجوردی (lapis) secondary · آبی آسمانی (sky) info · زعفرانی (saffron) warning
+ *   اناری (pomegranate) danger · پسته‌ای (pistachio) success · کاهگلی (straw-clay) light neutrals
+ *   شب نیلی (indigo night) dark neutrals.
+ * Every text colour meets WCAG AA (4.5:1) on its surface in both modes.
+ *
+ * Modes: <html data-theme="light|dark|system">. The --av-* tokens hold the palette; Radzen's --rz-* variables
+ * are mapped onto them once, so dark mode only redefines --av-* (for "dark", and for "system" on a dark OS).
+ * html[data-theme] outranks Radzen's :root, so the stylesheet order does not matter.
+ */
+
+@font-face {
+    font-family: "Vazirmatn";
+    src: url("../fonts/Vazirmatn-Variable.woff2") format("woff2");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Vazir Code";
+    src: url("../fonts/Vazir-Code.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* ---------- Light palette (default for every mode) ---------- */
+html[data-theme] {
+    color-scheme: light;
+
+    --av-n50: #FBF9F5;
+    --av-n100: #F5F2EB;
+    --av-n200: #ECE7DD;
+    --av-n300: #DDD6C8;
+    --av-n400: #BDB4A4;
+    --av-n500: #9A9284;
+    --av-n600: #6E685E;
+    --av-n700: #57524A;
+    --av-n800: #2F2C28;
+    --av-n900: #1B1916;
+
+    --av-bg: #F5F2EB;
+    --av-surface: #FFFFFF;
+    --av-surface-muted: #FBF9F5;
+    --av-raised: #FFFFFF;
+    --av-border: #E4DED2;
+    --av-text: #1B1916;
+    --av-text-muted: #57524A;
+    --av-shadow: 0 1px 2px rgba(27, 25, 22, 0.06), 0 1px 1px rgba(27, 25, 22, 0.04);
+
+    --av-primary: #0A7471;
+    --av-primary-light: #13918D;
+    --av-primary-dark: #075E5B;
+    --av-primary-darker: #054845;
+    --av-primary-tint: rgba(10, 116, 113, 0.12);
+    --av-on-primary: #FFFFFF;
+
+    --av-secondary: #26428B;
+    --av-secondary-light: #3A57A6;
+    --av-secondary-dark: #1C3270;
+    --av-secondary-darker: #142557;
+    --av-secondary-tint: rgba(38, 66, 139, 0.12);
+    --av-on-secondary: #FFFFFF;
+
+    --av-info: #1F5FA8;
+    --av-info-light: #3474BD;
+    --av-info-dark: #184C87;
+    --av-info-tint: rgba(31, 95, 168, 0.12);
+    --av-on-info: #FFFFFF;
+
+    --av-success: #3B7228;
+    --av-success-light: #4C8A36;
+    --av-success-dark: #2E5B1F;
+    --av-success-tint: rgba(59, 114, 40, 0.12);
+    --av-on-success: #FFFFFF;
+
+    --av-warning: #8F5B00;
+    --av-warning-light: #A86C00;
+    --av-warning-dark: #744A00;
+    --av-warning-tint: rgba(242, 184, 75, 0.24);
+    --av-on-warning: #FFFFFF;
+
+    --av-danger: #B42318;
+    --av-danger-light: #CC3A2E;
+    --av-danger-dark: #931C13;
+    --av-danger-tint: rgba(180, 35, 24, 0.10);
+    --av-on-danger: #FFFFFF;
+
+    /* Brand accents that keep their colour in both modes (decoration on fixed dark artwork) */
+    --av-saffron: #F2B84B;
+    --av-turquoise-glow: #7FD8D3;
+    --av-on-art: #FFFFFF;
+    --av-art-from: #142557;
+    --av-art-to: #054845;
+
+    --av-radius: 10px;
+    --av-font: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+    --av-font-mono: "Vazir Code", Consolas, "Courier New", monospace;
+
+    /* ---------- Radzen mapping (written once, follows --av-*) ---------- */
+    --rz-text-font-family: var(--av-font);
+    --rz-border-radius: 8px;
+    /* Persian script is cursive: letter-spacing breaks the joins, and uppercasing only distorts Latin words. */
+    --rz-badge-text-transform: none;
+    --rz-datepicker-calendar-header-text-transform: none;
+    --rz-scheduler-header-text-transform: none;
+    --rz-scheduler-today-button-text-transform: none;
+    --rz-tabs-tab-text-transform: none;
+    --rz-text-button-text-transform: none;
+    --rz-text-overline-text-transform: none;
+    --rz-badge-letter-spacing: 0;
+    --rz-dialog-title-letter-spacing: 0;
+    --rz-tabs-tab-letter-spacing: 0;
+    --rz-text-button-letter-spacing: 0;
+    --rz-text-caption-letter-spacing: 0;
+    --rz-text-overline-letter-spacing: 0;
+    --rz-base-50: var(--av-n50);
+    --rz-base-100: var(--av-n100);
+    --rz-base-200: var(--av-n200);
+    --rz-base-300: var(--av-n300);
+    --rz-base-400: var(--av-n400);
+    --rz-base-500: var(--av-n500);
+    --rz-base-600: var(--av-n600);
+    --rz-base-700: var(--av-n700);
+    --rz-base-800: var(--av-n800);
+    --rz-base-900: var(--av-n900);
+
+    --rz-primary: var(--av-primary);
+    --rz-primary-light: var(--av-primary-light);
+    --rz-primary-lighter: var(--av-primary-tint);
+    --rz-primary-dark: var(--av-primary-dark);
+    --rz-primary-darker: var(--av-primary-darker);
+    --rz-on-primary: var(--av-on-primary);
+    --rz-on-primary-light: var(--av-on-primary);
+    --rz-on-primary-lighter: var(--av-primary);
+    --rz-on-primary-dark: var(--av-on-primary);
+    --rz-on-primary-darker: var(--av-on-primary);
+
+    --rz-secondary: var(--av-secondary);
+    --rz-secondary-light: var(--av-secondary-light);
+    --rz-secondary-lighter: var(--av-secondary-tint);
+    --rz-secondary-dark: var(--av-secondary-dark);
+    --rz-secondary-darker: var(--av-secondary-darker);
+    --rz-on-secondary: var(--av-on-secondary);
+    --rz-on-secondary-light: var(--av-on-secondary);
+    --rz-on-secondary-lighter: var(--av-secondary);
+    --rz-on-secondary-dark: var(--av-on-secondary);
+    --rz-on-secondary-darker: var(--av-on-secondary);
+
+    --rz-info: var(--av-info);
+    --rz-info-light: var(--av-info-light);
+    --rz-info-lighter: var(--av-info-tint);
+    --rz-info-dark: var(--av-info-dark);
+    --rz-on-info: var(--av-on-info);
+    --rz-on-info-lighter: var(--av-info);
+
+    --rz-success: var(--av-success);
+    --rz-success-light: var(--av-success-light);
+    --rz-success-lighter: var(--av-success-tint);
+    --rz-success-dark: var(--av-success-dark);
+    --rz-on-success: var(--av-on-success);
+    --rz-on-success-lighter: var(--av-success);
+
+    --rz-warning: var(--av-warning);
+    --rz-warning-light: var(--av-warning-light);
+    --rz-warning-lighter: var(--av-warning-tint);
+    --rz-warning-dark: var(--av-warning-dark);
+    --rz-on-warning: var(--av-on-warning);
+    --rz-on-warning-lighter: var(--av-warning);
+
+    --rz-danger: var(--av-danger);
+    --rz-danger-light: var(--av-danger-light);
+    --rz-danger-lighter: var(--av-danger-tint);
+    --rz-danger-dark: var(--av-danger-dark);
+    --rz-on-danger: var(--av-on-danger);
+    --rz-on-danger-lighter: var(--av-danger);
+
+    --rz-body-background-color: var(--av-bg);
+    --rz-base-background-color: var(--av-surface);
+    --rz-header-background-color: var(--av-surface);
+    --rz-header-color: var(--av-text);
+    --rz-sidebar-background-color: var(--av-surface);
+    --rz-sidebar-color: var(--av-text);
+    --rz-sidebar-toggle-color: var(--av-text);
+    --rz-sidebar-toggle-hover-color: var(--av-text);
+    --rz-sidebar-toggle-hover-background-color: var(--av-n200);
+    --rz-dialog-background-color: var(--av-raised);
+    --rz-dialog-title-background-color: var(--av-raised);
+    --rz-card-border: 1px solid var(--av-border);
+    --rz-grid-header-background-color: var(--av-surface-muted);
+    --rz-grid-hover-background-color: var(--av-primary-tint);
+
+    /* Chart series: turquoise, lapis, saffron, pomegranate, pistachio, sumac, sky, clay */
+    --rz-series-1: #0A7471;
+    --rz-series-2: #26428B;
+    --rz-series-3: #D4930F;
+    --rz-series-4: #B42318;
+    --rz-series-5: #4C8A36;
+    --rz-series-6: #7B3F61;
+    --rz-series-7: #3B8FC4;
+    --rz-series-8: #A85A32;
+}
+
+/* ---------- Dark palette ---------- */
+/* Radzen's own dark component variables come from css/radzen-dark.css (generated); this block recolours them. */
+html[data-theme="dark"] {
+    color-scheme: dark;
+    --av-n50: #E7EBF1;
+    --av-n100: #BAC3D0;
+    --av-n200: #8B98AA;
+    --av-n300: #5F6C7E;
+    --av-n400: #3B4758;
+    --av-n500: #323D4B;
+    --av-n600: #283342;
+    --av-n700: #1E2834;
+    --av-n800: #161E28;
+    --av-n900: #0E141B;
+    --av-bg: #0E141B;
+    --av-surface: #161E28;
+    --av-surface-muted: #1A2330;
+    --av-raised: #1E2834;
+    --av-border: #2A3646;
+    --av-text: #E7EBF1;
+    --av-text-muted: #A5AFBD;
+    --av-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --av-primary: #3BC2BC;
+    --av-primary-light: #62D1CC;
+    --av-primary-dark: #2A9F9A;
+    --av-primary-darker: #1F7E7A;
+    --av-primary-tint: rgba(59, 194, 188, 0.16);
+    --av-on-primary: #06201F;
+    --av-secondary: #93A6EE;
+    --av-secondary-light: #AFBEF3;
+    --av-secondary-dark: #7489DB;
+    --av-secondary-darker: #5C70C4;
+    --av-secondary-tint: rgba(147, 166, 238, 0.16);
+    --av-on-secondary: #0E1630;
+    --av-info: #7FB2F0;
+    --av-info-light: #9CC4F4;
+    --av-info-dark: #5F97DB;
+    --av-info-tint: rgba(127, 178, 240, 0.16);
+    --av-on-info: #0B1A2E;
+    --av-success: #8DC46E;
+    --av-success-light: #A6D38D;
+    --av-success-dark: #73AA55;
+    --av-success-tint: rgba(141, 196, 110, 0.16);
+    --av-on-success: #0F1A0A;
+    --av-warning: #EDB04A;
+    --av-warning-light: #F2C46F;
+    --av-warning-dark: #D39634;
+    --av-warning-tint: rgba(237, 176, 74, 0.16);
+    --av-on-warning: #1A1200;
+    --av-danger: #F28B80;
+    --av-danger-light: #F5A69D;
+    --av-danger-dark: #DB6F63;
+    --av-danger-tint: rgba(242, 139, 128, 0.16);
+    --av-on-danger: #2A0B08;
+    --rz-series-1: #3BC2BC;
+    --rz-series-2: #93A6EE;
+    --rz-series-3: #EDB04A;
+    --rz-series-4: #F28B80;
+    --rz-series-5: #8DC46E;
+    --rz-series-6: #D59AC0;
+    --rz-series-7: #7FB2F0;
+    --rz-series-8: #E09A6E;
+}
+
+@media (prefers-color-scheme: dark) {
+    html[data-theme="system"] {
+        color-scheme: dark;
+        --av-n50: #E7EBF1;
+        --av-n100: #BAC3D0;
+        --av-n200: #8B98AA;
+        --av-n300: #5F6C7E;
+        --av-n400: #3B4758;
+        --av-n500: #323D4B;
+        --av-n600: #283342;
+        --av-n700: #1E2834;
+        --av-n800: #161E28;
+        --av-n900: #0E141B;
+        --av-bg: #0E141B;
+        --av-surface: #161E28;
+        --av-surface-muted: #1A2330;
+        --av-raised: #1E2834;
+        --av-border: #2A3646;
+        --av-text: #E7EBF1;
+        --av-text-muted: #A5AFBD;
+        --av-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --av-primary: #3BC2BC;
+        --av-primary-light: #62D1CC;
+        --av-primary-dark: #2A9F9A;
+        --av-primary-darker: #1F7E7A;
+        --av-primary-tint: rgba(59, 194, 188, 0.16);
+        --av-on-primary: #06201F;
+        --av-secondary: #93A6EE;
+        --av-secondary-light: #AFBEF3;
+        --av-secondary-dark: #7489DB;
+        --av-secondary-darker: #5C70C4;
+        --av-secondary-tint: rgba(147, 166, 238, 0.16);
+        --av-on-secondary: #0E1630;
+        --av-info: #7FB2F0;
+        --av-info-light: #9CC4F4;
+        --av-info-dark: #5F97DB;
+        --av-info-tint: rgba(127, 178, 240, 0.16);
+        --av-on-info: #0B1A2E;
+        --av-success: #8DC46E;
+        --av-success-light: #A6D38D;
+        --av-success-dark: #73AA55;
+        --av-success-tint: rgba(141, 196, 110, 0.16);
+        --av-on-success: #0F1A0A;
+        --av-warning: #EDB04A;
+        --av-warning-light: #F2C46F;
+        --av-warning-dark: #D39634;
+        --av-warning-tint: rgba(237, 176, 74, 0.16);
+        --av-on-warning: #1A1200;
+        --av-danger: #F28B80;
+        --av-danger-light: #F5A69D;
+        --av-danger-dark: #DB6F63;
+        --av-danger-tint: rgba(242, 139, 128, 0.16);
+        --av-on-danger: #2A0B08;
+        --rz-series-1: #3BC2BC;
+        --rz-series-2: #93A6EE;
+        --rz-series-3: #EDB04A;
+        --rz-series-4: #F28B80;
+        --rz-series-5: #8DC46E;
+        --rz-series-6: #D59AC0;
+        --rz-series-7: #7FB2F0;
+        --rz-series-8: #E09A6E;
+    }
+}

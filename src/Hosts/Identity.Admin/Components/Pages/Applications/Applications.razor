@@ -3,13 +3,15 @@
 
 <PageTitle>اپلیکیشن‌ها | کنسول مدیریت هویت</PageTitle>
 
-<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
-    <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">اپلیکیشن‌ها و دسترسی‌ها</RadzenText>
-    @if (canManage)
-    {
-        <RadzenButton Icon="add" Text="اپلیکیشن جدید" Click="@(() => EditAsync(null))" />
-    }
-</RadzenStack>
+<PageHeader Title="اپلیکیشن‌ها و دسترسی‌ها" Icon="apps">
+    <Description>هر سرویس یا وب‌اپلیکیشن یک Client در Keycloak است؛ دسترسی‌هایش به شکل <span class="ltr">App:Module:Resource:Action</span> در توکن می‌آیند.</Description>
+    <Actions>
+        @if (canManage)
+        {
+            <RadzenButton Icon="add" Text="اپلیکیشن جدید" Click="@(() => EditAsync(null))" />
+        }
+    </Actions>
+</PageHeader>
 
 <RadzenDataGrid TItem="ApplicationDto" Data="@applications" IsLoading="@Busy" AllowSorting="true" EmptyText="اپلیکیشنی تعریف نشده است">
     <Columns>

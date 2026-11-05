@@ -59,6 +59,7 @@ Delegated admins may only manage users inside their own scope and grant only wha
 | `keycloak/themes` | Keycloak themes mounted into the container (Persian `avash` login theme) |
 | `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator), built in Docker by `scripts/build-keycloak-extensions.sh` into `keycloak/providers` |
 | `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |
+| `tests/Identity.Admin.Tests` | bUnit tests of the console (design-system components, menu permissions, Persian formatting) |
 | `tests/Identity.Packages.Tests` | Consumer-package tests (permission discovery, manifests, scope filters) against a test-only fixture |
 | `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`); `ConsumerHost` is an in-process consumer service |
 | `docs/` | Persian docs: architecture + Keycloak ERD, run guide, API summary |
@@ -90,6 +91,11 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - Keycloak Admin API writes are not idempotent: no blind retries on POST/PUT/DELETE.
 - Keep the Domain free of infrastructure; endpoints call application use cases, not adapters.
 - Persian Markdown docs follow the global RTL rules (RLM after markers, manual TOC, no dir wrappers).
+- Console design system: colours only through the `--av-*` tokens in `wwwroot/css/theme.css` (never hard-coded),
+  layout in `wwwroot/app.css`, shared components in `Components/Shared` (`PageHeader`, `StatCard`, `EmptyState`,
+  `ThemeSwitch`, `Girih`). Fonts (Vazirmatn, Vazir Code) are self-hosted. No `letter-spacing` or `uppercase` on
+  Persian text. Numbers and dates shown to users go through `PersianFormat` (Persian digits, Jalali, Tehran time).
+  After upgrading Radzen.Blazor rerun `python scripts/generate-radzen-dark-css.py`.
 
 ## Environment gotchas
 - Port 8080 is taken by a local Apache on the owner's machine; Keycloak runs on **18080**,

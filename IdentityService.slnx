@@ -39,6 +39,7 @@
         <Project Path="tools/Identity.TenantProvisioning/Identity.TenantProvisioning.csproj"/>
     </Folder>
     <Folder Name="/tests/">
+        <Project Path="tests/Identity.Admin.Tests/Identity.Admin.Tests.csproj"/>
         <Project Path="tests/Identity.ArchitectureTests/Identity.ArchitectureTests.csproj"/>
         <Project Path="tests/Identity.Authentication.Tests/Identity.Authentication.Tests.csproj"/>
         <Project Path="tests/Identity.Authorization.Tests/Identity.Authorization.Tests.csproj"/>

@@ -5,23 +5,19 @@
 
 @if (user is null)
 {
-    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
+    <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" aria-label="در حال بارگذاری" />
     return;
 }
 
-<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="rz-mb-4">
-    <RadzenStack Gap="0">
-        <RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1" class="rz-m-0">@(user.DisplayName ?? user.Username)</RadzenText>
-        <span class="ltr">@user.Username</span>
-    </RadzenStack>
-    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
-        <RadzenButton Icon="arrow_forward" Text="بازگشت" ButtonStyle="ButtonStyle.Light" Click="@(() => Navigation.NavigateTo("/users"))" />
+<PageHeader Title="@(user.DisplayName ?? user.Username)" Icon="person">
+    <Breadcrumb><a href="/users">کاربران</a> / <span class="ltr">@user.Username</span></Breadcrumb>
+    <Actions>
         @if (canManage)
         {
-            <RadzenButton Icon="delete" Text="حذف کاربر" ButtonStyle="ButtonStyle.Danger" Click="@DeleteAsync" />
+            <RadzenButton Icon="delete" Text="حذف کاربر" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Outlined" Click="@DeleteAsync" />
         }
-    </RadzenStack>
-</RadzenStack>
+    </Actions>
+</PageHeader>
 
 <RadzenTabs RenderMode="TabRenderMode.Client">
     <Tabs>
@@ -85,7 +81,7 @@
                         <Columns>
                             <RadzenDataGridColumn Title="نوع"><Template Context="c">@CredentialName(c.Type)</Template></RadzenDataGridColumn>
                             <RadzenDataGridColumn Property="Label" Title="برچسب" />
-                            <RadzenDataGridColumn Title="تاریخ ایجاد"><Template Context="c">@c.CreatedAt?.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</Template></RadzenDataGridColumn>
+                            <RadzenDataGridColumn Title="تاریخ ایجاد"><Template Context="c">@PersianFormat.DateAndTime(c.CreatedAt)</Template></RadzenDataGridColumn>
                             <RadzenDataGridColumn Title="" Width="140px">
                                 <Template Context="c">
                                     @if (canManage)
@@ -119,8 +115,8 @@
             <RadzenDataGrid TItem="UserSessionDto" Data="@sessions" EmptyText="نشست فعالی وجود ندارد">
                 <Columns>
                     <RadzenDataGridColumn Title="IP"><Template Context="s"><span class="ltr">@s.IpAddress</span></Template></RadzenDataGridColumn>
-                    <RadzenDataGridColumn Title="شروع"><Template Context="s">@s.Start.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</Template></RadzenDataGridColumn>
-                    <RadzenDataGridColumn Title="آخرین فعالیت"><Template Context="s">@s.LastAccess.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</Template></RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="شروع"><Template Context="s">@PersianFormat.DateAndTime(s.Start)</Template></RadzenDataGridColumn>
+                    <RadzenDataGridColumn Title="آخرین فعالیت"><Template Context="s">@PersianFormat.DateAndTime(s.LastAccess)</Template></RadzenDataGridColumn>
                     <RadzenDataGridColumn Title="اپلیکیشن‌ها"><Template Context="s"><span class="ltr">@string.Join(", ", s.Clients.Values)</span></Template></RadzenDataGridColumn>
                 </Columns>
             </RadzenDataGrid>

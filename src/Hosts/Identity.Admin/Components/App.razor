@@ -1,14 +1,20 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" data-theme="@ThemeMode">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <base href="/" />
     <ResourcePreloader />
+    <link rel="preload" href="@Assets["fonts/Vazirmatn-Variable.woff2"]" as="font" type="font/woff2" crossorigin />
     <RadzenTheme Theme="material" @rendermode="InteractiveServer" />
+    @* Order: Radzen's dark component variables, then the Avash tokens that recolour both modes, then the layout. *@
+    <link rel="stylesheet" href="@Assets["css/radzen-dark.css"]" />
+    <link rel="stylesheet" href="@Assets["css/theme.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Identity.Admin.styles.css"]" />
+    <link rel="icon" type="image/svg+xml" href="@Assets["favicon.svg"]" />
     <ImportMap />
     <HeadOutlet @rendermode="PageRenderMode" />
 </head>
@@ -16,6 +22,7 @@
 <body>
     <Routes @rendermode="PageRenderMode" />
     <ReconnectModal />
+    <script src="@Assets["js/theme.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="_content/Radzen.Blazor/Radzen.Blazor.js?v=@(typeof(Radzen.Colors).Assembly.GetName().Version)"></script>
 </body>
@@ -23,6 +30,8 @@
 </html>
 
 @code {
+    private static readonly string[] ThemeModes = ["light", "dark", "system"];
+
     [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
 
     // The login page stays static (it only holds links); everything else is interactive without prerendering,
@@ -31,4 +40,8 @@
 
     private IComponentRenderMode? PageRenderMode =>
         HttpContext.Request.Path.StartsWithSegments("/login") ? null : Interactive;
+
+    // Rendered on the server from the cookie set by js/theme.js, so the first paint already has the right colours.
+    private string ThemeMode =>
+        HttpContext.Request.Cookies.TryGetValue("avash-theme", out var mode) && ThemeModes.Contains(mode) ? mode : "system";
 }

@@ -3,42 +3,62 @@
 
 <PageTitle>داشبورد | کنسول مدیریت هویت</PageTitle>
 
-<RadzenText TextStyle="TextStyle.H4" TagName="TagName.H1">داشبورد</RadzenText>
+<PageHeader Title="داشبورد" Icon="space_dashboard">
+    <Description>نمای کلی این سازمان. هر کارت فقط برای مدیرانی دیده می‌شود که اجازه خواندن آن بخش را دارند.</Description>
+</PageHeader>
 
-<RadzenRow Gap="1rem">
+@if (cards.Count == 0 && loaded)
+{
+    <EmptyState Icon="lock" Title="بخشی برای نمایش ندارید">
+        حساب شما هیچ‌یک از دسترسی‌های خواندن کنسول را ندارد. از مدیر سامانه بخواهید نقش مناسب را به شما بدهد.
+    </EmptyState>
+}
+
+<section class="av-stats" aria-label="شاخص‌های کلیدی">
     @foreach (var card in cards)
     {
-        <RadzenColumn Size="12" SizeMD="6" SizeLG="3">
-            <RadzenCard>
-                <RadzenStack Gap="0.25rem">
-                    <RadzenText TextStyle="TextStyle.Overline">@card.Title</RadzenText>
-                    <RadzenText TextStyle="TextStyle.H4" class="rz-m-0">@(card.Value?.ToString() ?? "—")</RadzenText>
-                    <RadzenLink Path="@card.Path" Text="مشاهده" />
-                </RadzenStack>
-            </RadzenCard>
-        </RadzenColumn>
+        <StatCard Label="@card.Label" Icon="@card.Icon" Tone="@card.Tone" Path="@card.Path" Value="@card.Value" Failed="@card.Failed" />
     }
-</RadzenRow>
+</section>
 
 @code {
-    private sealed record Card(string Title, string Path, int? Value);
-    private List<Card> cards = [];
+    private sealed class Card(string label, string icon, string tone, string path)
+    {
+        public string Label { get; } = label;
+        public string Icon { get; } = icon;
+        public string Tone { get; } = tone;
+        public string Path { get; } = path;
+        public long? Value { get; set; }
+        public bool Failed { get; set; }
+    }
+
+    private readonly List<Card> cards = [];
+    private bool loaded;
 
     protected override async Task OnInitializedAsync()
     {
-        var list = new List<Card>();
+        var loads = new List<Task>();
         if (await Can(Permissions.UsersRead))
-            await RunAsync(async () => list.Add(new("کاربران", "/users",
-                (await Api.GetAsync<PagedResponse<UserDto>>("api/identity/users?pageSize=1")).Total)));
+            loads.Add(Load(new("کاربران", "group", "primary", "/users"),
+                async () => (await Api.GetAsync<PagedResponse<UserDto>>("api/identity/users?pageSize=1")).Total ?? 0));
         if (await Can(Permissions.RolesRead))
-            await RunAsync(async () => list.Add(new("نقش‌ها", "/roles",
-                (await Api.GetAsync<List<BusinessRoleDto>>("api/identity/business-roles")).Count)));
+            loads.Add(Load(new("نقش‌ها", "badge", "secondary", "/roles"),
+                async () => (await Api.GetAsync<List<BusinessRoleDto>>("api/identity/business-roles")).Count));
         if (await Can(Permissions.ApplicationsRead))
-            await RunAsync(async () => list.Add(new("اپلیکیشن‌ها", "/applications",
-                (await Api.GetAsync<List<ApplicationDto>>("api/identity/applications")).Count)));
+            loads.Add(Load(new("اپلیکیشن‌ها", "apps", "info", "/applications"),
+                async () => (await Api.GetAsync<List<ApplicationDto>>("api/identity/applications")).Count));
         if (await Can(Permissions.PermissionsRead))
-            await RunAsync(async () => list.Add(new("دسترسی‌ها", "/applications",
-                (await Api.GetAsync<List<CatalogPermissionDto>>("api/identity/permissions")).Count)));
-        cards = list;
+            loads.Add(Load(new("دسترسی‌ها", "key", "warning", "/applications"),
+                async () => (await Api.GetAsync<List<CatalogPermissionDto>>("api/identity/permissions")).Count));
+        loaded = true;
+        await Task.WhenAll(loads);
+    }
+
+    // Each card loads on its own: one failing section leaves the others visible (partial dashboard).
+    private async Task Load(Card card, Func<Task<long>> read)
+    {
+        cards.Add(card);
+        if (!await RunAsync(async () => card.Value = await read())) card.Failed = true;
+        StateHasChanged();
     }
 }

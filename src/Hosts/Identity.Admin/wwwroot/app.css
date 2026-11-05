@@ -1,40 +1,470 @@
-/* Persian (RTL) console. Radzen follows dir="rtl" on <html>; these rules only add the typeface and the login page. */
-:root {
-    --rz-text-font-family: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
-}
+/*
+ * Console layout and shared components. Colours and typefaces come from css/theme.css (--av-* tokens);
+ * this file never hard-codes a colour. Logical properties (inline-start/end) keep everything correct in RTL.
+ */
 
 html, body {
-    font-family: var(--rz-text-font-family);
     margin: 0;
+    font-family: var(--av-font);
+    background: var(--av-bg);
+    color: var(--av-text);
+    letter-spacing: 0;
 }
 
-/* Headings receive focus after navigation (screen readers announce the page); no visible box is needed. */
-h1:focus {
-    outline: none;
+body {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
 }
 
-.login-page {
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    background: var(--rz-base-100);
-    padding: 1rem;
+/* Headings get focus after navigation (screen readers announce the page); the page header styles them. */
+h1:focus { outline: none; }
+
+:focus-visible {
+    outline: 2px solid var(--av-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
 }
 
-.login-card {
-    width: min(420px, 100%);
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 
-.login-tenant {
-    display: block;
-    text-align: center;
-    text-decoration: none;
-}
-
-/* Latin identifiers (permission names, client ids) stay left-to-right inside RTL text. */
+/* Latin identifiers (permission names, client ids, URLs) stay left-to-right inside RTL text. */
 .ltr {
     direction: ltr;
     unicode-bidi: isolate;
-    font-family: Consolas, "Courier New", monospace;
+    white-space: nowrap;
+    font-family: var(--av-font-mono);
     font-size: 0.85em;
+}
+
+.av-muted { color: var(--av-text-muted); }
+
+.av-skip-link {
+    position: absolute;
+    inset-inline-start: 1rem;
+    top: -3rem;
+    z-index: 100;
+    padding: 0.5rem 1rem;
+    background: var(--av-primary);
+    color: var(--av-on-primary);
+    border-radius: var(--av-radius);
+    text-decoration: none;
+}
+.av-skip-link:focus { top: 0.75rem; }
+
+/* ---------- Shell ---------- */
+.av-header.rz-header {
+    border-bottom: 1px solid var(--av-border);
+    box-shadow: none;
+    min-height: 3.5rem;
+}
+
+.av-header__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    height: 100%;
+    padding-inline: 0.75rem 1rem;
+}
+
+.av-header__spacer { flex: 1; }
+
+.av-sidebar.rz-sidebar {
+    border-inline-end: 1px solid var(--av-border);
+    display: flex;
+    flex-direction: column;
+}
+
+.av-body.rz-body { background: var(--av-bg); }
+
+.av-main {
+    max-width: 1320px;
+    margin-inline: auto;
+    padding: 1.5rem clamp(1rem, 3vw, 2rem) 3rem;
+}
+
+/* Brand block with the girih band */
+/* The girih band is a thin strip along the top; the brand text sits on the plain surface below it. */
+.av-brand {
+    position: relative;
+    border-bottom: 1px solid var(--av-border);
+    padding: 1.6rem 1rem 1rem;
+}
+
+.av-brand__pattern {
+    position: absolute;
+    inset: 0 0 auto 0;
+    width: 100%;
+    height: 14px;
+    background: var(--av-primary-tint);
+}
+
+.av-brand__body {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.av-brand__mark {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 10px;
+    background: var(--av-primary);
+    box-shadow: var(--av-shadow);
+}
+.av-brand__mark svg { width: 1.9rem; height: 1.9rem; }
+.av-brand__star { fill: var(--av-saffron); }
+.av-brand__ring { fill: none; stroke: var(--av-on-primary); stroke-width: 1.6; }
+
+.av-brand__text { display: flex; flex-direction: column; line-height: 1.3; }
+.av-brand__name { font-weight: 800; font-size: 1.05rem; color: var(--av-text); }
+.av-brand__caption { font-size: 0.78rem; color: var(--av-text-muted); }
+
+/* Girih pattern colours */
+.av-girih__star { stroke: var(--av-primary); }
+.av-girih__square { stroke: var(--av-secondary); opacity: 0.55; }
+.av-girih__link { stroke: var(--av-primary); opacity: 0.45; }
+
+/* Navigation */
+.av-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem 0.75rem 2rem;
+    overflow-y: auto;
+}
+
+.av-nav__group { display: flex; flex-direction: column; gap: 0.15rem; }
+
+.av-nav__title {
+    padding: 0 0.75rem 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--av-text-muted);
+}
+
+.av-nav__link {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-height: 2.5rem;
+    padding-inline: 0.75rem;
+    border-radius: 8px;
+    color: var(--av-text);
+    text-decoration: none;
+    font-size: 0.92rem;
+    border-inline-start: 3px solid transparent;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+.av-nav__link .rzi { font-size: 1.25rem; color: var(--av-text-muted); }
+.av-nav__link:hover { background: var(--av-n200); }
+.av-nav__link.active {
+    background: var(--av-primary-tint);
+    color: var(--av-primary);
+    font-weight: 700;
+    border-inline-start-color: var(--av-primary);
+}
+.av-nav__link.active .rzi { color: var(--av-primary); }
+
+/* Header widgets */
+.av-tenant-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    background: var(--av-secondary-tint);
+    color: var(--av-secondary);
+    font-size: 0.85rem;
+}
+.av-tenant-chip .rzi { font-size: 1.05rem; }
+
+.av-theme-switch {
+    display: inline-flex;
+    padding: 2px;
+    border: 1px solid var(--av-border);
+    border-radius: 999px;
+    background: var(--av-surface-muted);
+}
+
+.av-theme-switch__option {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--av-text-muted);
+    cursor: pointer;
+}
+.av-theme-switch__option .rzi { font-size: 1.1rem; }
+.av-theme-switch__option:hover { color: var(--av-text); }
+.av-theme-switch__option[aria-pressed="true"] {
+    background: var(--av-surface);
+    color: var(--av-primary);
+    box-shadow: var(--av-shadow);
+}
+
+.av-user { display: inline-flex; align-items: center; gap: 0.5rem; }
+.av-user form { margin: 0; }
+.av-user__avatar {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--av-primary);
+    color: var(--av-on-primary);
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+.av-user__name { font-size: 0.9rem; }
+
+@media (max-width: 640px) {
+    .av-user__name, .av-tenant-chip .ltr { display: none; }
+}
+
+/* ---------- Page header ---------- */
+.av-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.av-page-header__text { min-width: 0; }
+
+.av-page-header__crumb { font-size: 0.85rem; margin-bottom: 0.25rem; }
+.av-page-header__crumb a { color: var(--av-text-muted); text-decoration: none; }
+.av-page-header__crumb a:hover { color: var(--av-primary); }
+
+.av-page-header__title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1.4;
+    color: var(--av-text);
+}
+.av-page-header__icon { color: var(--av-primary); font-size: 1.6rem; }
+
+.av-page-header__description {
+    margin: 0.35rem 0 0;
+    max-width: 70ch;
+    color: var(--av-text-muted);
+    font-size: 0.92rem;
+    line-height: 1.8;
+}
+
+.av-page-header__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* ---------- Toolbar above lists ---------- */
+.av-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+.av-toolbar .rz-textbox { min-width: min(320px, 100%); }
+
+/* ---------- Panels (one level only; never nest) ---------- */
+.av-panel {
+    background: var(--av-surface);
+    border: 1px solid var(--av-border);
+    border-radius: var(--av-radius);
+    box-shadow: var(--av-shadow);
+    padding: 1.25rem;
+}
+
+.av-panel__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+/* Radzen surfaces follow the same look */
+.rz-card { border-radius: var(--av-radius); box-shadow: var(--av-shadow); }
+.rz-data-grid { border-radius: var(--av-radius); overflow: hidden; }
+.rz-dialog { border-radius: 14px; }
+
+/* ---------- Stat card ---------- */
+.av-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.av-stat {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    min-height: 5.5rem;
+    padding: 1rem 1.1rem;
+    background: var(--av-surface);
+    border: 1px solid var(--av-border);
+    border-radius: var(--av-radius);
+    box-shadow: var(--av-shadow);
+    transition: border-color 120ms ease, transform 120ms ease;
+}
+.av-stat:has(.av-stat__link):hover { border-color: var(--av-tone); transform: translateY(-1px); }
+
+.av-stat__icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 12px;
+    background: var(--av-tone-tint);
+    color: var(--av-tone);
+}
+.av-stat__icon .rzi { font-size: 1.5rem; }
+
+.av-stat__body { display: flex; flex-direction: column; min-width: 0; }
+.av-stat__label { font-size: 0.85rem; color: var(--av-text-muted); }
+.av-stat__value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    min-width: 3ch;
+}
+.av-stat__value--muted { color: var(--av-text-muted); }
+.av-stat__hint { font-size: 0.78rem; color: var(--av-text-muted); }
+
+.av-stat__link { position: absolute; inset: 0; border-radius: inherit; }
+
+.av-tone-primary { --av-tone: var(--av-primary); --av-tone-tint: var(--av-primary-tint); }
+.av-tone-secondary { --av-tone: var(--av-secondary); --av-tone-tint: var(--av-secondary-tint); }
+.av-tone-info { --av-tone: var(--av-info); --av-tone-tint: var(--av-info-tint); }
+.av-tone-success { --av-tone: var(--av-success); --av-tone-tint: var(--av-success-tint); }
+.av-tone-warning { --av-tone: var(--av-warning); --av-tone-tint: var(--av-warning-tint); }
+.av-tone-danger { --av-tone: var(--av-danger); --av-tone-tint: var(--av-danger-tint); }
+
+.av-skeleton {
+    display: inline-block;
+    width: 4ch;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--av-n200), var(--av-n100), var(--av-n200));
+    background-size: 200% 100%;
+    animation: av-shimmer 1.2s linear infinite;
+}
+@keyframes av-shimmer { to { background-position: -200% 0; } }
+
+/* ---------- Empty / error state ---------- */
+.av-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.4rem;
+    padding: 2.5rem 1rem;
+    color: var(--av-text-muted);
+}
+.av-empty__icon { font-size: 2.5rem; color: var(--av-primary); opacity: 0.85; }
+.av-empty__title { margin: 0.25rem 0 0; font-weight: 700; color: var(--av-text); }
+.av-empty__text { margin: 0; max-width: 52ch; line-height: 1.8; font-size: 0.92rem; }
+.av-empty__action { margin-top: 0.75rem; }
+
+.av-center-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+/* ---------- Login ---------- */
+.av-login {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+    background: var(--av-bg);
+}
+
+.av-login__art {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    padding: 3rem;
+    background: linear-gradient(160deg, var(--av-art-from), var(--av-art-to));
+    color: var(--av-on-art);
+}
+
+.av-login__pattern {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.35;
+}
+.av-login__art .av-girih__star,
+.av-login__art .av-girih__link { stroke: var(--av-turquoise-glow); }
+.av-login__art .av-girih__square { stroke: var(--av-saffron); }
+
+.av-login__art-text { position: relative; display: flex; flex-direction: column; gap: 0.5rem; }
+.av-login__art-title { font-size: 2rem; font-weight: 800; }
+.av-login__art-caption { font-size: 1.05rem; opacity: 0.9; }
+
+.av-login__panel {
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem clamp(1rem, 4vw, 3rem);
+}
+
+.av-login__top { display: flex; justify-content: flex-end; }
+
+.av-login__card {
+    width: min(440px, 100%);
+    margin: auto;
+    padding: 1rem 0 3rem;
+}
+
+.av-login__title { margin: 0 0 0.5rem; font-size: 1.6rem; font-weight: 800; }
+.av-login__hint { margin: 0 0 1.5rem; color: var(--av-text-muted); line-height: 1.8; }
+
+.av-login__tenants { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+
+.av-login__tenant {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--av-border);
+    border-radius: var(--av-radius);
+    background: var(--av-surface);
+    color: var(--av-text);
+    text-decoration: none;
+    box-shadow: var(--av-shadow);
+    transition: border-color 120ms ease, background-color 120ms ease;
+}
+.av-login__tenant:hover { border-color: var(--av-primary); background: var(--av-primary-tint); }
+.av-login__tenant > .rzi:first-child { color: var(--av-primary); font-size: 1.4rem; }
+.av-login__tenant-name { flex: 1; font-weight: 700; }
+.av-login__tenant-id { color: var(--av-text-muted); }
+.av-login__tenant-go { color: var(--av-text-muted); }
+
+@media (max-width: 860px) {
+    .av-login { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .av-login__art { order: -1; min-height: 7.5rem; padding: 1.25rem 1.5rem; }
+    .av-login__art-title { font-size: 1.4rem; }
 }
