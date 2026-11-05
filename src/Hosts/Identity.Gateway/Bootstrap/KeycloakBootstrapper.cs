@@ -77,7 +77,14 @@ public sealed class KeycloakBootstrapper(
     }
 
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default) =>
-        Task.FromResult(_completed
-            ? HealthCheckResult.Healthy("Keycloak bootstrap completed.")
-            : HealthCheckResult.Unhealthy($"Keycloak bootstrap pending ({_status})."));
+        Task.FromResult(Health(_completed, _status));
+
+    /// <summary>
+    /// Still running is Degraded (not ready, /health answers 503, logged as a warning); only a failed step is Unhealthy
+    /// (logged as an error). Public for tests.
+    /// </summary>
+    public static HealthCheckResult Health(bool completed, string status) =>
+        completed ? HealthCheckResult.Healthy("Keycloak bootstrap completed.")
+        : status.Contains(" failed: ", StringComparison.Ordinal) ? HealthCheckResult.Unhealthy($"Keycloak bootstrap failing ({status}).")
+        : HealthCheckResult.Degraded($"Keycloak bootstrap pending ({status}).");
 }

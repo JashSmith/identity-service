@@ -65,6 +65,14 @@ public static class ConsoleAuthentication
         var options = configuration.GetSection("Console").Get<ConsoleOptions>() ?? new ConsoleOptions();
         services.Configure<ConsoleOptions>(configuration.GetSection("Console"));
         services.AddSingleton<ConsoleSessionStore>();
+        services.AddDistributedMemoryCache();
+        // The console cookie carries only a session key; the ticket (claims, permissions) stays in server memory like
+        // the tokens. A full ticket was ~3.7 KB and, sent to Keycloak on the same host (localhost), pushed the Cookie
+        // header past Keycloak's limit (HTTP 431 on sign-in).
+        services.AddOptions<CookieAuthenticationOptions>(CookieScheme)
+            .Configure<Microsoft.Extensions.Caching.Distributed.IDistributedCache, Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(
+                (cookie, cache, dataProtection) => cookie.SessionStore =
+                    new Avash.Identity.Authentication.AspNetCore.DistributedCacheTicketStore(cache, dataProtection, TimeSpan.FromHours(8)));
 
         var auth = services.AddAuthentication(o =>
             {
@@ -180,11 +188,23 @@ public static class ConsoleAuthentication
     /// <summary>Sign-in per tenant and sign-out (form POST with an antiforgery token).</summary>
     public static IEndpointRouteBuilder MapConsoleAuthentication(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/auth/login/{tenant}", (string tenant, string? returnUrl, IOptions<ConsoleOptions> options) =>
+        app.MapGet("/auth/login/{tenant}", async (string tenant, string? returnUrl, IOptions<ConsoleOptions> options,
+            IOptionsMonitor<OpenIdConnectOptions> oidc, ILoggerFactory loggers, CancellationToken ct) =>
         {
             if (options.Value.Tenants.All(t => t.Id != tenant)) return Results.NotFound();
             // Only local return URLs: an open redirect would let a link send administrators elsewhere after login.
             var target = !string.IsNullOrEmpty(returnUrl) && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") ? returnUrl : "/";
+            // Reading Keycloak's discovery document first turns "Keycloak unreachable" into a Persian message on the
+            // login page instead of an unhandled 500 from the OIDC handler.
+            try
+            {
+                await oidc.Get(SchemeFor(tenant)).ConfigurationManager!.GetConfigurationAsync(ct);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException or HttpRequestException)
+            {
+                loggers.CreateLogger("Identity.Admin.Auth").LogWarning("Keycloak of tenant {Tenant} is unreachable: {Reason}", tenant, ex.Message);
+                return Results.Redirect($"/login?error=temporarily_unavailable&returnUrl={Uri.EscapeDataString(target)}");
+            }
             return Results.Challenge(new AuthenticationProperties { RedirectUri = target }, [SchemeFor(tenant)]);
         }).AllowAnonymous();
 

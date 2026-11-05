@@ -235,7 +235,12 @@ app.UseMiddleware<Identity.Gateway.Tenancy.TenantResolutionMiddleware>();
 app.UseAuthentication();
 app.UseMiddleware<Identity.Gateway.Tenancy.TenantIssuerMiddleware>();
 app.UseAuthorization();
-app.MapHealthChecks("/health/live");
+// Liveness = the process answers. Readiness (/health, ServiceDefaults) also waits for the Keycloak bootstrap; mixing
+// the two made Aspire report the gateway unhealthy for the whole bootstrap.
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live"),
+});
 app.MapOidcProxy();
 app.MapGet("/api/identity/me", (ICurrentUserContext current) =>
         current.UserId is null
