@@ -139,7 +139,8 @@ public sealed class KeycloakAuthorizationTests
               {"name":"username"},
               {"name":"authz.scope.region","multivalued":true,"permissions":{"view":["admin"],"edit":["admin"]}},
               {"name":"iam.scoped_access","permissions":{"view":["admin"],"edit":["admin"]}},
-              {"name":"access.schedule","permissions":{"view":["admin"],"edit":["admin"]}}
+              {"name":"access.schedule","permissions":{"view":["admin"],"edit":["admin"]}},
+              {"name":"phone_number","permissions":{"view":["admin"],"edit":["admin"]}}
             ]}
             """).RootElement;
         // Nothing missing → no churn.

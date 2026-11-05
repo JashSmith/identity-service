@@ -8,6 +8,10 @@ const string KeycloakImageTag = "26.4";
 // commonly taken by other local web servers.
 const int KeycloakPort = 18080;
 
+// Before anything creates an HttpClient: with a Windows system proxy that does not bypass local addresses, the
+// AppHost's calls to Aspire's orchestrator on localhost would go to the proxy and time out after two minutes.
+Identity.ServiceDefaults.LoopbackProxyBypass.Install();
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Explicit names: Aspire's defaults hash the AppHost's path, so moving the project would silently start
@@ -39,6 +43,8 @@ var acmeGatewayClientSecret = ClientSecret("acme-gateway-client-secret");
 var acmeGatewayAdminClientSecret = ClientSecret("acme-gateway-admin-client-secret");
 // The admin console's OIDC client; the gateway creates it in every tenant realm with this secret.
 var adminConsoleClientSecret = ClientSecret("admin-console-client-secret");
+// Shared by Keycloak's Avash SMS authenticators and the gateway: signs the "send this SMS code" calls.
+var smsHookSecret = ClientSecret("sms-hook-secret");
 const string AdminConsoleUrl = "http://localhost:5090";
 
 var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin, keycloakAdminPassword)
@@ -57,6 +63,7 @@ var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin
     .WithEnvironment("GATEWAY_ADMIN_CLIENT_SECRET", gatewayAdminClientSecret)
     .WithEnvironment("ACME_GATEWAY_CLIENT_SECRET", acmeGatewayClientSecret)
     .WithEnvironment("ACME_GATEWAY_ADMIN_CLIENT_SECRET", acmeGatewayAdminClientSecret)
+    .WithEnvironment("AVASH_SMS_HOOK_SECRET", smsHookSecret)
     .WaitFor(keycloakDb);
 
 var keycloakHttp = keycloak.GetEndpoint("http");
@@ -79,11 +86,14 @@ var gateway = builder.AddProject<Projects.Identity_Gateway>("identity-gateway")
     .WithEnvironment("Identity__AdminConsole__BaseUrl", AdminConsoleUrl)
     .WithEnvironment("Identity__AdminConsole__ClientSecret", adminConsoleClientSecret)
     .WithEnvironment("Identity__Redis__Configuration", redis.Resource.ConnectionStringExpression)
+    .WithEnvironment("Identity__SmsLogin__HookSecret", smsHookSecret)
     .WithHttpHealthCheck("/health/live")
     .WaitFor(keycloak)
     .WaitFor(redis);
 
 var gatewayHttp = gateway.GetEndpoint("http");
+// Keycloak (a container) calls the gateway to deliver SMS sign-in codes; Aspire resolves the host address for it.
+keycloak.WithEnvironment("AVASH_GATEWAY_URL", gatewayHttp);
 gateway.WithEnvironment("Identity__PublicBaseUrl", gatewayHttp);
 
 // Persian (RTL) admin console: signs in through Keycloak (Avash login theme) and calls the gateway API.
@@ -99,6 +109,10 @@ builder.AddProject<Projects.Identity_Admin>("identity-admin")
     .WithEnvironment("Console__Tenants__1__Realm", "acme")
     .WithHttpHealthCheck("/alive")
     .WaitFor(gateway);
+
+// Fail at once (not after Aspire's two-minute orchestrator timeout) when another stack holds the fixed ports.
+if (builder.ExecutionContext.IsRunMode)
+    PortPreflight.EnsureFree((5080, "identity-gateway"), (5090, "identity-admin"), (KeycloakPort, "keycloak"));
 
 builder.Build().Run();
 

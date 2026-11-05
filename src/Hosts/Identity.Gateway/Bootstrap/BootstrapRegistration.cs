@@ -36,6 +36,14 @@ public static class BootstrapRegistration
         services.AddSingleton(new BootstrapStep("schedule-authenticator", (sp, ct) =>
             sp.GetRequiredService<KeycloakScheduleAuthenticatorSetup>().EnsureAsync(ct)));
 
+        // 6b. SMS sign-in steps in the login and token-endpoint flows, switched by the tenant's stored mode.
+        services.AddSingleton(new BootstrapStep("sms-login-flows", async (sp, ct) =>
+        {
+            var settings = await sp.GetRequiredService<Identity.Application.Sms.ISmsLoginSettingsStore>().GetAsync(ct);
+            if (!settings.IsSuccess) return settings.Error!;
+            return await sp.GetRequiredService<Identity.Application.Sms.ISmsLoginFlows>().ApplyAsync(settings.Value.Mode, ct);
+        }));
+
         // 7. One prefixed permission mapper per application in the shared iam-permissions client scope.
         services.AddSingleton(new BootstrapStep("permission-claims", (sp, ct) =>
             sp.GetRequiredService<Identity.Application.Permissions.IApplicationCatalog>().EnsurePermissionClaimsAsync(ct)));

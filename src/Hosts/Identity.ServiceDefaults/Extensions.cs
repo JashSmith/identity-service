@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -24,6 +25,8 @@ public static class Extensions
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
+        // localhost must never go through a system proxy (gateway -> Keycloak, console -> gateway in development).
+        global::Identity.ServiceDefaults.LoopbackProxyBypass.Install();
         builder.ConfigureOpenTelemetry();
         builder.AddDefaultHealthChecks();
         builder.Services.AddServiceDiscovery();
@@ -88,7 +91,16 @@ public static class Extensions
         // Health endpoints expose dependency state, so they are mapped in Development only.
         if (app.Environment.IsDevelopment())
         {
-            app.MapHealthChecks(HealthEndpointPath);
+            // Readiness: Degraded (e.g. a bootstrap still running) is not ready yet.
+            app.MapHealthChecks(HealthEndpointPath, new HealthCheckOptions
+            {
+                ResultStatusCodes =
+                {
+                    [HealthStatus.Healthy] = StatusCodes.Status200OK,
+                    [HealthStatus.Degraded] = StatusCodes.Status503ServiceUnavailable,
+                    [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable,
+                },
+            });
             app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
             {
                 Predicate = r => r.Tags.Contains("live")

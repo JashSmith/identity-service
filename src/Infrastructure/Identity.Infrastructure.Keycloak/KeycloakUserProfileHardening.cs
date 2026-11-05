@@ -91,8 +91,9 @@ public sealed class KeycloakUserProfileHardening(
     public static string? PatchProfile(JsonElement root, IReadOnlyCollection<string> scopeKeys)
     {
         // access.schedule is a user-level schedule override (see WeeklySchedule); admin-only like the scopes.
+        // phone_number: the SMS sign-in number; set only by administrators through the gateway (unique, normalised).
         var required = scopeKeys.Select(k => ScopeAttrPrefix + k).Append(LegacyAttributeName)
-            .Append(Identity.Contracts.WeeklySchedule.AttributeName).ToArray();
+            .Append(Identity.Contracts.WeeklySchedule.AttributeName).Append(ProtectedUserAttributes.PhoneNumber).ToArray();
 
         var existing = new HashSet<string>(StringComparer.Ordinal);
         if (root.TryGetProperty("attributes", out var attrs) && attrs.ValueKind == JsonValueKind.Array)

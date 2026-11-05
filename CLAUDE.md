@@ -27,8 +27,9 @@ access context, permission discovery/registration).
   tenants may get a dedicated Keycloak cluster. Design every Keycloak call to be tenant (realm) aware.
 - Auth types to support: direct login via gateway APIs, SSO with a per-application login page
   (`login_theme` client attribute), LDAP/Active Directory (user federation), OTP/MFA.
-  SMS infrastructure exists (provider abstraction, Kavenegar, development provider, console settings); the SMS
-  *login* flow itself is still deferred until the owner asks for it.
+  SMS sign-in (owner, 2026-11-05): per tenant `off`, `passwordless` (mobile number + code) or `second-factor`
+  (password + code), on Keycloak's login page and in the gateway login API. Keycloak's Avash authenticators make and
+  check the codes; they call the gateway (HMAC-signed) to deliver them through the tenant's SMS provider.
 
 ## Keycloak storage model (target)
 | Concept | Keycloak entity |
@@ -43,6 +44,7 @@ access context, permission discovery/registration).
 | Audit | Keycloak admin events + login events |
 | Auth settings | Realm settings, authentication flows, OTP/password policies, identity providers, LDAP components |
 | SMS settings | Realm attributes `iam.sms.enabled`, `iam.sms.provider`, `iam.sms.<provider>.<field>`. Keycloak replaces the whole attribute map on a realm PUT: always read, merge, write the full map |
+| SMS sign-in | Realm attributes `iam.smslogin.{mode,code_length,ttl_seconds,resend_seconds,max_attempts}` (read by the Keycloak authenticators). User mobile number: attribute `phone_number` (+989..., unique, admin-only, set only via `PhoneNumber`). Flows: `avash-browser` gets `avash-sms-otp` in its forms sub-flow and the alternative sub-flow `avash-browser sms`; `avash-direct-grant` (built by the gateway) is bound only while SMS sign-in is on. The gateway only toggles requirements after adding the steps once |
 
 The super-admin group `super-admins` must always exist and hold every permission.
 Delegated admins may only manage users inside their own scope and grant only what they hold.
@@ -60,11 +62,11 @@ Delegated admins may only manage users inside their own scope and grant only wha
 | `tools/Identity.TenantProvisioning` | Operator tool: creates a new tenant realm with master credentials (the gateway never gets them) |
 | `keycloak/realms` | Realm imports: `company` and the demo tenant `acme` (imported only when the realm does not exist) |
 | `keycloak/themes` | Keycloak themes mounted into the container (Persian `avash` login theme) |
-| `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator), built in Docker by `scripts/build-keycloak-extensions.sh` into `keycloak/providers` |
+| `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator; SMS sign-in authenticators with their login templates and messages in `theme-resources`), built and unit-tested in Docker by `scripts/build-keycloak-extensions.sh` into `keycloak/providers` |
 | `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |
 | `tests/Identity.Admin.Tests` | bUnit tests of the console (design-system components, menu permissions, Persian formatting) |
 | `tests/Identity.Packages.Tests` | Consumer-package tests (permission discovery, manifests, scope filters) against a test-only fixture |
-| `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`); `ConsumerHost` is an in-process consumer service |
+| `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` on the fixed dev ports (only with `IDENTITY_E2E=1`); `ConsumerHost` is an in-process consumer service; `Ui/` drives the console in the installed Chrome with Playwright and fails on any HTTP >= 400 or browser console error |
 | `docs/` | Persian docs: index (`docs/README.md`), integration guide, per-app login pages, console guide, architecture, run guide, API summary; screenshots in `docs/images`. Check/fix the RTL rules with `python scripts/check-docs.py --fix` |
 
 ## Commands
@@ -74,6 +76,7 @@ dotnet test IdentityService.slnx
 dotnet run --project src/Hosts/Identity.AppHost --launch-profile http   # whole stack + Aspire dashboard
 bash scripts/smoke-test.sh                   # needs the stack running
 IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests   # starts its own stack; dev stack must be stopped
+IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests --filter "FullyQualifiedName~Ui"   # browser tests only (PLAYWRIGHT_HEADED=1 shows the browser)
 ```
 Use the `run-stack` skill to start, verify and stop the stack correctly.
 
@@ -101,8 +104,25 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
   After upgrading Radzen.Blazor rerun `python scripts/generate-radzen-dark-css.py`.
 
 ## Environment gotchas
+- Keycloak reaches the gateway at `AVASH_GATEWAY_URL` (Aspire resolves it, `aspire.dev.internal`); the HMAC secret is the
+  generated Aspire parameter `sms-hook-secret` (`AVASH_SMS_HOOK_SECRET` / `Identity__SmsLogin__HookSecret`).
+- Two failed sign-ins of one user within a second lock it for 60 s (Keycloak's quick-login check), also in tests.
+  In `second-factor` mode the admin needs a code too: tests take the admin token first and always switch back to `off`.
 - Port 8080 is taken by a local Apache on the owner's machine; Keycloak runs on **18080**,
   and Aspire serves it over HTTPS with the dev certificate.
+- Browsers send a host's cookies to every port of it: on `localhost` the console's and apps' cookies reach Keycloak too.
+  Keep auth cookies small (server-side ticket store, `DistributedCacheTicketStore`); Keycloak answers 431 past ~8 KB.
+- Docker Desktop on the owner's machine can leak thousands of half-closed connections (port 8888, `gost-proxy`),
+  exhausting Windows ephemeral ports: `WSAENOBUFS`, `ERR_NO_BUFFER_SPACE`, `ERR_ADDRESS_IN_USE`. Check with
+  `netstat -ano`; the owner decides on restarting Docker Desktop.
+- The owner's Windows system proxy (172.20.20.136:8888) has no local bypass, and .NET follows it when no HTTP(S)_PROXY
+  variables are set: `LoopbackProxyBypass` (AppHost + AddServiceDefaults) keeps localhost/127.0.0.1/::1 direct. Without
+  it the AppHost's DCP calls time out after 2 minutes from a plain terminal (but work from shells that set NO_PROXY).
+- `keycloak/providers/*.jar` is not in git: rebuild it after switching branches. A jar older than the realm's flows
+  (e.g. SMS steps in the database, no SMS authenticators in the jar) breaks the flow: "Could not find authenticator
+  provider", bootstrap `schedule-authenticator failed: auth_flow.not_found`.
+- The AppHost refuses to start when ports 5080/5090/18080 are taken (`PortPreflight`): never run the dev stack and the
+  E2E tests at the same time; without the check Aspire's DCP only failed after a 2-minute `TimeoutRejectedException`.
 - Stopping the AppHost by killing its process orphans session containers (`keycloak-*`, `redis-*`);
   remove them. The `identity-postgres` container (volume `identity-postgres-data`) is persistent on purpose;
   its name is pinned in the AppHost because Aspire's default names hash the AppHost path.
@@ -123,7 +143,7 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - An SSO session opened inside the schedule is not re-checked when it signs in to another application
   (cookie path); it ends with the SSO idle timeout.
 - `super-admins` members follow the realm's default schedule; give them an `unrestricted` user override.
-- The console keeps tokens in server memory: a console restart signs administrators out.
+- The console keeps tokens and the auth ticket in server memory: a console restart signs administrators out.
 
 ## Roadmap
 1. Foundation: cleanup, rename, Aspire, agent knowledge (done)
@@ -138,4 +158,15 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 10. Radzen admin console and E2E tests with `Aspire.Hosting.Testing` (done)
 11. Documentation in Persian (done)
 12. Console redesign, dashboard and audit, per-app login pages, web SSO package, SMS provider infrastructure (done)
-13. Next: SMS login flow (when the owner asks)
+13. SMS sign-in: passwordless and second factor, login page and API, user mobile numbers (done)
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.

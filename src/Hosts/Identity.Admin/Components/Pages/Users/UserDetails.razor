@@ -27,6 +27,10 @@
                 <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="نام خانوادگی" Style="width: 100%;"><RadzenTextBox @bind-Value="lastName" Disabled="@(!canManage)" /></RadzenFormField></RadzenColumn>
                 <RadzenColumn Size="12" SizeMD="6"><RadzenFormField Text="ایمیل" Style="width: 100%;"><RadzenTextBox @bind-Value="email" Disabled="@(!canManage)" Style="direction: ltr;" /></RadzenFormField></RadzenColumn>
                 <RadzenColumn Size="12" SizeMD="6">
+                    <RadzenFormField Text="شماره موبایل" Style="width: 100%;"><RadzenTextBox @bind-Value="phone" Name="user-phone" Disabled="@(!canManage)" Style="direction: ltr;" MaxLength="20" /></RadzenFormField>
+                    <span class="av-muted av-small av-field-hint">برای ورود با کد پیامکی؛ هر شماره فقط برای یک کاربر (نمونه: 09121234567).</span>
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="6">
                     <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" Style="height: 100%;">
                         <RadzenSwitch @bind-Value="enabled" Disabled="@(!canManage)" /> <RadzenText class="rz-m-0">حساب فعال است</RadzenText>
                     </RadzenStack>
@@ -158,7 +162,7 @@
     [Parameter] public string Id { get; set; } = "";
 
     private UserDto? user;
-    private string? firstName, lastName, email, newPassword;
+    private string? firstName, lastName, email, phone, newPassword;
     private bool enabled, temporaryPassword = true, canManage, canAssign, canSchedule, hasOwnSchedule;
     private List<AssignmentsEditor.Row> rows = [];
     private AccessLookups lookups = AccessLookups.Empty;
@@ -185,6 +189,7 @@
             firstName = user.Attributes.GetValueOrDefault("firstName")?.FirstOrDefault();
             lastName = user.Attributes.GetValueOrDefault("lastName")?.FirstOrDefault();
             email = user.Attributes.GetValueOrDefault("email")?.FirstOrDefault();
+            phone = LocalMobile(user.PhoneNumber);
             enabled = user.Enabled;
         });
         if (user is null) return;
@@ -216,8 +221,17 @@
     });
 
     private Task SaveProfileAsync() => RunAsync(async () =>
-        user = await Api.SendAsync<UserDto>(HttpMethod.Put, UserPath, new UpdateUserRequest(email ?? "", firstName ?? "", lastName ?? "", enabled)),
+        {
+            // An empty number removes it; the gateway normalises and checks that no other user has it.
+            user = await Api.SendAsync<UserDto>(HttpMethod.Put, UserPath,
+                new UpdateUserRequest(email ?? "", firstName ?? "", lastName ?? "", enabled, PhoneNumber: phone?.Trim() ?? ""));
+            phone = LocalMobile(user.PhoneNumber);
+        },
         "مشخصات ذخیره شد");
+
+    /// <summary>+989121234567 as 09121234567, the way people write it.</summary>
+    private static string? LocalMobile(string? normalized) =>
+        normalized is { Length: 13 } && normalized.StartsWith("+98", StringComparison.Ordinal) ? "0" + normalized[3..] : normalized;
 
     private async Task ResetPasswordAsync()
     {
