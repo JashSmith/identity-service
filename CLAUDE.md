@@ -111,7 +111,9 @@ Use the `run-stack` skill to start, verify and stop the stack correctly.
 - Port 8080 is taken by a local Apache on the owner's machine; Keycloak runs on **18080**,
   and Aspire serves it over HTTPS with the dev certificate.
 - Browsers send a host's cookies to every port of it: on `localhost` the console's and apps' cookies reach Keycloak too.
-  Keep auth cookies small (server-side ticket store, `DistributedCacheTicketStore`); Keycloak answers 431 past ~8 KB.
+  Keep auth cookies small (server-side ticket store, `DistributedCacheTicketStore`). Browsers use HTTP/2 to Keycloak
+  (HTTPS), where Quarkus caps the header list at 8192 bytes and answers 431; the AppHost raises it with
+  `QUARKUS_HTTP_LIMITS_MAX_HEADER_LIST_SIZE=32768` (HTTP/1.1, e.g. curl, never hit the cap).
 - Docker Desktop on the owner's machine can leak thousands of half-closed connections (port 8888, `gost-proxy`),
   exhausting Windows ephemeral ports: `WSAENOBUFS`, `ERR_NO_BUFFER_SPACE`, `ERR_ADDRESS_IN_USE`. Check with
   `netstat -ano`; the owner decides on restarting Docker Desktop.

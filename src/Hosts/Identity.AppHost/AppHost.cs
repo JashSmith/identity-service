@@ -59,6 +59,11 @@ var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin
         $"jdbc:postgresql://{postgres.Resource.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}/{keycloakDb.Resource.DatabaseName}"))
     .WithEnvironment("KC_DB_USERNAME", postgres.Resource.UserNameReference)
     .WithEnvironment("KC_DB_PASSWORD", postgres.Resource.PasswordParameter)
+    // Browsers reach Keycloak over HTTPS, hence HTTP/2, where Quarkus caps the whole header list at 8192 bytes
+    // (quarkus.http.limits.max-header-list-size) and answers 431. A browser sends every localhost cookie of every port
+    // (Aspire dashboard, console, demo apps, other local projects) to Keycloak too, so the cap is reached in development
+    // even though each of our cookies is small. 32 KB matches Kestrel's limit for the other services; HTTP/1.1 is not affected.
+    .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_LIST_SIZE", "32768")
     .WithEnvironment("GATEWAY_CLIENT_SECRET", gatewayClientSecret)
     .WithEnvironment("GATEWAY_ADMIN_CLIENT_SECRET", gatewayAdminClientSecret)
     .WithEnvironment("ACME_GATEWAY_CLIENT_SECRET", acmeGatewayClientSecret)
