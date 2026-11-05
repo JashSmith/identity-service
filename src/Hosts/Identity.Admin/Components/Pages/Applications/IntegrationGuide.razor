@@ -8,6 +8,14 @@
     <Description>هر پروژه‌ای (هر زبان و فریم‌ورکی) با این مشخصات به ورود یکپارچه سازمان وصل می‌شود. آدرس Keycloak هیچ‌جا لازم نیست؛ همه‌چیز از درگاه خوانده می‌شود.</Description>
 </PageHeader>
 
+@if (!canRead)
+{
+    <EmptyState Icon="lock" Title="به این بخش دسترسی ندارید">
+        راهنمای اتصال اپلیکیشن‌ها دسترسی «خواندن اپلیکیشن‌ها» می‌خواهد. از مدیر سامانه بخواهید آن را به نقش شما بدهد.
+    </EmptyState>
+    return;
+}
+
 @if (info is null)
 {
     @if (failed)
@@ -91,7 +99,7 @@
     [Parameter] public string ClientId { get; set; } = "";
 
     private ApplicationIntegrationDto? info;
-    private bool canManage, failed;
+    private bool canRead = true, canManage, failed;
     private string? backchannel, postLogout;
 
     private IEnumerable<(string Label, string Value)> Facts
@@ -109,6 +117,8 @@
     protected override async Task OnInitializedAsync()
     {
         canManage = await Can(Permissions.ApplicationsManage);
+        canRead = await Can(Permissions.ApplicationsRead);
+        if (!canRead) return;
         failed = !await RunAsync(async () =>
         {
             info = await Api.GetAsync<ApplicationIntegrationDto>($"api/identity/applications/{Uri.EscapeDataString(ClientId)}/integration");

@@ -135,7 +135,9 @@ public sealed class GatewayApi(
         }
         catch (JsonException)
         {
-            return new ApiException(status, "", response.ReasonPhrase ?? $"HTTP {status}", new Dictionary<string, string[]>());
+            // No problem body (e.g. 403 from the authorization middleware): the Persian title says enough; the English
+            // reason phrase would only add noise to the notification.
+            return new ApiException(status, "", "", new Dictionary<string, string[]>());
         }
     }
 }

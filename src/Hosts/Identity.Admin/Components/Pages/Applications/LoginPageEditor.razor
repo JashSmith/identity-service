@@ -18,6 +18,14 @@
     </Actions>
 </PageHeader>
 
+@if (!canRead)
+{
+    <EmptyState Icon="lock" Title="به این بخش دسترسی ندارید">
+        دیدن صفحه ورود اپلیکیشن‌ها دسترسی «خواندن اپلیکیشن‌ها» می‌خواهد. از مدیر سامانه بخواهید آن را به نقش شما بدهد.
+    </EmptyState>
+    return;
+}
+
 @if (page is null)
 {
     @if (!failed)
@@ -177,13 +185,16 @@ else
     private ApplicationDto? application;
     private ApplicationLoginPageDto? page;
     private List<string> themes = [];
-    private bool canManage, failed;
+    private bool canRead = true, canManage, failed;
     private string mode = LoginPageModes.Inherit, color = DefaultColor, background = "pattern";
     private string? title, subtitle, logoUrl, theme;
 
     protected override async Task OnInitializedAsync()
     {
         canManage = await Can(Permissions.ApplicationsManage);
+        // Reached by URL without the read permission: explain instead of calling the gateway for a 403.
+        canRead = await Can(Permissions.ApplicationsRead);
+        if (!canRead) return;
         var ok = await RunAsync(async () =>
         {
             application = await Api.GetAsync<ApplicationDto>($"api/identity/applications/{Uri.EscapeDataString(ClientId)}");

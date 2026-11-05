@@ -203,6 +203,44 @@ public sealed class BusinessFlowTests(IdentityStack stack)
     }
 
     [E2EFact]
+    public async Task Login_page_settings_belong_to_one_tenant()
+    {
+        var company = await stack.LoginAsync(Admin, Admin);
+        var acme = await stack.LoginAsync(Admin, Admin, "acme");
+        var application = $"e2e-tenant-{Run}";
+        foreach (var (token, tenant) in new[] { (company, (string?)null), (acme, "acme") })
+            using (var created = await stack.CallAsync(HttpMethod.Post, "/api/identity/applications", token,
+                       new { clientId = application, displayName = "E2E", kind = "web", redirectUris = new[] { "http://localhost:5999/*" } }, tenant))
+                Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using (var branded = await stack.CallAsync(HttpMethod.Put, $"/api/identity/applications/{application}/login-page", acme,
+                   new { mode = "branded", branding = new { title = "Acme", background = "plain" } }, "acme"))
+            Assert.Equal(HttpStatusCode.OK, branded.StatusCode);
+        using var inCompany = await stack.CallAsync(HttpMethod.Get, $"/api/identity/applications/{application}/login-page", company);
+        using var crossTenant = await stack.CallAsync(HttpMethod.Put, $"/api/identity/applications/{application}/login-page", company,
+            new { mode = "embedded" }, "acme");
+
+        Assert.Equal("inherit", (await JsonAsync(inCompany)).GetProperty("mode").GetString());
+        Assert.Equal(HttpStatusCode.Forbidden, crossTenant.StatusCode);
+    }
+
+    [E2EFact]
+    public async Task Admin_console_renders_the_chosen_theme_on_the_first_paint()
+    {
+        using var dark = new HttpRequestMessage(HttpMethod.Get, "/login");
+        dark.Headers.Add("Cookie", "avash-theme=dark");
+        using var forged = new HttpRequestMessage(HttpMethod.Get, "/login");
+        forged.Headers.Add("Cookie", "avash-theme=%22%3E%3Cscript%3E");
+
+        var darkPage = await (await stack.Console.SendAsync(dark)).Content.ReadAsStringAsync();
+        var forgedPage = await (await stack.Console.SendAsync(forged)).Content.ReadAsStringAsync();
+
+        Assert.Contains("data-theme=\"dark\"", darkPage);
+        Assert.Contains("data-theme=\"system\"", forgedPage); // unknown values fall back, never echoed
+        Assert.DoesNotContain("<script>\"", forgedPage);
+    }
+
+    [E2EFact]
     public async Task Admin_console_sends_administrators_to_their_tenants_sign_in_page()
     {
         using var login = await stack.Console.GetAsync("/login");
