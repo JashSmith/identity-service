@@ -147,6 +147,47 @@ public sealed class BusinessFlowTests(IdentityStack stack)
     }
 
     [E2EFact]
+    public async Task Each_application_gets_its_own_login_page_and_only_embedded_mode_allows_direct_login()
+    {
+        var admin = await stack.LoginAsync(Admin, Admin);
+        var application = $"e2e-web-{Run}";
+        const string callback = "http://localhost:5999/callback";
+        string secret;
+        using (var created = await stack.CallAsync(HttpMethod.Post, "/api/identity/applications", admin,
+                   new { clientId = application, displayName = "E2E web", kind = "web", redirectUris = new[] { callback } }))
+        {
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            secret = (await JsonAsync(created)).GetProperty("clientSecret").GetString()!;
+        }
+        var loginPage = $"/realms/company/protocol/openid-connect/auth?client_id={application}&redirect_uri={Uri.EscapeDataString(callback)}&response_type=code&scope=openid&ui_locales=fa";
+        Task<HttpResponseMessage> SetMode(object body) => stack.CallAsync(HttpMethod.Put, $"/api/identity/applications/{application}/login-page", admin, body);
+        async Task<HttpStatusCode> DirectLogin()
+        {
+            using var response = await stack.Gateway.PostAsync("/api/identity/auth/login", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "password", ["client_id"] = application, ["client_secret"] = secret, ["username"] = Admin, ["password"] = Admin,
+            }));
+            return response.StatusCode;
+        }
+
+        using (var branded = await SetMode(new { mode = "branded", branding = new { title = $"سامانه {Run}", primaryColor = "#26428B", background = "plain" } }))
+            Assert.Equal(HttpStatusCode.OK, branded.StatusCode);
+        var brandedHtml = await stack.Keycloak.GetStringAsync(loginPage);
+        Assert.Contains("class=\"avash-brand\"", brandedHtml);
+        Assert.Contains($"سامانه {Run}", brandedHtml);
+        Assert.Contains("--avash-brand: #26428B", brandedHtml);
+        Assert.Equal(HttpStatusCode.BadRequest, await DirectLogin());
+
+        using (var embedded = await SetMode(new { mode = "embedded" }))
+            Assert.True((await JsonAsync(embedded)).GetProperty("directLogin").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, await DirectLogin());
+
+        using (await SetMode(new { mode = "inherit" })) { }
+        Assert.DoesNotContain("class=\"avash-brand\"", await stack.Keycloak.GetStringAsync(loginPage));
+        Assert.Equal(HttpStatusCode.BadRequest, await DirectLogin());
+    }
+
+    [E2EFact]
     public async Task Tokens_only_work_for_their_own_tenant()
     {
         var company = await stack.LoginAsync(Admin, Admin);

@@ -32,7 +32,7 @@ access context, permission discovery/registration).
 | Concept | Keycloak entity |
 |---|---|
 | Tenant | Realm |
-| Application | Client; display metadata in client attributes; per-app login page via `login_theme` |
+| Application | Client; display metadata in client attributes. Login page mode in `iam.login.mode`: `inherit` (realm theme), `branded` (`login_theme=avash` + `iam.login.{title,subtitle,logo_url,primary_color,background}`, rendered by `keycloak/themes/avash/login/footer.ftl`), `theme` (any installed theme in `login_theme`), `embedded` (app's own form via the direct login API; only this mode enables `directAccessGrantsEnabled`) |
 | Permission | Client role named `Module:Resource:Action`; emitted as `App:Module:Resource:Action`. Source (manual/synced) and deprecation live in role attributes. The admin UI builds a tree with "check all" per level from these segments, plus "all Read of an app" |
 | Business role | Group. Permissions = client-role mappings. Attributes: display name, required scope keys (e.g. province+city required, district optional), schedule |
 | Scope keys | Attributes of the `iam-scope-registry` group (owner's existing model; keep it) |

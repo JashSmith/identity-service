@@ -69,6 +69,8 @@ builder.Services.AddTransient<Identity.Application.Permissions.IApplicationCatal
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>());
 builder.Services.AddTransient<Identity.Application.Permissions.IPermissionCatalog>(sp =>
     sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>());
+builder.Services.AddTransient<Identity.Application.Permissions.IApplicationLoginPages>(sp =>
+    sp.GetRequiredService<Identity.Infrastructure.Keycloak.KeycloakApplicationCatalog>());
 
 // Dynamic roles/scope infrastructure
 builder.Services.AddMemoryCache();

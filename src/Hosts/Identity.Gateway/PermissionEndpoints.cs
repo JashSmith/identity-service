@@ -46,6 +46,22 @@ public static class PermissionEndpoints
             .RequireAuthorization(IamPermissions.ApplicationsManage).WithName("RotateApplicationSecret")
             .Produces<ApplicationSecretResponse>(200).ProducesProblem(404);
 
+        apps.MapGet("/{clientId}/login-page", async (string clientId, IApplicationLoginPages pages, CancellationToken ct) =>
+                (await pages.GetLoginPageAsync(clientId, ct)).ToHttpResult(p => Results.Ok(p)))
+            .RequireAuthorization(IamPermissions.ApplicationsRead).WithName("GetApplicationLoginPage")
+            .Produces<ApplicationLoginPageDto>(200).ProducesProblem(404);
+
+        apps.MapPut("/{clientId}/login-page", async (string clientId, UpdateLoginPageRequest req, IApplicationLoginPages pages, CancellationToken ct) =>
+                (await pages.SetLoginPageAsync(clientId, req, ct)).ToHttpResult(p => Results.Ok(p)))
+            .WithValidation<UpdateLoginPageRequest>()
+            .RequireAuthorization(IamPermissions.ApplicationsManage).WithName("SetApplicationLoginPage")
+            .Produces<ApplicationLoginPageDto>(200).ProducesProblem(400).ProducesProblem(404);
+
+        app.MapGet("/api/identity/settings/login-themes", async (IApplicationLoginPages pages, CancellationToken ct) =>
+                (await pages.ListLoginThemesAsync(ct)).ToHttpResult(t => Results.Ok(t)))
+            .WithTags("Settings").RequireAuthorization(IamPermissions.ApplicationsRead).WithName("ListLoginThemes")
+            .Produces<LoginThemesDto>(200);
+
         apps.MapGet("/{clientId}/permissions", async (string clientId, bool? includeDeprecated, IPermissionCatalog catalog, CancellationToken ct) =>
                 (await catalog.ListAsync(clientId, includeDeprecated ?? false, ct)).ToHttpResult(list => Results.Ok(list)))
             .RequireAuthorization(IamPermissions.PermissionsRead).WithName("ListApplicationPermissions")

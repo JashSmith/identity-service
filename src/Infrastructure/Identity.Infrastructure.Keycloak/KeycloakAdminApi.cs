@@ -30,6 +30,15 @@ public sealed class KeycloakAdminApi(
         }
     }
 
+    /// <summary>Server-wide endpoints (e.g. <c>serverinfo</c>) are addressed with a leading "/" (<c>/serverinfo</c>).</summary>
+    private string Url(string path)
+    {
+        if (path.Length == 0) return RealmBase;
+        if (path[0] != '/') return $"{RealmBase}/{path}";
+        var o = KeycloakTenant.Resolve(options);
+        return $"{o.BaseUrl.TrimEnd('/')}/admin{path}";
+    }
+
     /// <summary>
     /// Sends a request to <paramref name="path"/> (relative to the realm, e.g. "groups/{id}") and returns
     /// the JSON body, or null when Keycloak answered without one. <paramref name="resource"/> prefixes error codes.
@@ -63,7 +72,7 @@ public sealed class KeycloakAdminApi(
         var token = await tokens.GetTokenResultAsync(ct);
         if (!token.IsSuccess) return token.Error!;
 
-        using var request = new HttpRequestMessage(method, path.Length == 0 ? RealmBase : $"{RealmBase}/{path}");
+        using var request = new HttpRequestMessage(method, Url(path));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Value);
         if (body is not null) request.Content = JsonContent.Create(body);
 

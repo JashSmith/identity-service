@@ -1,0 +1,246 @@
+@page "/applications/{ClientId}/login-page"
+@inherits ConsolePage
+@using Microsoft.Extensions.Options
+@inject IOptions<ConsoleOptions> ConsoleOptions
+
+<PageTitle>صفحه ورود @ClientId | کنسول مدیریت هویت</PageTitle>
+
+<PageHeader Title="@($"صفحه ورود {application?.DisplayName ?? ClientId}")" Icon="login">
+    <Breadcrumb><a href="/applications">اپلیکیشن‌ها</a> / <span class="ltr">@ClientId</span> / صفحه ورود</Breadcrumb>
+    <Description>کاربران این اپلیکیشن کدام صفحه ورود را ببینند. در سه حالت اول ورود یکپارچه (SSO) برقرار است: کسی که یک بار وارد شده، در اپلیکیشن‌های دیگر همین سازمان دوباره رمز نمی‌زند.</Description>
+    <Actions>
+        @if (TestUrl is { } url && page is not null)
+        {
+            <a class="rz-button rz-button-md rz-variant-outlined rz-base rz-shade-default" href="@url" target="_blank" rel="noopener">
+                <span class="rzi" aria-hidden="true">open_in_new</span><span class="rz-button-text">آزمایش ورود واقعی</span>
+            </a>
+        }
+    </Actions>
+</PageHeader>
+
+@if (page is null)
+{
+    @if (!failed)
+    {
+        <RadzenProgressBarCircular ShowValue="false" Mode="ProgressBarMode.Indeterminate" aria-label="در حال بارگذاری" />
+    }
+    else
+    {
+        <EmptyState Icon="cloud_off" Title="تنظیمات صفحه ورود خوانده نشد">
+            <ChildContent>اپلیکیشن پیدا نشد یا ارتباط با درگاه برقرار نشد.</ChildContent>
+            <Action><RadzenButton Icon="arrow_forward" Text="بازگشت به اپلیکیشن‌ها" Variant="Variant.Outlined" Click="@(() => Navigation.NavigateTo("/applications"))" /></Action>
+        </EmptyState>
+    }
+    return;
+}
+
+<fieldset class="av-modes" disabled="@(!canManage)">
+    <legend class="av-sr-only">حالت صفحه ورود</legend>
+    @foreach (var option in Modes)
+    {
+        <label class="av-mode @(mode == option.Key ? "av-mode--selected" : "")">
+            <input type="radio" name="login-mode" value="@option.Key" checked="@(mode == option.Key)" @onchange="@(() => mode = option.Key)" />
+            <span class="av-mode__icon rzi" aria-hidden="true">@option.Icon</span>
+            <span class="av-mode__title">@option.Title</span>
+            <span class="av-mode__text">@option.Text</span>
+            <span class="av-mode__sso @(option.Sso ? "av-tone-success" : "av-tone-warning")">@(option.Sso ? "با SSO" : "بدون SSO")</span>
+        </label>
+    }
+</fieldset>
+
+@if (mode == LoginPageModes.Branded)
+{
+    <div class="av-branding">
+        <section class="av-panel" aria-labelledby="brand-form-title">
+            <h2 id="brand-form-title" class="av-panel__title">ظاهر صفحه</h2>
+            <RadzenStack Gap="1rem">
+                <RadzenFormField Text="عنوان (مثلاً نام اپلیکیشن)" Style="width: 100%;"><RadzenTextBox @bind-Value="title" MaxLength="60" Disabled="@(!canManage)" /></RadzenFormField>
+                <RadzenFormField Text="متن زیر عنوان (خوشامد)" Style="width: 100%;"><RadzenTextBox @bind-Value="subtitle" MaxLength="160" Disabled="@(!canManage)" /></RadzenFormField>
+                <RadzenFormField Text="نشانی لوگو (https)" Style="width: 100%;"><RadzenTextBox @bind-Value="logoUrl" Style="direction: ltr;" Placeholder="https://cdn.example.com/logo.svg" Disabled="@(!canManage)" /></RadzenFormField>
+                <div class="av-color-row">
+                    <label class="av-color-row__label" for="brand-color">رنگ اصلی</label>
+                    <input id="brand-color" type="color" value="@color" @onchange="@(e => color = e.Value?.ToString()?.ToUpperInvariant() ?? DefaultColor)" disabled="@(!canManage)" />
+                    <span class="ltr">@color</span>
+                    @foreach (var swatch in Swatches)
+                    {
+                        <button type="button" class="av-swatch" style="background: @swatch.Hex" title="@swatch.Name" aria-label="@($"رنگ {swatch.Name}")"
+                                @onclick="@(() => color = swatch.Hex)" disabled="@(!canManage)"></button>
+                    }
+                </div>
+                @if (Contrast(color) < 3.0)
+                {
+                    <p class="av-inline-alert av-tone-danger" role="alert">این رنگ روشن است و متن سفید دکمه روی آن خوانا نیست (کنتراست کمتر از ۳ به ۱). رنگ تیره‌تری انتخاب کنید.</p>
+                }
+                <div>
+                    <span class="av-field-label">پس‌زمینه</span>
+                    <RadzenSelectBar @bind-Value="background" TValue="string" Disabled="@(!canManage)">
+                        <Items>
+                            <RadzenSelectBarItem Text="نقش گره" Value="@("pattern")" />
+                            <RadzenSelectBarItem Text="ساده" Value="@("plain")" />
+                            <RadzenSelectBarItem Text="گرادیان" Value="@("gradient")" />
+                        </Items>
+                    </RadzenSelectBar>
+                </div>
+            </RadzenStack>
+        </section>
+
+        <section class="av-panel" aria-labelledby="preview-title">
+            <h2 id="preview-title" class="av-panel__title">پیش‌نمایش</h2>
+            <div class="av-preview av-preview--@background" style="--preview-brand: @color;" aria-hidden="true">
+                <div class="av-preview__card">
+                    @if (!string.IsNullOrWhiteSpace(logoUrl) && logoUrl.StartsWith("https://", StringComparison.Ordinal))
+                    {
+                        <img class="av-preview__logo" src="@logoUrl" alt="" referrerpolicy="no-referrer" />
+                    }
+                    <span class="av-preview__title">@(string.IsNullOrWhiteSpace(title) ? application?.DisplayName : title)</span>
+                    @if (!string.IsNullOrWhiteSpace(subtitle))
+                    {
+                        <span class="av-preview__subtitle">@subtitle</span>
+                    }
+                    <span class="av-preview__field">نام کاربری یا ایمیل</span>
+                    <span class="av-preview__field">رمز عبور</span>
+                    <span class="av-preview__button">ورود</span>
+                    <span class="av-preview__link">رمز عبور را فراموش کرده‌اید؟</span>
+                </div>
+            </div>
+            <p class="av-muted av-small">پیش‌نمایش تقریبی است؛ صفحه واقعی را با «آزمایش ورود واقعی» ببینید. در حالت تیره سیستم، صفحه ورود هم تیره می‌شود.</p>
+        </section>
+    </div>
+}
+else if (mode == LoginPageModes.Theme)
+{
+    <section class="av-panel">
+        <h2 class="av-panel__title">قالب اختصاصی Keycloak</h2>
+        <RadzenFormField Text="قالب نصب‌شده" Style="width: min(420px, 100%);">
+            <RadzenDropDown TValue="string" Data="@themes" @bind-Value="theme" Disabled="@(!canManage)" Placeholder="یک قالب انتخاب کنید" />
+        </RadzenFormField>
+        <p class="av-muted av-small">
+            قالب اختصاصی یک پوشه در <span class="ltr">keycloak/themes</span> (یا یک فایل jar در <span class="ltr">keycloak/providers</span>) است که با قالب‌های FreeMarker خود Keycloak ساخته می‌شود.
+            قالب <span class="ltr">avash</span> را می‌توانید پایه قرار دهید. نحوه ساخت در راهنمای صفحه ورود آمده است.
+        </p>
+    </section>
+}
+else if (mode == LoginPageModes.Embedded)
+{
+    <section class="av-panel">
+        <h2 class="av-panel__title">فرم ورود داخل خود اپلیکیشن</h2>
+        <p class="av-inline-alert av-tone-warning" role="note">
+            فقط برای اپلیکیشن‌های داخلی و مورد اعتماد. رمز کاربر از دست اپلیکیشن عبور می‌کند، ورود یکپارچه (SSO) و ورود دومرحله‌ای Keycloak در این حالت نیست،
+            و استاندارد OAuth 2.1 این روش را منسوخ می‌داند. در صورت امکان حالت «ورود مرکزی با برند اختصاصی» را انتخاب کنید.
+        </p>
+        <p>اپلیکیشن با شناسه و کلید محرمانه خودش این درخواست را به درگاه می‌فرستد:</p>
+        <pre class="av-code ltr">POST /api/identity/auth/login
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&amp;client_id=@(ClientId)&amp;client_secret=&lt;secret&gt;&amp;username=...&amp;password=...</pre>
+        <p class="av-muted av-small">پاسخ همان توکن‌های Keycloak است؛ برنامه زمانی هفتگی و محدودیت‌های کاربر مثل بقیه حالت‌ها اعمال می‌شود.</p>
+    </section>
+}
+else
+{
+    <section class="av-panel">
+        <h2 class="av-panel__title">ورود مرکزی سازمان</h2>
+        <p class="av-muted">این اپلیکیشن همان صفحه ورودی را نشان می‌دهد که در «تنظیمات احراز هویت ← صفحه ورود» برای کل سازمان انتخاب شده است.</p>
+    </section>
+}
+
+@if (canManage)
+{
+    <div class="av-actions-bar">
+        <RadzenButton Icon="save" Text="ذخیره" IsBusy="@Busy" Click="@SaveAsync" Disabled="@(mode == LoginPageModes.Theme && string.IsNullOrEmpty(theme))" />
+    </div>
+}
+
+@code {
+    [Parameter] public string ClientId { get; set; } = "";
+
+    private const string DefaultColor = "#0A7471";
+
+    private sealed record ModeOption(string Key, string Icon, string Title, string Text, bool Sso);
+    private sealed record Swatch(string Name, string Hex);
+
+    private static readonly ModeOption[] Modes =
+    [
+        new(LoginPageModes.Inherit, "hub", "ورود مرکزی سازمان", "همان صفحه ورود مشترک همه اپلیکیشن‌ها.", true),
+        new(LoginPageModes.Branded, "palette", "ورود مرکزی با برند اختصاصی", "صفحه مرکزی با لوگو، رنگ و عنوان همین اپلیکیشن.", true),
+        new(LoginPageModes.Theme, "design_services", "قالب کاملاً اختصاصی", "یک قالب Keycloak که برای این اپلیکیشن طراحی و نصب شده است.", true),
+        new(LoginPageModes.Embedded, "dashboard_customize", "فرم ورود داخل اپلیکیشن", "اپلیکیشن فرم خودش را دارد و با API درگاه وارد می‌کند.", false),
+    ];
+
+    // Iranian tile colours that keep white button text readable.
+    private static readonly Swatch[] Swatches =
+    [
+        new("فیروزه‌ای", "#0A7471"), new("لاجوردی", "#26428B"), new("اناری", "#B42318"),
+        new("پسته‌ای", "#3B7228"), new("سماقی", "#7B3F61"), new("قهوه‌ای سفالی", "#8A4B2A"),
+    ];
+
+    private ApplicationDto? application;
+    private ApplicationLoginPageDto? page;
+    private List<string> themes = [];
+    private bool canManage, failed;
+    private string mode = LoginPageModes.Inherit, color = DefaultColor, background = "pattern";
+    private string? title, subtitle, logoUrl, theme;
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = await Can(Permissions.ApplicationsManage);
+        var ok = await RunAsync(async () =>
+        {
+            application = await Api.GetAsync<ApplicationDto>($"api/identity/applications/{Uri.EscapeDataString(ClientId)}");
+            Apply(await Api.GetAsync<ApplicationLoginPageDto>($"api/identity/applications/{Uri.EscapeDataString(ClientId)}/login-page"));
+            themes = (await Api.GetAsync<LoginThemesDto>("api/identity/settings/login-themes")).Themes
+                .Where(t => t is not "base").ToList();
+        });
+        failed = !ok;
+    }
+
+    private void Apply(ApplicationLoginPageDto value)
+    {
+        page = value;
+        mode = value.Mode;
+        theme = value.Mode == LoginPageModes.Theme ? value.Theme : null;
+        title = value.Branding.Title;
+        subtitle = value.Branding.Subtitle;
+        logoUrl = value.Branding.LogoUrl;
+        color = value.Branding.PrimaryColor ?? DefaultColor;
+        background = value.Branding.Background;
+    }
+
+    private async Task SaveAsync()
+    {
+        var request = new UpdateLoginPageRequest(mode, mode == LoginPageModes.Theme ? theme : null,
+            new LoginPageBrandingDto(Blank(title), Blank(subtitle), Blank(logoUrl), color, background));
+        await RunAsync(async () => Apply(await Api.SendAsync<ApplicationLoginPageDto>(HttpMethod.Put,
+            $"api/identity/applications/{Uri.EscapeDataString(ClientId)}/login-page", request)), "صفحه ورود ذخیره شد");
+    }
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>The real Keycloak login page of this application, for applications that sign users in through a browser.</summary>
+    private string? TestUrl
+    {
+        get
+        {
+            if (mode == LoginPageModes.Embedded || application is null) return null;
+            var redirect = application.RedirectUris.FirstOrDefault(u => u.StartsWith("http", StringComparison.Ordinal));
+            var tenantId = AuthenticationState.Result.User.FindFirst(ConsoleClaims.Tenant)?.Value;
+            var realm = ConsoleOptions.Value.Tenants.FirstOrDefault(t => t.Id == tenantId)?.Realm;
+            if (redirect is null || realm is null) return null;
+            redirect = redirect.TrimEnd('*');
+            return $"{ConsoleOptions.Value.KeycloakBaseUrl.TrimEnd('/')}/realms/{Uri.EscapeDataString(realm)}/protocol/openid-connect/auth" +
+                   $"?client_id={Uri.EscapeDataString(ClientId)}&redirect_uri={Uri.EscapeDataString(redirect)}&response_type=code&scope=openid&ui_locales=fa";
+        }
+    }
+
+    /// <summary>WCAG contrast of white text on #RRGGBB (the gateway enforces at least 3:1 when saving).</summary>
+    private static double Contrast(string hex)
+    {
+        if (hex.Length != 7 || hex[0] != '#' || !hex.Skip(1).All(Uri.IsHexDigit)) return 0;
+        double Channel(int i)
+        {
+            var c = Convert.ToInt32(hex.Substring(i, 2), 16) / 255.0;
+            return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+        return 1.05 / (0.2126 * Channel(1) + 0.7152 * Channel(3) + 0.0722 * Channel(5) + 0.05);
+    }
+}

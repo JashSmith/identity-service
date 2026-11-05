@@ -18,7 +18,7 @@ namespace Identity.Infrastructure.Keycloak;
 /// mapper per application in the shared <c>iam-permissions</c> client scope.</item>
 /// </list>
 /// </summary>
-public sealed class KeycloakApplicationCatalog(
+public sealed partial class KeycloakApplicationCatalog(
     HttpClient http,
     IOptions<KeycloakOptions> opts,
     KeycloakAdminTokenProvider tokenProvider,

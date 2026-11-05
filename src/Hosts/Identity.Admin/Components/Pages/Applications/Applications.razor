@@ -25,10 +25,12 @@
         <RadzenDataGridColumn Title="وضعیت" Width="110px">
             <Template Context="app"><RadzenBadge BadgeStyle="@(app.Enabled ? BadgeStyle.Success : BadgeStyle.Light)" Text="@(app.Enabled ? "فعال" : "غیرفعال")" /></Template>
         </RadzenDataGridColumn>
-        <RadzenDataGridColumn Title="" Width="300px" Sortable="false">
+        <RadzenDataGridColumn Title="" Width="400px" Sortable="false">
             <Template Context="app">
                 <RadzenButton Icon="key" Text="دسترسی‌ها" Size="ButtonSize.Small" Variant="Variant.Text"
                               Click="@(() => Navigation.NavigateTo($"/applications/{Uri.EscapeDataString(app.ClientId)}"))" />
+                <RadzenButton Icon="login" Text="صفحه ورود" Size="ButtonSize.Small" Variant="Variant.Text"
+                              Click="@(() => Navigation.NavigateTo($"/applications/{Uri.EscapeDataString(app.ClientId)}/login-page"))" />
                 @if (canManage)
                 {
                     <RadzenButton Icon="edit" Size="ButtonSize.Small" Variant="Variant.Text" Click="@(() => EditAsync(app))" title="ویرایش" />
