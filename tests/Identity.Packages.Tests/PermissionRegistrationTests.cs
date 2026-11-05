@@ -6,18 +6,17 @@ using Identity.Gateway;
 using Identity.Application;
 using Identity.Contracts;
 using Microsoft.Extensions.Logging.Abstractions;
-using SampleApp;
+using Identity.Packages.Tests.Fixtures;
 
-namespace Identity.Sample.Tests;
+namespace Identity.Packages.Tests;
 
 /// <summary>
-/// Tests for the sample consumer service (OrderService.Sample) and the permission
-/// registration pipeline it exercises: discovery of [RequirePermission] attributes,
-/// manifest creation/hashing, the gateway registry, and best-effort Keycloak role sync.
+/// Permission registration pipeline of the consumer packages: discovery of [RequirePermission]
+/// attributes and manifest creation/hashing, against the ten-permission test fixture.
 /// </summary>
 public sealed class PermissionDiscoveryTests
 {
-    private static readonly Assembly SampleAssembly = typeof(OrderService).Assembly;
+    private static readonly Assembly FixtureAssembly = typeof(OrderService).Assembly;
 
     private static readonly string[] ExpectedTenPermissions =
     [
@@ -34,9 +33,9 @@ public sealed class PermissionDiscoveryTests
     ];
 
     [Fact]
-    public void Sample_declares_exactly_ten_distinct_permissions()
+    public void Fixture_declares_exactly_ten_distinct_permissions()
     {
-        var discovered = PermissionDiscovery.Discover(SampleAssembly);
+        var discovered = PermissionDiscovery.Discover(FixtureAssembly);
         Assert.Equal(10, discovered.Count);
         Assert.Equal(10, discovered.Select(d => d.Name).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(ExpectedTenPermissions.OrderBy(x => x, StringComparer.Ordinal),
@@ -58,7 +57,7 @@ public sealed class PermissionDiscoveryTests
     [Fact]
     public void Discovery_returns_sorted_descriptors_with_module()
     {
-        var discovered = PermissionDiscovery.Discover(SampleAssembly).ToList();
+        var discovered = PermissionDiscovery.Discover(FixtureAssembly).ToList();
         Assert.Equal(discovered.Select(d => d.Name).OrderBy(x => x, StringComparer.Ordinal),
             discovered.Select(d => d.Name));
         Assert.All(discovered, d => Assert.Equal(typeof(OrderService).Namespace, d.Module));
@@ -99,45 +98,5 @@ public sealed class PermissionManifestTests
         var a = PermissionManifest.Create(Options("1.0.0"), typeof(OrderService).Assembly);
         var b = PermissionManifest.Create(Options("1.0.1"), typeof(OrderService).Assembly);
         Assert.NotEqual(a.ManifestHash, b.ManifestHash);
-    }
-}
-
-
-
-
-
-public sealed class SampleServiceBehaviorTests
-{
-    private readonly OrderService _svc = new();
-
-    [Fact]
-    public void ListOrders_returns_seeded_orders()
-    {
-        Assert.Equal(3, _svc.ListOrders().Count);
-    }
-
-    [Fact]
-    public void CreateOrder_validates_inputs()
-    {
-        Assert.Throws<ArgumentException>(() => _svc.CreateOrder(" ", 10m));
-        Assert.Throws<ArgumentOutOfRangeException>(() => _svc.CreateOrder("alice", 0m));
-        var order = _svc.CreateOrder("alice", 42.5m);
-        Assert.Equal("open", order.Status);
-        Assert.Equal(42.5m, order.Total);
-    }
-
-    [Fact]
-    public void ExportReport_rejects_unknown_format()
-    {
-        Assert.Equal("report.csv", _svc.ExportReport("csv"));
-        Assert.Equal("report.json", _svc.ExportReport("JSON"));
-        Assert.Throws<ArgumentException>(() => _svc.ExportReport("xml"));
-    }
-
-    [Fact]
-    public void ApproveRefund_rejects_nonpositive_amount()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => _svc.ApproveRefund("ord-1", -1m));
-        Assert.True(_svc.ApproveRefund("ord-1", 10m).Approved);
     }
 }

@@ -69,7 +69,6 @@ dotnet run --project src/Identity.AppHost --launch-profile http
 | درگاه هویت | `http://localhost:5080` |
 | ‏Keycloak | `https://localhost:18080` |
 | داشبورد Aspire | `http://localhost:15140` |
-| سرویس نمونه | `http://localhost:5081` |
 
 کاربر پیش‌فرض محیط توسعه `admin` با رمز `admin` در هر دو سازمان `company` و `acme` است. راهنمای کامل اجرا در [راهنمای اجرا](docs/running.md) است.
 
@@ -106,7 +105,7 @@ builder.Services.AddPermissionRegistration(o =>
 app.MapGet("/api/orders", ListOrders).RequireAuthorization("Orders:Order:View");
 ```
 
-نمونه کامل در [`samples/OrderService.Sample`](samples/OrderService.Sample/) است. فهرست درخواست‌های API در [`Identity.Gateway.http`](src/Identity.Gateway/Identity.Gateway.http) و [خلاصه API](docs/api.md) آمده است.
+در این مثال `order-service` شناسه اپلیکیشنی است که پیش‌تر در کنسول یا با `POST /api/identity/applications` ثبت شده است. فهرست درخواست‌های API در [`Identity.Gateway.http`](src/Identity.Gateway/Identity.Gateway.http) و [خلاصه API](docs/api.md) آمده است.
 
 ## تست‌ها
 

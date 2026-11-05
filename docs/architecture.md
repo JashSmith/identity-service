@@ -27,7 +27,7 @@
 
 | پروژه | نقش |
 |---|---|
-| ‏`Identity.AppHost` | میزبان Aspire: ‏PostgreSQL، ‏Keycloak با Import دو Realm و تم فارسی، Redis، درگاه، کنسول و سرویس نمونه |
+| ‏`Identity.AppHost` | میزبان Aspire: ‏PostgreSQL، ‏Keycloak با Import دو Realm و تم فارسی، Redis، درگاه و کنسول |
 | ‏`Identity.Gateway` | ‏Minimal API، مدل خطا، احراز هویت چند صادرکننده، چندسازمانی، Bootstrap کلیدکول |
 | ‏`Identity.Admin` | کنسول مدیریت فارسی با Radzen Blazor |
 | ‏`Identity.Application` | منطق کاربرد: هماهنگ‌سازی کاربر و نقش، تفویض، اعتبارسنجی محدوده، برنامه زمانی |

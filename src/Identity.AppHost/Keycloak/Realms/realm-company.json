@@ -149,70 +149,6 @@
           }
         }
       ]
-    },
-    {
-      "clientId": "order-service",
-      "name": "Order Service (sample permission registrant)",
-      "description": "Sample consumer — registers its [RequirePermission] actions at startup",
-      "enabled": true,
-      "publicClient": false,
-      "clientAuthenticatorType": "client-secret",
-      "secret": "${ORDER_SERVICE_CLIENT_SECRET}",
-      "bearerOnly": false,
-      "serviceAccountsEnabled": true,
-      "directAccessGrantsEnabled": false,
-      "standardFlowEnabled": false,
-      "protocol": "openid-connect",
-      "attributes": {
-        "client.secret.creation.time": "0",
-        "iam.application": "true",
-        "iam.display_name": "سرویس سفارش (نمونه)",
-        "iam.kind": "service"
-      },
-      "protocolMappers": [
-        {
-          "name": "identity-gateway-audience",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-audience-mapper",
-          "config": {
-            "included.client.audience": "identity-gateway",
-            "id.token.claim": "false",
-            "access.token.claim": "true"
-          }
-        },
-        {
-          "name": "subject-sub",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-property-mapper",
-          "config": {
-            "user.attribute": "id",
-            "claim.name": "sub",
-            "jsonType.label": "String",
-            "id.token.claim": "true",
-            "access.token.claim": "true",
-            "userinfo.token.claim": "true"
-          }
-        },
-        {
-          "name": "iam-access-mapper",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-attribute-mapper",
-          "config": {
-            "user.attribute": "iam.scoped_access",
-            "claim.name": "iam_access",
-            "jsonType.label": "String",
-            "multivalued": "false",
-            "userinfo.token.claim": "true",
-            "access.token.claim": "true",
-            "id.token.claim": "false"
-          }
-        }
-      ],
-      "defaultClientScopes": [
-        "iam-access",
-        "authz-scopes",
-        "iam-permissions"
-      ]
     }
   ],
   "clientScopes": [
@@ -288,14 +224,6 @@
           "manage-identity-providers"
         ]
       },
-      "requiredActions": []
-    },
-    {
-      "username": "service-account-order-service",
-      "enabled": true,
-      "serviceAccountClientId": "order-service",
-      "email": "service-account-order-service@company.local",
-      "emailVerified": true,
       "requiredActions": []
     },
     {

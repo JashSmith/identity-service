@@ -10,7 +10,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
-namespace Identity.Sample.Tests;
+namespace Identity.Packages.Tests;
 
 /// <summary>
 /// §69 — Keycloak as source of truth.
@@ -171,9 +171,9 @@ public sealed class KeycloakAuthorizationTests
     [Fact]
     public async Task ScopeFilter_NoEffectiveScopes_Denies()
     {
-        var svc = new ScopeFilterService(new SampleApp.SampleResourceScopeResolver());
-        svc.Register(new SampleApp.RegionOrderFilter());
-        var orders = new[] { new SampleApp.OrderDto("1", "u", 10, "open", "tehran-1") }.AsQueryable();
+        var svc = new ScopeFilterService(new Fixtures.InMemoryResourceScopeResolver());
+        svc.Register(new Fixtures.RegionOrderFilter());
+        var orders = new[] { new Fixtures.OrderDto("1", "u", 10, "open", "tehran-1") }.AsQueryable();
         var result = await svc.ApplyAsync(orders, new Dictionary<string, IReadOnlyCollection<string>>(), ResourceKeys.Orders, CancellationToken.None);
         Assert.Empty(result);
     }
@@ -181,13 +181,13 @@ public sealed class KeycloakAuthorizationTests
     [Fact]
     public async Task ScopeFilter_MultiValues_OR_Semantics()
     {
-        var svc = new ScopeFilterService(new SampleApp.SampleResourceScopeResolver());
-        svc.Register(new SampleApp.RegionOrderFilter());
+        var svc = new ScopeFilterService(new Fixtures.InMemoryResourceScopeResolver());
+        svc.Register(new Fixtures.RegionOrderFilter());
         var orders = new[]
         {
-            new SampleApp.OrderDto("1","u",10,"open","tehran-1"),
-            new SampleApp.OrderDto("2","u",10,"open","tehran-2"),
-            new SampleApp.OrderDto("3","u",10,"open","tehran-9"),
+            new Fixtures.OrderDto("1","u",10,"open","tehran-1"),
+            new Fixtures.OrderDto("2","u",10,"open","tehran-2"),
+            new Fixtures.OrderDto("3","u",10,"open","tehran-9"),
         }.AsQueryable();
         var result = await svc.ApplyAsync(orders, new Dictionary<string, IReadOnlyCollection<string>> { ["region"] = new[] { "tehran-1", "tehran-2" } }, ResourceKeys.Orders, CancellationToken.None);
         Assert.Equal(2, result.Count());

@@ -8,7 +8,7 @@ using Aspire.Hosting.Testing;
 namespace Identity.E2E.Tests;
 
 /// <summary>
-/// Runs only with IDENTITY_E2E=1: the tests start the real stack (PostgreSQL, Keycloak, Redis, gateway, sample,
+/// Runs only with IDENTITY_E2E=1: the tests start the real stack (PostgreSQL, Keycloak, Redis, gateway,
 /// console) through the Aspire AppHost, so they need Docker and the stack's ports (Keycloak 18080) to be free.
 /// </summary>
 public sealed class E2EFactAttribute : FactAttribute
@@ -27,7 +27,6 @@ public sealed class IdentityStack : IAsyncLifetime
     private DistributedApplication? _app;
 
     public HttpClient Gateway { get; private set; } = default!;
-    public HttpClient Sample { get; private set; } = default!;
     public HttpClient Console { get; private set; } = default!;
 
     public async Task InitializeAsync()
@@ -40,10 +39,8 @@ public sealed class IdentityStack : IAsyncLifetime
         await _app.StartAsync(timeout.Token);
 
         await _app.ResourceNotifications.WaitForResourceHealthyAsync("identity-gateway", timeout.Token);
-        await _app.ResourceNotifications.WaitForResourceHealthyAsync("order-service", timeout.Token);
         await _app.ResourceNotifications.WaitForResourceHealthyAsync("identity-admin", timeout.Token);
         Gateway = _app.CreateHttpClient("identity-gateway", "http");
-        Sample = _app.CreateHttpClient("order-service", "http");
         Console = _app.CreateHttpClient("identity-admin", "http");
 
         // Liveness is not readiness: wait until the Keycloak bootstrap (claim mappers, super-admins, ...) completed.
