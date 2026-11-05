@@ -15,7 +15,7 @@
 
 - ‏.NET 10 SDK
 - ‏Docker Desktop در حال اجرا
-- آزاد بودن پورت‌های `18080` (Keycloak)، ‏`5080` (درگاه)، ‏`5081` (سرویس نمونه) و `5090` (کنسول)
+- آزاد بودن پورت‌های `18080` (Keycloak)، ‏`5080` (درگاه) و `5090` (کنسول)
 
 پورت 8080 روی سیستم مالک پروژه در اختیار Apache است؛ به همین دلیل Keycloak روی 18080 و با گواهی توسعه HTTPS اجرا می‌شود.
 
@@ -38,7 +38,6 @@ dotnet run --project src/Identity.AppHost --launch-profile http
 | ‏`redis` | ‏Cache |
 | ‏`identity-gateway` | درگاه هویت |
 | ‏`identity-admin` | کنسول مدیریت |
-| ‏`order-service` | سرویس نمونه که دسترسی‌هایش را ثبت می‌کند |
 
 رمزهای Clientها و رمز مدیر Keycloak به‌صورت پارامتر Aspire ساخته و در User Secrets پروژه AppHost نگه داشته می‌شوند و در مخزن ذخیره نمی‌شوند.
 

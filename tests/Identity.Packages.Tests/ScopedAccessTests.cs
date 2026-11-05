@@ -5,7 +5,7 @@ using Identity.Application;
 using Identity.Contracts;
 using Microsoft.AspNetCore.Http;
 
-namespace Identity.Sample.Tests;
+namespace Identity.Packages.Tests;
 
 public sealed class ScopedAccessSerializerTests
 {

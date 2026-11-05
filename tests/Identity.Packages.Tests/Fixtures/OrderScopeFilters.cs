@@ -1,6 +1,6 @@
 using Identity.Application.Scope;
 
-namespace SampleApp;
+namespace Identity.Packages.Tests.Fixtures;
 
 public sealed class RegionOrderFilter : IScopeFilterHandler<OrderDto>
 {
@@ -27,8 +27,8 @@ public sealed class TestKeyResourceAFilter : IScopeFilterHandler<OrderDto>
         => query.Where(o => allowedValues.Contains(o.Region));
 }
 
-/// <summary>In-memory resolver for the sample — mirrors DB mapping without requiring a DB.</summary>
-public sealed class SampleResourceScopeResolver : IResourceScopeResolver
+/// <summary>In-memory resolver: mirrors a service's resource-to-scope mapping without a database.</summary>
+public sealed class InMemoryResourceScopeResolver : IResourceScopeResolver
 {
     private static readonly Dictionary<string, HashSet<string>> Map = new(StringComparer.OrdinalIgnoreCase)
     {

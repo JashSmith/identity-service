@@ -1,5 +1,5 @@
 // Local orchestration for the Identity Gateway stack:
-// PostgreSQL (Keycloak's database) -> Keycloak -> Identity Gateway -> sample consumer, plus Redis as cache.
+// PostgreSQL (Keycloak's database) -> Keycloak -> Identity Gateway -> admin console, plus Redis as cache.
 // The gateway keeps no database of its own; Keycloak is the single source of truth.
 
 const string KeycloakRealm = "company";
@@ -30,7 +30,6 @@ var keycloakAdminPassword = builder.AddParameter(
 // Confidential client secrets: generated once, persisted in the AppHost user secrets and injected
 // into the realm import through ${...} placeholders, so no secret lives in the repository.
 var gatewayClientSecret = ClientSecret("gateway-client-secret");
-var orderServiceClientSecret = ClientSecret("order-service-client-secret");
 var gatewayAdminClientSecret = ClientSecret("gateway-admin-client-secret");
 // Second, demo tenant (realm "acme") with its own gateway clients: shows one-realm-per-tenant locally.
 var acmeGatewayClientSecret = ClientSecret("acme-gateway-client-secret");
@@ -52,7 +51,6 @@ var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin
     .WithEnvironment("KC_DB_USERNAME", postgres.Resource.UserNameReference)
     .WithEnvironment("KC_DB_PASSWORD", postgres.Resource.PasswordParameter)
     .WithEnvironment("GATEWAY_CLIENT_SECRET", gatewayClientSecret)
-    .WithEnvironment("ORDER_SERVICE_CLIENT_SECRET", orderServiceClientSecret)
     .WithEnvironment("GATEWAY_ADMIN_CLIENT_SECRET", gatewayAdminClientSecret)
     .WithEnvironment("ACME_GATEWAY_CLIENT_SECRET", acmeGatewayClientSecret)
     .WithEnvironment("ACME_GATEWAY_ADMIN_CLIENT_SECRET", acmeGatewayAdminClientSecret)
@@ -97,13 +95,6 @@ builder.AddProject<Projects.Identity_Admin>("identity-admin")
     .WithEnvironment("Console__Tenants__1__DisplayName", "Acme (نمونه)")
     .WithEnvironment("Console__Tenants__1__Realm", "acme")
     .WithHttpHealthCheck("/alive")
-    .WaitFor(gateway);
-
-builder.AddProject<Projects.OrderService_Sample>("order-service")
-    .WithEnvironment("Identity__Authority", gatewayHttp)
-    .WithEnvironment("PermissionRegistration__IdentityServer", gatewayHttp)
-    .WithEnvironment("PermissionRegistration__ClientSecret", orderServiceClientSecret)
-    .WithHttpHealthCheck("/health/live")
     .WaitFor(gateway);
 
 builder.Build().Run();

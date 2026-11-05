@@ -41,12 +41,20 @@ public sealed class BusinessFlowTests(IdentityStack stack)
     }
 
     [E2EFact]
-    public async Task Scoped_user_gets_role_permissions_and_scopes_and_the_sample_service_enforces_them()
+    public async Task Scoped_user_gets_role_permissions_and_scopes_and_a_consumer_service_enforces_them()
     {
         var admin = await stack.LoginAsync(Admin, Admin);
+        var application = $"e2e-orders-{Run}";
+        var view = $"{application}:{ConsumerHost.ViewPermission}";
+        using (var app = await stack.CallAsync(HttpMethod.Post, "/api/identity/applications", admin,
+                   new { clientId = application, displayName = "E2E orders", kind = "service" }))
+            Assert.Equal(HttpStatusCode.Created, app.StatusCode);
+        using (var permission = await stack.CallAsync(HttpMethod.Post, $"/api/identity/applications/{application}/permissions", admin,
+                   new { name = ConsumerHost.ViewPermission, displayName = "View orders" }))
+            Assert.Equal(HttpStatusCode.Created, permission.StatusCode);
         var role = $"e2e-clerk-{Run}";
         using (var created = await stack.CallAsync(HttpMethod.Post, "/api/identity/business-roles", admin,
-                   new { name = role, permissions = new[] { "order-service:Orders:Order:View" } }))
+                   new { name = role, permissions = new[] { view } }))
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using (var user = await stack.CallAsync(HttpMethod.Post, "/api/identity/users", admin,
                    NewUser($"e2e-clerk-{Run}", role, new() { ["region"] = ["tehran"] })))
@@ -54,12 +62,15 @@ public sealed class BusinessFlowTests(IdentityStack stack)
 
         var token = await stack.LoginAsync($"e2e-clerk-{Run}", Password);
 
-        Assert.Contains("order-service:Orders:Order:View", IdentityStack.Claims(token, "permissions"));
+        Assert.Contains(view, IdentityStack.Claims(token, "permissions"));
         Assert.Contains("tehran", IdentityStack.Claims(token, "authz.scope.region"));
-        using var allowed = await stack.CallAsync(HttpMethod.Get, "/api/orders", token, client: stack.Sample);
+        await using var consumer = await ConsumerHost.StartAsync(stack.Gateway.BaseAddress!, application);
+        using var allowed = await stack.CallAsync(HttpMethod.Get, "/api/orders", token, client: consumer.Client);
         Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
-        using var denied = await stack.CallAsync(HttpMethod.Post, "/api/orders?customerUsername=x&total=1", token, client: stack.Sample);
+        using var denied = await stack.CallAsync(HttpMethod.Post, "/api/orders", token, client: consumer.Client);
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        using var anonymous = await consumer.Client.GetAsync("/api/orders");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
     }
 
     [E2EFact]
@@ -70,7 +81,7 @@ public sealed class BusinessFlowTests(IdentityStack stack)
         using (var created = await stack.CallAsync(HttpMethod.Post, "/api/identity/business-roles", admin, new
                {
                    name = managerRole,
-                   permissions = new[] { "identity-gateway:Users:User:Read", "identity-gateway:Users:User:Manage", "order-service:Orders:Order:View" },
+                   permissions = new[] { "identity-gateway:Users:User:Read", "identity-gateway:Users:User:Manage" },
                }))
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         using (var manager = await stack.CallAsync(HttpMethod.Post, "/api/identity/users", admin,

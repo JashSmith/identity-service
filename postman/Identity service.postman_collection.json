@@ -46,9 +46,9 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"serviceId\": \"order-service\",\n  \"serviceVersion\": \"1.0.0\",\n  \"manifestVersion\": \"1\",\n  \"permissions\": [{ \"name\": \"Orders.View\", \"description\": \"Allows reading orders\" }],\n  \"manifestHash\": \"sha256:...\"\n}"
+              "raw": "{\n  \"serviceId\": \"my-service\",\n  \"serviceVersion\": \"1.0.0\",\n  \"manifestVersion\": \"1\",\n  \"permissions\": [{ \"name\": \"Orders.View\", \"description\": \"Allows reading orders\" }],\n  \"manifestHash\": \"sha256:...\"\n}"
             },
-            "description": "Service authenticates as itself (client_credentials). Gateway validates namespace (Orders.* for order-service, Identity.* for identity-gateway) -> 400 on cross-namespace. Each permission becomes a Keycloak client role + oidc-usermodel-client-role-mapper (claim permissions) + auto-mapped to /key-admins. Never deletes a client role when removed from manifest."
+            "description": "Service authenticates as itself (client_credentials). Gateway validates namespace (Orders.* for my-service, Identity.* for identity-gateway) -> 400 on cross-namespace. Each permission becomes a Keycloak client role + oidc-usermodel-client-role-mapper (claim permissions) + auto-mapped to /key-admins. Never deletes a client role when removed from manifest."
           },
           "response": []
         },
@@ -114,9 +114,9 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"serviceId\": \"order-service\",\n  \"serviceVersion\": \"1.0.0\",\n  \"manifestVersion\": \"2\",\n  \"permissions\": [{ \"name\": \"Identity.UsersRead\", \"description\": \"cross-namespace - must be rejected\" }],\n  \"manifestHash\": \"sha256:bad\"\n}"
+              "raw": "{\n  \"serviceId\": \"my-service\",\n  \"serviceVersion\": \"1.0.0\",\n  \"manifestVersion\": \"2\",\n  \"permissions\": [{ \"name\": \"Identity.UsersRead\", \"description\": \"cross-namespace - must be rejected\" }],\n  \"manifestHash\": \"sha256:bad\"\n}"
             },
-            "description": "Expect 400 ProblemDetails - namespace enforcement (order-service may only register Orders.*)."
+            "description": "Expect 400 ProblemDetails - namespace enforcement (my-service may only register Orders.*)."
           },
           "response": []
         }
@@ -756,7 +756,7 @@
               "query": [
                 {
                   "key": "serviceId",
-                  "value": "order-service",
+                  "value": "my-service",
                   "disabled": true
                 },
                 {

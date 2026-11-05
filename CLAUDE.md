@@ -47,18 +47,18 @@ Delegated admins may only manage users inside their own scope and grant only wha
 ## Layout
 | Path | Purpose |
 |---|---|
-| `src/Identity.AppHost` | Aspire AppHost: PostgreSQL, Keycloak (realms `company` + demo tenant `acme` from `Keycloak/Realms`, Persian `avash` login theme from `Keycloak/Themes`), Redis, gateway, console, sample |
+| `src/Identity.AppHost` | Aspire AppHost: PostgreSQL, Keycloak (realms `company` + demo tenant `acme` from `Keycloak/Realms`, Persian `avash` login theme from `Keycloak/Themes`), Redis, gateway, console |
 | `src/Identity.ServiceDefaults` | OpenTelemetry, health, service discovery, resilience (no retries for unsafe methods) |
 | `src/Identity.Gateway` | Host: minimal API endpoints, error model, tenancy (`Tenancy/`), Keycloak bootstrap (`Bootstrap/`) |
 | `src/Identity.Admin` | Persian RTL admin console (Radzen Blazor, interactive server, OIDC code + PKCE per tenant) |
 | `src/Identity.Application` / `Identity.Domain` / `Identity.Contracts` | Use cases, domain, DTOs |
 | `src/Identity.Infrastructure.Keycloak` / `.Redis` / `Identity.Infrastructure` | Adapters |
 | `src/Avash.Identity.*` | Consumer packages |
-| `samples/OrderService.Sample` | Sample consumer service |
 | `tools/Identity.TenantProvisioning` | Operator tool: creates a new tenant realm with master credentials (the gateway never gets them) |
 | `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator), built in Docker by `scripts/build-keycloak-extensions.sh` into `Keycloak/Providers` |
 | `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |
-| `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`) |
+| `tests/Identity.Packages.Tests` | Consumer-package tests (permission discovery, manifests, scope filters) against a test-only fixture |
+| `tests/Identity.E2E.Tests` | End-to-end tests that start the stack with `Aspire.Hosting.Testing` (only with `IDENTITY_E2E=1`); `ConsumerHost` is an in-process consumer service |
 | `docs/` | Persian docs: architecture + Keycloak ERD, run guide, API summary |
 
 ## Commands
