@@ -65,11 +65,29 @@ public sealed class ConsoleUiTests(IdentityStack stack, BrowserSession browser)
             await ui.SignOutAsync();
         }
 
-        // Keycloak refuses Cookie headers of about 8 KB (431). The console cookie is a short key now.
+        // Our own cookies stay small: they must not grow with every sign-in. The console cookie is a short key.
         Assert.True(ui.LargestKeycloakCookieHeader < 5000, $"Cookie header to Keycloak reached {ui.LargestKeycloakCookieHeader} bytes");
         var consoleCookie = (await ui.Context.CookiesAsync([BrowserSession.Console])).FirstOrDefault(c => c.Name == "avash-admin");
         Assert.True(consoleCookie is null || consoleCookie.Value.Length < 1200, $"console cookie is {consoleCookie?.Value.Length} bytes");
         await ui.AssertNoProblemsAsync("repeated-sign-in");
+    }
+
+    [E2EFact]
+    public async Task Signing_in_works_next_to_large_cookies_of_other_localhost_apps()
+    {
+        await using var ui = await browser.NewContextAsync();
+        // A developer's browser holds cookies of every app on localhost (Aspire dashboard, demo apps, other projects),
+        // and sends them to Keycloak too. Over HTTP/2 Keycloak used to answer 431 past an 8 KB header list.
+        await ui.Context.AddCookiesAsync(Enumerable.Range(0, 4).Select(i => new Microsoft.Playwright.Cookie
+        {
+            Name = $"other-app-{i}", Value = new string('x', 3000), Domain = "localhost", Path = "/",
+        }));
+
+        await ui.SignInAsync();
+        await Assertions.Expect(ui.Page.Locator("h1")).ToContainTextAsync("داشبورد");
+
+        Assert.True(ui.LargestKeycloakCookieHeader > 12_000, $"Cookie header to Keycloak was only {ui.LargestKeycloakCookieHeader} bytes");
+        await ui.AssertNoProblemsAsync("large-foreign-cookies");
     }
 
     [E2EFact]

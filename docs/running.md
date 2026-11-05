@@ -80,6 +80,7 @@ IDENTITY_E2E=1 dotnet test tests/Identity.E2E.Tests --filter "FullyQualifiedName
 
 - ورود از صفحه فارسی Keycloak و باز کردن همه‌ی بخش‌های کنسول بدون خطا و بدون اسکرول افقی
 - چند بار ورود و خروج پشت سر هم، با کنترل اندازه‌ی سرآیند Cookie (جلوگیری از بازگشت خطای 431)
+- ورود در کنار Cookieهای بزرگ برنامه‌های دیگر روی `localhost` (حدود ۱۲ کیلوبایت)
 - تغییر پوسته و ماندن آن پس از بارگذاری دوباره
 - ساخت صفحه ورود اختصاصی برای یک اپلیکیشن و باز کردن صفحه واقعی Keycloak با همان برند
 - تنظیم پیامک با سرویس آزمایشی و ارسال پیامک آزمایشی
@@ -131,7 +132,7 @@ docker ps --format '{{.Names}}' | grep -E '^(keycloak|redis)-' | xargs -r docker
 | ‏`Port(s) ... already in use` هنگام اجرای AppHost | یک Stack دیگر (اجرای دوم AppHost یا تست‌های E2E که همین پورت‌ها را می‌گیرند) در حال اجراست. آن را متوقف کنید و ظرف‌های `keycloak-*` و `redis-*` باقی‌مانده را حذف کنید. پیش از این بررسی، همین وضعیت پس از دو دقیقه با `TimeoutRejectedException` و `The JSON-RPC connection with the remote party was lost` تمام می‌شد. |
 | ‏`TimeoutRejectedException` پس از دو دقیقه، بدون اشغال بودن پورت‌ها | پروکسی سیستمی ویندوز درخواست‌های `localhost` را هم به پروکسی می‌فرستاد. AppHost و سرویس‌ها اکنون `localhost` و `127.0.0.1` را همیشه مستقیم صدا می‌زنند (`LoopbackProxyBypass`)؛ در تنظیمات پروکسی ویندوز هم بهتر است «برای نشانی‌های محلی از پروکسی استفاده نشود» روشن باشد. |
 | ‏`/health` با `schedule-authenticator failed: auth_flow.not_found` | فایل افزونه Keycloak از شاخه‌ای قدیمی‌تر از پایگاه داده ساخته شده است (مثلاً مراحل ورود با پیامک در Realm هست ولی در jar نیست). در شاخه فعلی `bash scripts/build-keycloak-extensions.sh` را اجرا و Stack را دوباره راه‌اندازی کنید. |
-| خطای 431 هنگام ورود | سرآیند Cookie از حد Keycloak بزرگ‌تر شده است. مرورگر Cookieهای همه‌ی پورت‌های یک نام میزبان (مثلاً `localhost`) را به Keycloak هم می‌فرستد. کنسول و بسته `AddAvashWebSso` نشست را سمت سرور نگه می‌دارند و در Cookie فقط یک کلید کوتاه می‌گذارند؛ اگر باز هم دیدید، Cookieهای `localhost` را از مرورگر پاک کنید. |
+| خطای 431 هنگام ورود | سرآیند Cookie از حد Keycloak بزرگ‌تر شده است. مرورگر Cookieهای همه‌ی پورت‌های یک نام میزبان (مثلاً `localhost`، از جمله داشبورد Aspire و پروژه‌های دیگر) را به Keycloak هم می‌فرستد. مرورگر روی HTTPS با Keycloak از HTTP/2 استفاده می‌کند و Keycloak در HTTP/2 به‌طور پیش‌فرض بیش از 8192 بایت سرآیند نمی‌پذیرد (`quarkus.http.limits.max-header-list-size`). ‏AppHost این حد را با `QUARKUS_HTTP_LIMITS_MAX_HEADER_LIST_SIZE=32768` بالا می‌برد؛ در محیط عملیاتی همین متغیر را روی Keycloak تنظیم کنید. کنسول و بسته `AddAvashWebSso` هم نشست را سمت سرور نگه می‌دارند و در Cookie فقط یک کلید کوتاه می‌گذارند. اگر باز هم دیدید، Cookieهای `localhost` را از مرورگر پاک کنید. |
 | «سرویس ورود موقتاً در دسترس نیست» در صفحه ورود کنسول | کنسول به Keycloak وصل نشد؛ وضعیت Keycloak را در داشبورد Aspire ببینید. |
 | خطاهای `ERR_NO_BUFFER_SPACE`، ‏`ERR_ADDRESS_IN_USE` یا `WSAENOBUFS` | پورت‌های موقت ویندوز تمام شده‌اند. با `netstat -ano` پردازه‌ای را که هزاران اتصال باز دارد پیدا و دوباره اجرا کنید (معمولاً `com.docker.backend`، یعنی Docker Desktop). |
 | خطای SSL روی آدرس Keycloak | پورت در اختیار برنامه دیگری است یا گواهی توسعه معتبر نیست (`dotnet dev-certs https --trust`). |
