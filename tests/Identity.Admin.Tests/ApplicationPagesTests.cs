@@ -37,7 +37,7 @@ public sealed class ApplicationPagesTests : ConsoleTestContext
         Assert.Equal("سامانه مشتریان", editor.Find(".av-preview__title").TextContent);
         Assert.Contains("--preview-brand: #26428B", editor.Find(".av-preview").GetAttribute("style"));
         var test = editor.Find("a[target=_blank]").GetAttribute("href")!;
-        Assert.StartsWith("https://kc.test/realms/company/protocol/openid-connect/auth?client_id=crm", test);
+        Assert.StartsWith("https://kc.test/realms/avash/protocol/openid-connect/auth?client_id=crm", test);
         Assert.Contains("redirect_uri=https%3A%2F%2Fcrm.example%2F", test);
         Assert.Empty(editor.FindAll("[role=alert]")); // lapis is dark enough
     }
@@ -137,17 +137,17 @@ public sealed class ApplicationPagesTests : ConsoleTestContext
     public void Integration_guide_fills_the_code_with_the_applications_values()
     {
         SignIn(Permissions.ApplicationsRead);
-        CrmGateway(tenant: "acme");
+        CrmGateway(tenant: "branch-north");
 
         var guide = Render<IntegrationGuide>(p => p.Add(c => c.ClientId, "crm"));
 
         guide.WaitForAssertion(() => Assert.NotEmpty(guide.FindAll("pre.av-code")));
         var web = guide.FindAll("pre.av-code")[0].TextContent;
         Assert.Contains("o.Authority = \"https://identity.example\";", web);
-        Assert.Contains("o.Tenant = \"acme\";", web);
+        Assert.Contains("o.Tenant = \"branch-north\";", web);
         Assert.Contains("o.ClientId = \"crm\";", web);
         Assert.DoesNotContain("ClientSecret = \"", web); // the secret is read from configuration, never pasted
-        Assert.Contains(guide.FindAll("button.av-copy"), b => b.GetAttribute("data-copy") == "https://identity.example/.well-known/openid-configuration?tenant=acme");
+        Assert.Contains(guide.FindAll("button.av-copy"), b => b.GetAttribute("data-copy") == "https://identity.example/.well-known/openid-configuration?tenant=branch-north");
         Assert.Empty(guide.FindAll(".av-panel button.rz-button")); // logout settings are read-only for readers
     }
 

@@ -48,7 +48,7 @@ public sealed class SmsTests
     {
         var store = new MemoryStore();
         var fake = new FakeProvider(accept);
-        var tenant = new Tenant("company");
+        var tenant = new Tenant("avash");
         var dev = new DevelopmentSmsProvider(TimeProvider.System, NullLogger<DevelopmentSmsProvider>.Instance);
         return (new SmsService([fake, dev], store, tenant, dev), store, fake, tenant);
     }
@@ -155,7 +155,7 @@ public sealed class SmsTests
         var result = await sms.SendTestAsync("۰۹۱۲ ۱۲۳ ۴۵۶۷", CancellationToken.None);
 
         var (message, settings) = Assert.Single(fake.Sent);
-        Assert.Equal(("+989121234567", "company"), (message.To, message.Tenant));
+        Assert.Equal(("+989121234567", "avash"), (message.To, message.Tenant));
         Assert.Equal(SmsService.TestText, message.Text);
         Assert.Equal("t", settings["token"]);
         Assert.Equal(("fake", true, "m-1", "+98912***4567"), (result.Value.Provider, result.Value.Delivered, result.Value.MessageId, result.Value.PhoneNumber));
@@ -180,13 +180,13 @@ public sealed class SmsTests
         store.Value = new StoredSmsSettings(true, "development", new Dictionary<string, IReadOnlyDictionary<string, string>>());
 
         await sms.SendTestAsync("09121234567", CancellationToken.None);
-        tenant.TenantId = "acme";
-        var acme = sms.Outbox();
-        tenant.TenantId = "company";
-        var company = sms.Outbox();
+        tenant.TenantId = "branch-north";
+        var other = sms.Outbox();
+        tenant.TenantId = "avash";
+        var avash = sms.Outbox();
 
-        Assert.Empty(acme);
-        var item = Assert.Single(company);
+        Assert.Empty(other);
+        var item = Assert.Single(avash);
         Assert.Equal("+98912***4567", item.PhoneNumber);
         Assert.Equal(SmsService.TestText, item.Text);
     }
@@ -238,7 +238,7 @@ public sealed class SmsTests
         var kc = new FakeKavenegar(HttpStatusCode.OK,
             """{"return":{"status":200,"message":"تایید شد"},"entries":[{"messageid":8792343,"status":1}]}""");
 
-        var result = await Kavenegar(kc).SendAsync(new SmsMessage("+989121234567", "سلام", "company"), KavenegarSettings, CancellationToken.None);
+        var result = await Kavenegar(kc).SendAsync(new SmsMessage("+989121234567", "سلام", "avash"), KavenegarSettings, CancellationToken.None);
 
         Assert.True(result.Accepted);
         Assert.Equal("8792343", result.MessageId);
@@ -257,7 +257,7 @@ public sealed class SmsTests
     {
         var kc = new FakeKavenegar(http, $$"""{"return":{"status":{{status}},"message":"خطا"},"entries":null}""");
 
-        var result = await Kavenegar(kc).SendAsync(new SmsMessage("+989121234567", "x", "company"), KavenegarSettings, CancellationToken.None);
+        var result = await Kavenegar(kc).SendAsync(new SmsMessage("+989121234567", "x", "avash"), KavenegarSettings, CancellationToken.None);
 
         Assert.False(result.Accepted);
         Assert.Contains(reason, result.Error);
@@ -273,7 +273,7 @@ public sealed class SmsTests
     [Fact]
     public async Task Kavenegar_network_failures_never_carry_the_url()
     {
-        var result = await Kavenegar(new Unreachable()).SendAsync(new SmsMessage("+989121234567", "x", "company"), KavenegarSettings, CancellationToken.None);
+        var result = await Kavenegar(new Unreachable()).SendAsync(new SmsMessage("+989121234567", "x", "avash"), KavenegarSettings, CancellationToken.None);
 
         Assert.Equal("Kavenegar is unreachable.", result.Error);
     }
@@ -283,7 +283,7 @@ public sealed class SmsTests
     {
         var kc = new FakeKavenegar(HttpStatusCode.OK, "{}");
 
-        var result = await Kavenegar(kc).SendAsync(new SmsMessage("+989121234567", "x", "company"), new Dictionary<string, string>(), CancellationToken.None);
+        var result = await Kavenegar(kc).SendAsync(new SmsMessage("+989121234567", "x", "avash"), new Dictionary<string, string>(), CancellationToken.None);
 
         Assert.False(result.Accepted);
         Assert.Null(kc.Request);
@@ -316,7 +316,7 @@ public sealed class SmsTests
                 foreach (var p in body.RootElement.GetProperty("attributes").EnumerateObject()) Attributes[p.Name] = p.Value.GetString()!;
                 return new HttpResponseMessage(HttpStatusCode.NoContent);
             }
-            return Json(new { realm = "company", attributes = Attributes });
+            return Json(new { realm = "avash", attributes = Attributes });
         }
 
         private static HttpResponseMessage Json(object body) => new(HttpStatusCode.OK)
@@ -329,7 +329,7 @@ public sealed class SmsTests
     public async Task Saving_keeps_the_realms_other_attributes_and_replaces_only_the_sms_ones()
     {
         var realm = new FakeRealm();
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "company", AdminClientSecret = "s" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "avash", AdminClientSecret = "s" });
         var store = new KeycloakSmsSettingsStore(new HttpClient(realm), options, new KeycloakAdminTokenProvider(new HttpClient(realm), options));
 
         var saved = await store.SaveAsync(new StoredSmsSettings(true, "kavenegar", Settings("kavenegar", ("apiKey", "K"), ("sender", "1000"))), CancellationToken.None);

@@ -114,8 +114,8 @@ class SmsLoginTest {
     @Test
     void the_gateway_signature_matches_the_shared_test_vector() {
         // The same vector is checked by the gateway's tests (Identity.Gateway.Tests, SmsLoginHookTests).
-        assertEquals("a764da6b09824f54bf53c4399cad9254858dc943c31807e4ac139eb38ebc5c24",
-                GatewaySmsSender.sign("0123456789abcdef0123456789abcdef", "1700000000", "{\"realm\":\"company\"}"));
+        assertEquals("5a08e70a6d0aab788d59a3436f83ee72ca00f67661c30ba868fcd4db68900817",
+                GatewaySmsSender.sign("0123456789abcdef0123456789abcdef", "1700000000", "{\"realm\":\"avash\"}"));
     }
 
     @Test

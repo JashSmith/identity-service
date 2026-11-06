@@ -159,7 +159,7 @@ public sealed class BusinessFlowTests(IdentityStack stack)
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
             secret = (await JsonAsync(created)).GetProperty("clientSecret").GetString()!;
         }
-        var loginPage = $"/realms/company/protocol/openid-connect/auth?client_id={application}&redirect_uri={Uri.EscapeDataString(callback)}&response_type=code&scope=openid&ui_locales=fa";
+        var loginPage = $"/realms/avash/protocol/openid-connect/auth?client_id={application}&redirect_uri={Uri.EscapeDataString(callback)}&response_type=code&scope=openid&ui_locales=fa";
         Task<HttpResponseMessage> SetMode(object body) => stack.CallAsync(HttpMethod.Put, $"/api/identity/applications/{application}/login-page", admin, body);
         async Task<HttpStatusCode> DirectLogin()
         {
@@ -188,40 +188,15 @@ public sealed class BusinessFlowTests(IdentityStack stack)
     }
 
     [E2EFact]
-    public async Task Tokens_only_work_for_their_own_tenant()
+    public async Task Tokens_are_refused_for_an_unknown_tenant()
     {
-        var company = await stack.LoginAsync(Admin, Admin);
-        var acme = await stack.LoginAsync(Admin, Admin, "acme");
+        var avash = await stack.LoginAsync(Admin, Admin);
 
-        using var foreign = await stack.CallAsync(HttpMethod.Get, "/api/identity/business-roles", company, tenant: "acme");
-        using var own = await stack.CallAsync(HttpMethod.Get, "/api/identity/business-roles", acme, tenant: "acme");
-        using var unknown = await stack.CallAsync(HttpMethod.Get, "/api/identity/business-roles", company, tenant: "ghost");
+        using var own = await stack.CallAsync(HttpMethod.Get, "/api/identity/business-roles", avash);
+        using var unknown = await stack.CallAsync(HttpMethod.Get, "/api/identity/business-roles", avash, tenant: "ghost");
 
-        Assert.Equal(HttpStatusCode.Forbidden, foreign.StatusCode);
         Assert.Equal(HttpStatusCode.OK, own.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
-    }
-
-    [E2EFact]
-    public async Task Login_page_settings_belong_to_one_tenant()
-    {
-        var company = await stack.LoginAsync(Admin, Admin);
-        var acme = await stack.LoginAsync(Admin, Admin, "acme");
-        var application = $"e2e-tenant-{Run}";
-        foreach (var (token, tenant) in new[] { (company, (string?)null), (acme, "acme") })
-            using (var created = await stack.CallAsync(HttpMethod.Post, "/api/identity/applications", token,
-                       new { clientId = application, displayName = "E2E", kind = "web", redirectUris = new[] { "http://localhost:5999/*" } }, tenant))
-                Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-
-        using (var branded = await stack.CallAsync(HttpMethod.Put, $"/api/identity/applications/{application}/login-page", acme,
-                   new { mode = "branded", branding = new { title = "Acme", background = "plain" } }, "acme"))
-            Assert.Equal(HttpStatusCode.OK, branded.StatusCode);
-        using var inCompany = await stack.CallAsync(HttpMethod.Get, $"/api/identity/applications/{application}/login-page", company);
-        using var crossTenant = await stack.CallAsync(HttpMethod.Put, $"/api/identity/applications/{application}/login-page", company,
-            new { mode = "embedded" }, "acme");
-
-        Assert.Equal("inherit", (await JsonAsync(inCompany)).GetProperty("mode").GetString());
-        Assert.Equal(HttpStatusCode.Forbidden, crossTenant.StatusCode);
     }
 
     [E2EFact]
@@ -248,6 +223,6 @@ public sealed class BusinessFlowTests(IdentityStack stack)
 
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.Contains("dir=\"rtl\"", page);
-        Assert.Contains("/auth/login/acme", page);
+        Assert.Contains("/auth/login/avash", page);
     }
 }

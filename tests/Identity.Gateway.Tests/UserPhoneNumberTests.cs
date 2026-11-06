@@ -21,7 +21,7 @@ public sealed class UserPhoneNumberTests
         {
             var path = request.RequestUri!.AbsolutePath;
             if (path.EndsWith("/token", StringComparison.Ordinal)) return Json(new { access_token = "t", expires_in = 300 });
-            if (path.EndsWith("/admin/realms/company/users", StringComparison.Ordinal) && request.Method == HttpMethod.Get)
+            if (path.EndsWith("/admin/realms/avash/users", StringComparison.Ordinal) && request.Method == HttpMethod.Get)
             {
                 Query = Uri.UnescapeDataString(request.RequestUri.Query);
                 return Json(otherUserWithPhone is null
@@ -46,7 +46,7 @@ public sealed class UserPhoneNumberTests
 
     private static KeycloakUserProvisioner Provisioner(FakeKeycloak kc)
     {
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "company", AdminClientSecret = "s" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "avash", AdminClientSecret = "s" });
         return new KeycloakUserProvisioner(new HttpClient(kc), options, new KeycloakAdminTokenProvider(new HttpClient(kc), options));
     }
 

@@ -46,7 +46,7 @@ public sealed class ReservedGroupsTests
     private static IOptions<KeycloakOptions> Options() => Microsoft.Extensions.Options.Options.Create(new KeycloakOptions
     {
         BaseUrl = "http://kc.test",
-        Realm = "company",
+        Realm = "avash",
         AdminClientSecret = "secret",
     });
 

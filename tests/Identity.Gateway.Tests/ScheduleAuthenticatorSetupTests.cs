@@ -22,8 +22,8 @@ public sealed class ScheduleAuthenticatorSetupTests
                 return Json(extensionInstalled
                     ? new object[] { new { id = "auth-otp-form" }, new { id = KeycloakScheduleAuthenticatorSetup.ProviderId } }
                     : new object[] { new { id = "auth-otp-form" } });
-            if (path.EndsWith("/admin/realms/company", StringComparison.Ordinal) && request.Method == HttpMethod.Get)
-                return Json(new { realm = "company", browserFlow });
+            if (path.EndsWith("/admin/realms/avash", StringComparison.Ordinal) && request.Method == HttpMethod.Get)
+                return Json(new { realm = "avash", browserFlow });
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
         }
 
@@ -35,7 +35,7 @@ public sealed class ScheduleAuthenticatorSetupTests
 
     private static KeycloakScheduleAuthenticatorSetup Setup(FakeKeycloak kc)
     {
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "company", AdminClientSecret = "s" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "avash", AdminClientSecret = "s" });
         return new KeycloakScheduleAuthenticatorSetup(new HttpClient(kc), options,
             new KeycloakAdminTokenProvider(new HttpClient(kc), options), new AccessScheduleOptions());
     }

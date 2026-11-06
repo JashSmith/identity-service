@@ -25,14 +25,14 @@ public sealed class SmsLoginTests
     [Fact]
     public void The_signature_matches_the_vector_shared_with_the_keycloak_extension() =>
         // Same vector as keycloak/extensions SmsLoginTest.the_gateway_signature_matches_the_shared_test_vector.
-        Assert.Equal("a764da6b09824f54bf53c4399cad9254858dc943c31807e4ac139eb38ebc5c24",
-            SmsLoginEndpoints.Sign(Secret, "1700000000", "{\"realm\":\"company\"}"));
+        Assert.Equal("5a08e70a6d0aab788d59a3436f83ee72ca00f67661c30ba868fcd4db68900817",
+            SmsLoginEndpoints.Sign(Secret, "1700000000", "{\"realm\":\"avash\"}"));
 
     [Fact]
     public void Only_fresh_requests_signed_with_the_secret_are_accepted()
     {
         var now = DateTimeOffset.FromUnixTimeSeconds(1_700_000_000);
-        var body = "{\"realm\":\"company\"}";
+        var body = "{\"realm\":\"avash\"}";
         var signature = SmsLoginEndpoints.Sign(Secret, "1700000000", body);
 
         Assert.Null(SmsLoginEndpoints.Verify(Secret, "1700000000", signature, body, now));
@@ -79,7 +79,7 @@ public sealed class SmsLoginTests
 
     private sealed class Tenant : ITenantContext
     {
-        public string TenantId => "company";
+        public string TenantId => "avash";
     }
 
     private static (SmsLoginService Login, LoginStore Store, SmsStore Sms, DevelopmentSmsProvider Outbox, List<string> Log) Login(
@@ -148,7 +148,7 @@ public sealed class SmsLoginTests
         var sent = await login.SendCodeAsync("09121234567", "482913", 120, "login", CancellationToken.None);
 
         Assert.True(sent.IsSuccess);
-        var message = Assert.Single(outbox.Recent("company", 5));
+        var message = Assert.Single(outbox.Recent("avash", 5));
         Assert.Contains("482913", message.Text);
         Assert.Contains("۲ دقیقه", message.Text);
     }
@@ -244,13 +244,13 @@ public sealed class SmsLoginTests
                 ? JsonNode.Parse(await request.Content.ReadAsStringAsync(ct))
                 : null;
             if (request.Method != HttpMethod.Get && !path.EndsWith("/token", StringComparison.Ordinal)) Writes++;
-            const string realm = "/admin/realms/company";
+            const string realm = "/admin/realms/avash";
             if (path.EndsWith("/token", StringComparison.Ordinal)) return Json(new { access_token = "t", expires_in = 300 });
             if (path == realm + "/authentication/authenticator-providers")
                 return Json((ExtensionInstalled ? new[] { KeycloakSmsLoginFlowSetup.LoginProvider, KeycloakSmsLoginFlowSetup.OtpProvider,
                     KeycloakSmsLoginFlowSetup.DirectLoginProvider, KeycloakSmsLoginFlowSetup.DirectOtpProvider } : [])
                     .Append(KeycloakScheduleAuthenticatorSetup.ProviderId).Select(id => new { id }));
-            if (path == realm && request.Method == HttpMethod.Get) return Json(new { realm = "company", browserFlow = BrowserFlow, directGrantFlow = DirectGrantFlow });
+            if (path == realm && request.Method == HttpMethod.Get) return Json(new { realm = "avash", browserFlow = BrowserFlow, directGrantFlow = DirectGrantFlow });
             if (path == realm && request.Method == HttpMethod.Put)
             {
                 if (body!["directGrantFlow"] is { } direct) DirectGrantFlow = direct.GetValue<string>();
@@ -326,13 +326,13 @@ public sealed class SmsLoginTests
 
         private static HttpResponseMessage Created() => new(HttpStatusCode.Created)
         {
-            Headers = { Location = new Uri("http://kc.test/admin/realms/company/x/" + Guid.NewGuid()) }
+            Headers = { Location = new Uri("http://kc.test/admin/realms/avash/x/" + Guid.NewGuid()) }
         };
     }
 
     private static KeycloakSmsLoginFlowSetup Setup(FakeKeycloak kc)
     {
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "company", AdminClientSecret = "s" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "avash", AdminClientSecret = "s" });
         return new KeycloakSmsLoginFlowSetup(new HttpClient(kc), options, new KeycloakAdminTokenProvider(new HttpClient(kc), options),
             new AccessScheduleOptions());
     }

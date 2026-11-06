@@ -12,7 +12,7 @@ public sealed class SmsService(IEnumerable<ISmsProvider> providers, ISmsSettings
     ISmsLoginSettingsStore? loginSettings = null)
 {
     public const string Mask = "**********";
-    public const string TestText = "پیام آزمایشی درگاه هویت آواش: تنظیمات پیامک درست است.";
+    public const string TestText = "پیام آزمایشی درگاه هویت آوش: تنظیمات پیامک درست است.";
 
     private readonly IReadOnlyDictionary<string, ISmsProvider> _providers =
         providers.ToDictionary(p => p.Id, StringComparer.Ordinal);

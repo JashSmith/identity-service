@@ -45,16 +45,16 @@ public sealed class RealmTemplateTests
     }
 
     [Fact]
-    public void Template_matches_the_demo_tenant_realm()
+    public void Template_matches_the_avash_realm()
     {
-        // Guards drift: the template and the realm imported for the demo tenant must define the same building blocks.
+        // Guards drift: the template and the realm imported for the Avash organization must define the same building blocks.
         var root = AppContext.BaseDirectory;
         while (!File.Exists(Path.Combine(root, "IdentityService.slnx"))) root = Path.GetDirectoryName(root)!;
-        var demo = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "keycloak/realms/realm-acme.json")))!;
+        var avash = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "keycloak/realms/realm-avash.json")))!;
         var template = RealmTemplate.Load();
 
         foreach (var (collection, key) in new[] { ("clients", "clientId"), ("groups", "name"), ("clientScopes", "name"), ("users", "username") })
-            Assert.Equal(Names(demo, collection, key), Names(template, collection, key));
+            Assert.Equal(Names(avash, collection, key), Names(template, collection, key));
     }
 
     private static string[] Names(JsonNode realm, string collection, string key) =>

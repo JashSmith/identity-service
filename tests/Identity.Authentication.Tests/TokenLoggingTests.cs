@@ -18,7 +18,7 @@ public class TokenLoggingTests
         services.AddLogging();
         services.AddAvashAuthentication(o =>
         {
-            o.Authority = "https://kc.test/realms/company";
+            o.Authority = "https://kc.test/realms/avash";
             o.Audience = "identity-gateway";
         });
         await using var provider = services.BuildServiceProvider();

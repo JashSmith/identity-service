@@ -3,7 +3,7 @@
 # Run the login request, then the others reuse its token. Dev credentials only (admin/admin from the realm import).
 
 @gateway = http://localhost:5080
-@tenant = company
+@tenant = avash
 
 ### Sign in (password grant through the gateway; Keycloak stays hidden)
 # @name login
@@ -69,7 +69,7 @@ Content-Type: application/json
 
 {
   "username": "tehran.manager",
-  "email": "tehran.manager@company.local",
+  "email": "tehran.manager@avash.local",
   "firstName": "Tehran",
   "lastName": "Manager",
   "enabled": true,

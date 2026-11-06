@@ -21,7 +21,7 @@ description: Start, verify and stop the Identity Gateway stack (Aspire AppHost w
 Endpoints: Aspire dashboard `http://localhost:15140` (login URL with token is in the log),
 Keycloak `https://localhost:18080` (dev certificate), gateway `http://localhost:5080`,
 admin console `http://localhost:5090`.
-Tenants: `company` (default) and the demo tenant `acme` (header `X-Tenant-Id: acme`); dev login `admin`/`admin` in both.
+Tenant: `avash` (آوش, the only organization; header `X-Tenant-Id: avash`); dev login `admin`/`admin`.
 
 If a project exits right after start, run its DLL directly (`dotnet bin/Debug/net10.0/<Project>.dll`) to see the
 startup exception; a stale static-web-assets manifest is fixed with `dotnet build --no-incremental`.

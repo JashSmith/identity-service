@@ -34,7 +34,7 @@ public sealed class KeycloakAuthorizationTests
     private static KeycloakOptions KcOpts(string baseUrl = "http://kc.test") => new()
     {
         BaseUrl = baseUrl,
-        Realm = "company",
+        Realm = "avash",
         AdminClientId = "admin-cli",
         AdminClientSecret = "secret",
     };

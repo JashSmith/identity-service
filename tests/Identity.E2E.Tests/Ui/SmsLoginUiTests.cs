@@ -28,7 +28,7 @@ public sealed class SmsLoginUiTests(IdentityStack stack, BrowserSession browser)
     private static async Task OpenKeycloakAsync(UiContext ui)
     {
         await ui.Page.GotoAsync($"{BrowserSession.Console}/login");
-        await ui.Page.Locator("a.av-login__tenant[href*='/auth/login/company']").ClickAsync();
+        await ui.Page.Locator("a.av-login__tenant[href*='/auth/login/avash']").ClickAsync();
         await ui.Page.WaitForURLAsync(u => u.StartsWith(BrowserSession.Keycloak, StringComparison.Ordinal));
     }
 

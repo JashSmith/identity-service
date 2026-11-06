@@ -33,7 +33,7 @@ public sealed class AuditTests
 
     private static KeycloakAuditAdapter Adapter(FakeKeycloak kc)
     {
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "company", AdminClientSecret = "s" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "avash", AdminClientSecret = "s" });
         return new KeycloakAuditAdapter(new HttpClient(kc), options, new KeycloakAdminTokenProvider(new HttpClient(kc), options));
     }
 
@@ -54,7 +54,7 @@ public sealed class AuditTests
             CancellationToken.None);
 
         var url = Assert.Single(kc.Requests, r => r.Url.Contains("/events?", StringComparison.Ordinal)).Url;
-        Assert.StartsWith("/admin/realms/company/events?", url);
+        Assert.StartsWith("/admin/realms/avash/events?", url);
         Assert.Contains("dateFrom=2026-11-01", url);
         Assert.Contains("dateTo=2026-11-05", url);
         Assert.Contains("type=LOGIN&type=LOGIN_ERROR", url);
@@ -128,7 +128,7 @@ public sealed class AuditTests
         Assert.Equal(new EventSettingsDto(true, false, false, 30), read.Value);
         Assert.True(written.IsSuccess);
         var put = Assert.Single(kc.Requests, r => r.Method == HttpMethod.Put);
-        Assert.Equal("/admin/realms/company", put.Url);
+        Assert.Equal("/admin/realms/avash", put.Url);
         using var body = JsonDocument.Parse(put.Body!);
         Assert.True(body.RootElement.GetProperty("eventsEnabled").GetBoolean());
         Assert.True(body.RootElement.GetProperty("adminEventsEnabled").GetBoolean());

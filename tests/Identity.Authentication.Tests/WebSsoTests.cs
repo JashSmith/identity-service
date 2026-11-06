@@ -13,7 +13,7 @@ namespace Identity.Authentication.Tests;
 /// <summary>Web SSO for consumer applications: permissions from the access token and back-channel logout.</summary>
 public sealed class WebSsoTests
 {
-    private const string Issuer = "https://kc.test/realms/company";
+    private const string Issuer = "https://kc.test/realms/avash";
     private const string ClientId = "crm";
     private static readonly RsaSecurityKey Key = new(RSA.Create(2048)) { KeyId = "k1" };
 

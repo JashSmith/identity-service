@@ -11,8 +11,8 @@ public sealed class BootstrapHealthTests
 {
     [Theory]
     [InlineData(false, "not started", HealthStatus.Degraded)]
-    [InlineData(false, "company: running realm-check", HealthStatus.Degraded)]
-    [InlineData(false, "company: super-admins failed: keycloak_unavailable", HealthStatus.Unhealthy)]
+    [InlineData(false, "avash: running realm-check", HealthStatus.Degraded)]
+    [InlineData(false, "avash: super-admins failed: keycloak_unavailable", HealthStatus.Unhealthy)]
     [InlineData(true, "completed", HealthStatus.Healthy)]
     public void Bootstrap_state_maps_to_a_health_status(bool completed, string status, HealthStatus expected) =>
         Assert.Equal(expected, KeycloakBootstrapper.Health(completed, status).Status);

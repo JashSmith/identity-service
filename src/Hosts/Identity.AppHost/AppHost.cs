@@ -2,7 +2,7 @@
 // PostgreSQL (Keycloak's database) -> Keycloak -> Identity Gateway -> admin console, plus Redis as cache.
 // The gateway keeps no database of its own; Keycloak is the single source of truth.
 
-const string KeycloakRealm = "company";
+const string KeycloakRealm = "avash";
 const string KeycloakImageTag = "26.4";
 // Fixed so the token issuer stays stable across runs; 8080 is avoided because it is
 // commonly taken by other local web servers.
@@ -38,9 +38,6 @@ var keycloakAdminPassword = builder.AddParameter(
 // into the realm import through ${...} placeholders, so no secret lives in the repository.
 var gatewayClientSecret = ClientSecret("gateway-client-secret");
 var gatewayAdminClientSecret = ClientSecret("gateway-admin-client-secret");
-// Second, demo tenant (realm "acme") with its own gateway clients: shows one-realm-per-tenant locally.
-var acmeGatewayClientSecret = ClientSecret("acme-gateway-client-secret");
-var acmeGatewayAdminClientSecret = ClientSecret("acme-gateway-admin-client-secret");
 // The admin console's OIDC client; the gateway creates it in every tenant realm with this secret.
 var adminConsoleClientSecret = ClientSecret("admin-console-client-secret");
 // Shared by Keycloak's Avash SMS authenticators and the gateway: signs the "send this SMS code" calls.
@@ -66,8 +63,6 @@ var keycloak = builder.AddKeycloak("keycloak", port: KeycloakPort, keycloakAdmin
     .WithEnvironment("QUARKUS_HTTP_LIMITS_MAX_HEADER_LIST_SIZE", "32768")
     .WithEnvironment("GATEWAY_CLIENT_SECRET", gatewayClientSecret)
     .WithEnvironment("GATEWAY_ADMIN_CLIENT_SECRET", gatewayAdminClientSecret)
-    .WithEnvironment("ACME_GATEWAY_CLIENT_SECRET", acmeGatewayClientSecret)
-    .WithEnvironment("ACME_GATEWAY_ADMIN_CLIENT_SECRET", acmeGatewayAdminClientSecret)
     .WithEnvironment("AVASH_SMS_HOOK_SECRET", smsHookSecret)
     .WaitFor(keycloakDb);
 
@@ -83,11 +78,6 @@ var gateway = builder.AddProject<Projects.Identity_Gateway>("identity-gateway")
     // The gateway uses its own service account in the tenant realm, never the master superuser.
     .WithEnvironment("Identity__KeycloakAdmin__AdminClientId", "identity-gateway-admin")
     .WithEnvironment("Identity__KeycloakAdmin__AdminClientSecret", gatewayAdminClientSecret)
-    .WithEnvironment("Identity__Tenants__0__Id", "acme")
-    .WithEnvironment("Identity__Tenants__0__DisplayName", "Acme (demo tenant)")
-    .WithEnvironment("Identity__Tenants__0__Realm", "acme")
-    .WithEnvironment("Identity__Tenants__0__AdminClientSecret", acmeGatewayAdminClientSecret)
-    .WithEnvironment("Identity__Tenants__0__ClientSecret", acmeGatewayClientSecret)
     .WithEnvironment("Identity__AdminConsole__BaseUrl", AdminConsoleUrl)
     .WithEnvironment("Identity__AdminConsole__ClientSecret", adminConsoleClientSecret)
     .WithEnvironment("Identity__Redis__Configuration", redis.Resource.ConnectionStringExpression)
@@ -106,12 +96,9 @@ builder.AddProject<Projects.Identity_Admin>("identity-admin")
     .WithEnvironment("Console__KeycloakBaseUrl", keycloakHttp)
     .WithEnvironment("Console__GatewayBaseUrl", gatewayHttp)
     .WithEnvironment("Console__ClientSecret", adminConsoleClientSecret)
-    .WithEnvironment("Console__Tenants__0__Id", "company")
-    .WithEnvironment("Console__Tenants__0__DisplayName", "شرکت (پیش‌فرض)")
+    .WithEnvironment("Console__Tenants__0__Id", "avash")
+    .WithEnvironment("Console__Tenants__0__DisplayName", "آوش")
     .WithEnvironment("Console__Tenants__0__Realm", KeycloakRealm)
-    .WithEnvironment("Console__Tenants__1__Id", "acme")
-    .WithEnvironment("Console__Tenants__1__DisplayName", "Acme (نمونه)")
-    .WithEnvironment("Console__Tenants__1__Realm", "acme")
     .WithHttpHealthCheck("/alive")
     .WaitFor(gateway);
 

@@ -58,7 +58,7 @@ public sealed class LoginPageTests
 
     private static KeycloakApplicationCatalog Catalog(FakeKeycloak kc)
     {
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "company", AdminClientSecret = "s" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "avash", AdminClientSecret = "s" });
         return new KeycloakApplicationCatalog(new HttpClient(kc), options,
             new KeycloakAdminTokenProvider(new HttpClient(kc), options), new NoSuperAdmins(), NullLogger<KeycloakApplicationCatalog>.Instance);
     }

@@ -40,7 +40,7 @@ public sealed class BusinessRoleStoreTests
                 return Json(new { access_token = "t", expires_in = 300 });
             if (FailWith(request.Method, path) is { } failure) return new HttpResponseMessage(failure);
 
-            const string realm = "/admin/realms/company/";
+            const string realm = "/admin/realms/avash/";
             var rel = path[(path.IndexOf(realm, StringComparison.Ordinal) + realm.Length)..];
             var parts = rel.Split('/');
             var first = int.TryParse(query["first"], out var f) ? f : 0;
@@ -111,7 +111,7 @@ public sealed class BusinessRoleStoreTests
 
     private static KeycloakGroupBusinessRoleStore Store(FakeKeycloak kc)
     {
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "company", AdminClientSecret = "s" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "avash", AdminClientSecret = "s" });
         return new KeycloakGroupBusinessRoleStore(new HttpClient(kc), options,
             new KeycloakAdminTokenProvider(new HttpClient(kc), options), NullLogger<KeycloakGroupBusinessRoleStore>.Instance);
     }

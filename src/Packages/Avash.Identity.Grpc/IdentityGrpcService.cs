@@ -15,7 +15,7 @@ public sealed class IdentityGrpcService(
 {
     public override async Task<TokenResponse> Login(LoginRequest request, ServerCallContext context)
     {
-        var realm = cfg["Identity:Keycloak:Realm"] ?? cfg["Identity:KeycloakAdmin:Realm"] ?? "company";
+        var realm = cfg["Identity:Keycloak:Realm"] ?? cfg["Identity:KeycloakAdmin:Realm"] ?? "avash";
         var baseUrl =
             (cfg["Identity:Keycloak:BaseUrl"] ?? cfg["Identity:KeycloakAdmin:BaseUrl"] ?? "http://localhost:8080")
             .TrimEnd('/');
@@ -44,7 +44,7 @@ public sealed class IdentityGrpcService(
 
     public override async Task<TokenResponse> RefreshToken(RefreshTokenRequest request, ServerCallContext context)
     {
-        var realm = cfg["Identity:Keycloak:Realm"] ?? cfg["Identity:KeycloakAdmin:Realm"] ?? "company";
+        var realm = cfg["Identity:Keycloak:Realm"] ?? cfg["Identity:KeycloakAdmin:Realm"] ?? "avash";
         var baseUrl =
             (cfg["Identity:Keycloak:BaseUrl"] ?? cfg["Identity:KeycloakAdmin:BaseUrl"] ?? "http://localhost:8080")
             .TrimEnd('/');
@@ -72,7 +72,7 @@ public sealed class IdentityGrpcService(
 
     public override async Task<IntrospectResponse> Introspect(IntrospectRequest request, ServerCallContext context)
     {
-        var realm = cfg["Identity:Keycloak:Realm"] ?? cfg["Identity:KeycloakAdmin:Realm"] ?? "company";
+        var realm = cfg["Identity:Keycloak:Realm"] ?? cfg["Identity:KeycloakAdmin:Realm"] ?? "avash";
         var baseUrl =
             (cfg["Identity:Keycloak:BaseUrl"] ?? cfg["Identity:KeycloakAdmin:BaseUrl"] ?? "http://localhost:8080")
             .TrimEnd('/');
@@ -98,7 +98,7 @@ public sealed class IdentityGrpcService(
 
     public override async Task<LogoutResponse> Logout(LogoutRequest request, ServerCallContext context)
     {
-        var realm = cfg["Identity:Keycloak:Realm"] ?? cfg["Identity:KeycloakAdmin:Realm"] ?? "company";
+        var realm = cfg["Identity:Keycloak:Realm"] ?? cfg["Identity:KeycloakAdmin:Realm"] ?? "avash";
         var baseUrl =
             (cfg["Identity:Keycloak:BaseUrl"] ?? cfg["Identity:KeycloakAdmin:BaseUrl"] ?? "http://localhost:8080")
             .TrimEnd('/');
