@@ -289,9 +289,9 @@ grant_type=client_credentials&client_id=reports&client_secret=...
 
 هر سازمان یک Realm جدا در Keycloak است. اپلیکیشنی که برای سازمانی غیر از سازمان پیش‌فرض کار می‌کند:
 
-- در وب‌اپلیکیشن: `o.Tenant = "acme";`
-- در درخواست‌های API: سرآیند `X-Tenant-Id: acme`
-- در کتابخانه‌های OIDC: آدرس discovery با `?tenant=acme`
+- در وب‌اپلیکیشن: `o.Tenant = "branch-north";`
+- در درخواست‌های API: سرآیند `X-Tenant-Id: branch-north`
+- در کتابخانه‌های OIDC: آدرس discovery با `?tenant=branch-north`
 
 توکن یک سازمان در سازمان دیگر پذیرفته نمی‌شود و درگاه پاسخ ۴۰۳ می‌دهد.
 

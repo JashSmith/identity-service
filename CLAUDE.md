@@ -60,7 +60,7 @@ Delegated admins may only manage users inside their own scope and grant only wha
 | `src/Infrastructure/Identity.Infrastructure.Keycloak` / `.Redis` / `.Sms` / `Identity.Infrastructure` | Adapters (`.Sms`: SMS providers; add one with `AddSmsProvider<T>()`) |
 | `src/Packages/Avash.Identity.*` | Consumer packages |
 | `tools/Identity.TenantProvisioning` | Operator tool: creates a new tenant realm with master credentials (the gateway never gets them) |
-| `keycloak/realms` | Realm imports: `company` and the demo tenant `acme` (imported only when the realm does not exist) |
+| `keycloak/realms` | Realm import: `avash` (آوش), the only organization (imported only when the realm does not exist) |
 | `keycloak/themes` | Keycloak themes mounted into the container (Persian `avash` login theme) |
 | `keycloak/extensions` | Java Keycloak extensions (weekly-schedule authenticator; SMS sign-in authenticators with their login templates and messages in `theme-resources`), built and unit-tested in Docker by `scripts/build-keycloak-extensions.sh` into `keycloak/providers` |
 | `scripts/smoke-test.sh` | Business-flow smoke test against a running stack |

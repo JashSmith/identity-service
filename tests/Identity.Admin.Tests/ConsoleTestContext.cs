@@ -70,13 +70,13 @@ public abstract class ConsoleTestContext : BunitContext
         JSInterop.Mode = JSRuntimeMode.Loose;
         Services.AddRadzenComponents();
         var sessions = new ConsoleSessionStore();
-        sessions.Set("s-1", new ConsoleSession("company", "token", null, null, DateTimeOffset.UtcNow.AddHours(1)));
+        sessions.Set("s-1", new ConsoleSession("avash", "token", null, null, DateTimeOffset.UtcNow.AddHours(1)));
         Services.AddSingleton(sessions);
         Services.AddSingleton(Options.Create(new ConsoleOptions
         {
             KeycloakBaseUrl = "https://kc.test",
             GatewayBaseUrl = "http://gateway.test",
-            Tenants = [new ConsoleTenant { Id = "company", DisplayName = "شرکت", Realm = "company" }],
+            Tenants = [new ConsoleTenant { Id = "avash", DisplayName = "آوش", Realm = "avash" }],
         }));
         Services.AddSingleton<IHttpClientFactory>(new SingleClientFactory());
         Services.AddScoped(sp => new GatewayApi(new HttpClient(Gateway) { BaseAddress = new Uri("http://gateway.test/") },
@@ -85,7 +85,7 @@ public abstract class ConsoleTestContext : BunitContext
 
         var auth = AddAuthorization();
         auth.SetAuthorized("admin");
-        auth.SetClaims([new Claim(ConsoleClaims.SessionId, "s-1"), new Claim(ConsoleClaims.Tenant, "company"),
+        auth.SetClaims([new Claim(ConsoleClaims.SessionId, "s-1"), new Claim(ConsoleClaims.Tenant, "avash"),
             .. permissions.Select(p => new Claim(ConsoleClaims.Permission, p))]);
     }
 

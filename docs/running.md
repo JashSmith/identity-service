@@ -34,12 +34,14 @@ dotnet run --project src/Hosts/Identity.AppHost --launch-profile http
 | منبع | توضیح |
 |---|---|
 | ‏`postgres` | پایگاه داده Keycloak؛ ظرف ماندگار است و با توقف Stack پاک نمی‌شود |
-| ‏`keycloak` | ‏Import دو Realm نمونه (`company` و `acme`) و تم فارسی `avash` |
+| ‏`keycloak` | ‏Import ‏Realm سازمان آوش (`avash`) و تم فارسی `avash` |
 | ‏`redis` | ‏Cache |
 | ‏`identity-gateway` | درگاه هویت |
 | ‏`identity-admin` | کنسول مدیریت |
 
 رمزهای Clientها و رمز مدیر Keycloak به‌صورت پارامتر Aspire ساخته و در User Secrets پروژه AppHost نگه داشته می‌شوند و در مخزن ذخیره نمی‌شوند.
+
+‏Realm فقط وقتی Import می‌شود که هنوز وجود نداشته باشد. اگر ظرف `postgres` از نسخه‌های قبلی، Realmهای `company` و `acme` را نگه داشته است، ظرف و Volume آن را یک بار پاک کنید تا Stack فقط با سازمان آوش بالا بیاید. کاربرانی که در آن Realmها ساخته شده‌اند هم پاک می‌شوند.
 
 ## بررسی سلامت
 
@@ -53,7 +55,7 @@ curl http://localhost:5090/alive         # کنسول
 
 ## اولین ورود
 
-1. ‏`http://localhost:5090` را باز کنید و سازمان «شرکت» را انتخاب کنید.
+1. ‏`http://localhost:5090` را باز کنید و سازمان «آوش» را انتخاب کنید.
 2. در صفحه ورود فارسی با `admin` و رمز `admin` وارد شوید. این کاربر فقط برای محیط توسعه است.
 3. از بخش «نقش‌ها» یک نقش بسازید و از بخش «کاربران» کاربری با آن نقش و محدوده دلخواه ایجاد کنید.
 
@@ -61,7 +63,7 @@ curl http://localhost:5090/alive         # کنسول
 
 ```bash
 curl -X POST http://localhost:5080/api/identity/auth/login \
-  -H "X-Tenant-Id: company" \
+  -H "X-Tenant-Id: avash" \
   -d "grant_type=password&username=admin&password=admin"
 ```
 

@@ -11,9 +11,9 @@ public sealed class TenancyTests
     {
         var values = new Dictionary<string, string?>
         {
-            ["Identity:Authority"] = "http://kc:8080/realms/company",
+            ["Identity:Authority"] = "http://kc:8080/realms/avash",
             ["Identity:KeycloakAdmin:BaseUrl"] = "http://kc-internal:8080",
-            ["Identity:KeycloakAdmin:Realm"] = "company",
+            ["Identity:KeycloakAdmin:Realm"] = "avash",
             ["Identity:KeycloakAdmin:AdminClientSecret"] = "a",
             ["Identity:Keycloak:ClientSecret"] = "c",
         };
@@ -26,8 +26,8 @@ public sealed class TenancyTests
     {
         var registry = Registry();
 
-        Assert.Equal("company", registry.Default.Id);
-        Assert.Equal("http://kc:8080/realms/company", registry.Issuer(registry.Default));
+        Assert.Equal("avash", registry.Default.Id);
+        Assert.Equal("http://kc:8080/realms/avash", registry.Issuer(registry.Default));
         Assert.Equal("http://kc-internal:8080", registry.KeycloakOptions(registry.Default).BaseUrl);
     }
 
@@ -35,11 +35,11 @@ public sealed class TenancyTests
     public void Further_tenants_get_their_own_realm_issuer_and_optional_cluster()
     {
         var registry = Registry(
-            ("Identity:Tenants:0:Id", "acme"), ("Identity:Tenants:0:Realm", "acme"),
+            ("Identity:Tenants:0:Id", "branch-north"), ("Identity:Tenants:0:Realm", "branch-north"),
             ("Identity:Tenants:1:Id", "big"), ("Identity:Tenants:1:Realm", "big"), ("Identity:Tenants:1:BaseUrl", "https://kc-big"));
 
-        Assert.True(registry.TryGet("ACME", out var acme));
-        Assert.Equal("http://kc:8080/realms/acme", registry.Issuer(acme));
+        Assert.True(registry.TryGet("BRANCH-NORTH", out var branch));
+        Assert.Equal("http://kc:8080/realms/branch-north", registry.Issuer(branch));
         Assert.True(registry.TryGet("big", out var big));
         Assert.Equal("https://kc-big/realms/big", registry.Issuer(big));
         Assert.Equal("https://kc-big", registry.KeycloakOptions(big).BaseUrl);
@@ -49,22 +49,22 @@ public sealed class TenancyTests
     [Fact]
     public void Duplicate_or_incomplete_tenants_fail_at_startup()
     {
-        Assert.Throws<InvalidOperationException>(() => Registry(("Identity:Tenants:0:Id", "company"), ("Identity:Tenants:0:Realm", "x")));
-        Assert.Throws<InvalidOperationException>(() => Registry(("Identity:Tenants:0:Id", "acme")));
+        Assert.Throws<InvalidOperationException>(() => Registry(("Identity:Tenants:0:Id", "avash"), ("Identity:Tenants:0:Realm", "x")));
+        Assert.Throws<InvalidOperationException>(() => Registry(("Identity:Tenants:0:Id", "branch-north")));
     }
 
     [Fact]
     public async Task The_ambient_tenant_flows_through_async_calls_and_is_restored()
     {
-        var fallback = new KeycloakOptions { Realm = "company" };
+        var fallback = new KeycloakOptions { Realm = "avash" };
         string? inner = null;
 
-        using (KeycloakTenant.Use(new KeycloakOptions { Realm = "acme" }))
+        using (KeycloakTenant.Use(new KeycloakOptions { Realm = "branch-north" }))
         {
             await Task.Run(async () => { await Task.Yield(); inner = KeycloakTenant.Resolve(fallback).Realm; });
         }
 
-        Assert.Equal("acme", inner);
-        Assert.Equal("company", KeycloakTenant.Resolve(fallback).Realm);
+        Assert.Equal("branch-north", inner);
+        Assert.Equal("avash", KeycloakTenant.Resolve(fallback).Realm);
     }
 }

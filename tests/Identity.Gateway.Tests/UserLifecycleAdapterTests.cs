@@ -22,7 +22,7 @@ public sealed class UserLifecycleAdapterTests
             Requests.Add((request.Method, path + request.RequestUri.Query, request.Content is null ? null : await request.Content.ReadAsStringAsync(ct)));
             if (path.EndsWith("/token", StringComparison.Ordinal)) return Json(new { access_token = "t", expires_in = 300 });
 
-            var rel = path[(path.IndexOf("/admin/realms/company/", StringComparison.Ordinal) + 22)..];
+            var rel = path[(path.IndexOf("/admin/realms/avash/", StringComparison.Ordinal) + "/admin/realms/avash/".Length)..];
             return (request.Method.Method, rel) switch
             {
                 ("GET", "users/u1") => Json(new { id = "u1", username = "ali", email = "ali@t.local", requiredActions = new[] { "VERIFY_EMAIL" } }),
@@ -52,7 +52,7 @@ public sealed class UserLifecycleAdapterTests
 
     private static KeycloakUserLifecycleAdapter Adapter(FakeKeycloak kc)
     {
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "company", AdminClientSecret = "s" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "avash", AdminClientSecret = "s" });
         return new KeycloakUserLifecycleAdapter(new HttpClient(kc), options, new KeycloakAdminTokenProvider(new HttpClient(kc), options));
     }
 

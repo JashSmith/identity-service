@@ -24,7 +24,7 @@ Check in particular:
    no tokens or passwords in logs, no raw Keycloak error bodies returned to clients.
 5. **Error handling**: no swallowed exceptions or empty results that hide failures; consistent
    ProblemDetails; no retries on non-idempotent Keycloak writes.
-6. **Tenancy**: realm comes from the tenant context, not hardcoded `company`.
+6. **Tenancy**: realm comes from the tenant context, not hardcoded `avash`.
 7. **Layering**: Domain has no infrastructure references; endpoints call application use cases.
 8. **Tests**: new behaviour has tests that would fail without the change.
 

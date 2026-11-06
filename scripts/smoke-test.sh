@@ -86,7 +86,7 @@ pass "permission '$PERM' assigned (client-role mapping)"
 step "5/7 — Create user with scoped assignment (region=$SCOPE_REGION)"
 CREATE_USER=$(curl -fsS -X POST "$GATEWAY/api/identity/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d "{\"username\":\"$TEST_USER\",\"email\":\"$TEST_USER@company.local\",\"firstName\":\"Smoke\",\"lastName\":\"User\",\"enabled\":true,
+  -d "{\"username\":\"$TEST_USER\",\"email\":\"$TEST_USER@avash.local\",\"firstName\":\"Smoke\",\"lastName\":\"User\",\"enabled\":true,
        \"credentials\":{\"password\":\"$TEST_PASS\",\"temporary\":false},
        \"assignments\":[{\"role\":\"$ROLE_NAME\",\"scopes\":{\"region\":[\"$SCOPE_REGION\"]}}]}")
 USER_ID=$(json_field "$CREATE_USER" "d['id']")

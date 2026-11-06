@@ -38,11 +38,11 @@ public sealed class TenantRegistry
     {
         _defaultBaseUrl = (cfg["Identity:KeycloakAdmin:BaseUrl"] ?? cfg["Identity:Keycloak:BaseUrl"] ?? "http://localhost:8080").TrimEnd('/');
         // Tokens are issued as <issuer base>/realms/<realm>; the base is the configured authority without its realm.
-        var authority = (cfg["Identity:Authority"] ?? $"{_defaultBaseUrl}/realms/company").TrimEnd('/');
+        var authority = (cfg["Identity:Authority"] ?? $"{_defaultBaseUrl}/realms/avash").TrimEnd('/');
         var realmsAt = authority.LastIndexOf("/realms/", StringComparison.Ordinal);
         _issuerBase = realmsAt > 0 ? authority[..realmsAt] : _defaultBaseUrl;
 
-        var realm = cfg["Identity:KeycloakAdmin:Realm"] ?? cfg["Identity:Keycloak:Realm"] ?? "company";
+        var realm = cfg["Identity:KeycloakAdmin:Realm"] ?? cfg["Identity:Keycloak:Realm"] ?? "avash";
         Default = new TenantDefinition
         {
             Id = cfg["Identity:DefaultTenant"] ?? realm,

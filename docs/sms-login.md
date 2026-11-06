@@ -52,12 +52,12 @@
 
 ```bash
 # ۱. ارسال کد
-curl -X POST http://localhost:5080/api/identity/auth/login -H "X-Tenant-Id: company" \
+curl -X POST http://localhost:5080/api/identity/auth/login -H "X-Tenant-Id: avash" \
   -d "client_id=crm&client_secret=...&phone_number=09121234567"
 # HTTP 401  {"error":"sms_code_sent","expires_in":120,"resend_in":60,...}
 
 # ۲. ورود با کد
-curl -X POST http://localhost:5080/api/identity/auth/login -H "X-Tenant-Id: company" \
+curl -X POST http://localhost:5080/api/identity/auth/login -H "X-Tenant-Id: avash" \
   -d "client_id=crm&client_secret=...&phone_number=09121234567&sms_code=482913"
 # HTTP 200  {"access_token":"...","refresh_token":"...",...}
 ```

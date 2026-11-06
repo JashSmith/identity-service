@@ -206,7 +206,7 @@
       "username": "service-account-identity-gateway-admin",
       "enabled": true,
       "serviceAccountClientId": "identity-gateway-admin",
-      "email": "service-account-identity-gateway-admin@company.local",
+      "email": "service-account-identity-gateway-admin@avash.local",
       "emailVerified": true,
       "clientRoles": {
         "realm-management": [
@@ -236,7 +236,7 @@
       "groups": [
         "super-admins"
       ],
-      "email": "admin@company.local",
+      "email": "admin@avash.local",
       "requiredActions": []
     }
   ],

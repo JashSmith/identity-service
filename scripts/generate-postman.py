@@ -118,7 +118,7 @@ def main() -> None:
         "name": "Identity Gateway (local)",
         "values": [
             {"key": "gateway", "value": "http://localhost:5080", "enabled": True},
-            {"key": "tenant", "value": "acme", "enabled": True},
+            {"key": "tenant", "value": "avash", "enabled": True},
             {"key": "username", "value": "admin", "enabled": True},
             {"key": "password", "value": "admin", "enabled": True, "type": "secret"},
             {"key": "token", "value": "", "enabled": True, "type": "secret"},

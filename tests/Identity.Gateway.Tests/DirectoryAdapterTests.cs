@@ -25,7 +25,7 @@ public sealed class DirectoryAdapterTests
                 return Json(new { access_token = "t", expires_in = 300 });
             if (FailEverything is { } status) return Task.FromResult(new HttpResponseMessage(status));
 
-            var rel = path[(path.IndexOf("/admin/realms/company/", StringComparison.Ordinal) + "/admin/realms/company/".Length)..];
+            var rel = path[(path.IndexOf("/admin/realms/avash/", StringComparison.Ordinal) + "/admin/realms/avash/".Length)..];
             return rel.Split('/') switch
             {
                 ["users"] => Json(Enumerable.Range(0, UserCount).Select(i => new { id = $"u{i}", username = $"user{i}", enabled = true })),
@@ -51,7 +51,7 @@ public sealed class DirectoryAdapterTests
 
     private static KeycloakDirectoryAdapter Adapter(FakeKeycloak kc)
     {
-        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "company", AdminClientSecret = "s" });
+        var options = Options.Create(new KeycloakOptions { BaseUrl = "http://kc.test", Realm = "avash", AdminClientSecret = "s" });
         return new KeycloakDirectoryAdapter(new HttpClient(kc), options, new KeycloakAdminTokenProvider(new HttpClient(kc), options));
     }
 
@@ -110,6 +110,6 @@ public sealed class DirectoryAdapterTests
         Assert.True(permissions.IsSuccess);
         Assert.Equal(["billing:perm-of-c-billing", "offline_access", "orders:perm-of-c-orders"], permissions.Value.Select(p => p.Name));
         Assert.Equal(2, kc.Paths.Count(p => p.Contains("/role-mappings/clients/", StringComparison.Ordinal)));
-        Assert.DoesNotContain(kc.Paths, p => p.EndsWith("/admin/realms/company/clients", StringComparison.Ordinal));
+        Assert.DoesNotContain(kc.Paths, p => p.EndsWith("/admin/realms/avash/clients", StringComparison.Ordinal));
     }
 }

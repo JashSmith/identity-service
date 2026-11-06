@@ -105,7 +105,7 @@ public sealed class UiContext : IAsyncDisposable
     }
 
     /// <summary>Signs in through the console's tenant list and Keycloak's (Persian) login page.</summary>
-    public async Task SignInAsync(string username = "admin", string password = "admin", string tenant = "company")
+    public async Task SignInAsync(string username = "admin", string password = "admin", string tenant = "avash")
     {
         try
         {
